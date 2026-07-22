@@ -1,0 +1,290 @@
+{
+  "version": "1.0",
+  "projectName": "ShowerFold",
+  "wallWidth": 96,
+  "wallHeight": 10,
+  "wallVertices": [
+    {
+      "x": -50.96773884514459,
+      "y": -86.0000000000005,
+      "isAngleLocked": false,
+      "lockedAngleValue": null
+    },
+    {
+      "x": -2.96773884514419,
+      "y": -86.0000000000001,
+      "isAngleLocked": true,
+      "lockedAngleValue": 270
+    },
+    {
+      "x": -2.967738845143792,
+      "y": -134.0000000000001
+    },
+    {
+      "x": 69.0320830338182,
+      "y": -134.16015429356062,
+      "isAngleLocked": true,
+      "lockedAngleValue": 90.19999999999999
+    },
+    {
+      "x": 69.30640378762784,
+      "y": -86.16075937429814,
+      "isAngleLocked": true,
+      "lockedAngleValue": 270,
+      "isLengthLocked": true,
+      "lockedLengthValue": 47.99999999999999
+    },
+    {
+      "x": 117.30561991335891,
+      "y": -86.43507910628708,
+      "isAngleLocked": true,
+      "lockedAngleValue": 90,
+      "isLengthLocked": true,
+      "lockedLengthValue": 95.99999999999999
+    },
+    {
+      "x": 117.85425937733677,
+      "y": 9.563353145175062,
+      "isAngleLocked": false,
+      "lockedAngleValue": null,
+      "isLengthLocked": true,
+      "lockedLengthValue": 47.99999999999999
+    },
+    {
+      "x": 69.85527321348023,
+      "y": 9.875326288102261,
+      "isLengthLocked": true,
+      "lockedLengthValue": 47.99999999999999,
+      "isAngleLocked": true,
+      "lockedAngleValue": 270
+    },
+    {
+      "x": 70.16724635640743,
+      "y": 57.8743124519588
+    },
+    {
+      "x": -2.9836668433261053,
+      "y": 58.00061763906219,
+      "isAngleLocked": true,
+      "lockedAngleValue": 89.99769614390412,
+      "isLengthLocked": true,
+      "lockedLengthValue": 48.000510900550154
+    },
+    {
+      "x": -3.064616160886966,
+      "y": 10.000174996084198,
+      "isLengthLocked": true,
+      "lockedLengthValue": 47.903122684577276
+    },
+    {
+      "x": -50.967738845144595,
+      "y": 9.999999999999904,
+      "isAngleLocked": true,
+      "lockedAngleValue": 90.00020930863165,
+      "isLengthLocked": true,
+      "lockedLengthValue": 96.0000000000004
+    }
+  ],
+  "unit": "in",
+  "shape": "rectangle",
+  "tileWidth": 4,
+  "tileHeight": 9,
+  "pattern": "herringbone",
+  "groutWidth": 0.125,
+  "angle": 0,
+  "tileName": "White Gloss Ceramic Subway",
+  "tileColors": [
+    "#b46000"
+  ],
+  "colorPattern": "single",
+  "tilesPerStripe": 1,
+  "groutColor": "#64748b",
+  "tileSpecular": true,
+  "offsetX": 45,
+  "offsetY": 10.5,
+  "subAreas": [
+    {
+      "id": "sa_1781563514159",
+      "name": "Niche",
+      "x": 14.8557,
+      "y": -60,
+      "width": 36,
+      "height": 24,
+      "shape": "hexagon",
+      "tileWidth": 4,
+      "tileHeight": 4,
+      "pattern": "stack",
+      "tileColors": [
+        "#d0d0a7"
+      ],
+      "colorPattern": "single",
+      "groutColor": "#cbd5e1",
+      "groutWidth": 0.125,
+      "offsetX": 0,
+      "offsetY": 0,
+      "tileSpecular": true,
+      "tileName": "CreamHex",
+      "useLabelColor": true,
+      "labelColor": "#ffffff",
+      "hasSill": true,
+      "sillDepth": 4,
+      "sillTileName": "Bullnose Sill Tile",
+      "sillTileShape": "Rectangle",
+      "sillTileWidth": 4,
+      "sillTileHeight": 3,
+      "sillTileColor": "#475569",
+      "shapeSettings": {
+        "rectangle": {
+          "tileWidth": 4,
+          "tileHeight": 4,
+          "pattern": "stack",
+          "groutWidth": 0.125,
+          "colorPattern": "single"
+        }
+      },
+      "soldAsMosaic": false,
+      "tileColor": "#d0d0a7",
+      "colorVariation": "V2"
+    },
+    {
+      "id": "sa_1781566001524",
+      "name": "Floor",
+      "x": -2.97,
+      "y": -134,
+      "width": 72,
+      "height": 48,
+      "shape": "rectangle",
+      "tileWidth": 3,
+      "tileHeight": 3,
+      "pattern": "stack",
+      "tileColors": [
+        "#082523"
+      ],
+      "colorPattern": "single",
+      "groutColor": "#cbd5e1",
+      "groutWidth": 0.125,
+      "offsetX": 0,
+      "offsetY": 0,
+      "tileSpecular": true,
+      "tileName": "3x3MatteBlack",
+      "useLabelColor": true,
+      "labelColor": "#ffffff",
+      "vertices": [
+        {
+          "x": -2.96773884514419,
+          "y": -86.0000000000001
+        },
+        {
+          "x": -2.967738845143792,
+          "y": -134.0000000000001
+        },
+        {
+          "x": 69.1470936907408,
+          "y": -134.0000000000001
+        },
+        {
+          "x": 69.1470936907408,
+          "y": -86
+        }
+      ],
+      "tileColor": "#082523"
+    }
+  ],
+  "activeSubAreaId": null,
+  "wallExtensions": [],
+  "activeWallExtensionId": null,
+  "isPainted": true,
+  "isBlankCanvasMode": false,
+  "activePresetId": "subway-backsplash",
+  "zoom": 1,
+  "soldAsMosaic": false,
+  "mosaicWidth": 12,
+  "mosaicHeight": 12,
+  "overage": 10,
+  "hasNotes": false,
+  "notes": "",
+  "printQuantities": true,
+  "disableTileColorOnPdf": false,
+  "angleDisplayMode": "all",
+  "backgroundImage": null,
+  "isBgUnlocked": false,
+  "bgScale": 1,
+  "bgOffsetX": 0,
+  "bgOffsetY": 0,
+  "tileOpacity": 1,
+  "bgOpacity": 1,
+  "exportPhotoBg": true,
+  "showAccentDistances": false,
+  "wallBoundaryShape": "rectangle",
+  "wallArchHeight": 24,
+  "wallActiveArches": {
+    "top": true,
+    "bottom": false,
+    "left": false,
+    "right": false
+  },
+  "wallArchDepth": 24,
+  "wallAngle": 0,
+  "wallBorder": {
+    "enabled": false,
+    "tileName": "Border Tile",
+    "tileWidth": 4,
+    "tileHeight": 2,
+    "cornerJoint": "straight",
+    "color": "#1e293b"
+  },
+  "mainShapeSettings": {
+    "rectangle": {
+      "tileWidth": 6,
+      "tileHeight": 3,
+      "pattern": "running_50",
+      "groutWidth": 0.125,
+      "soldAsMosaic": false,
+      "mosaicWidth": 12,
+      "mosaicHeight": 12,
+      "colorPattern": "single"
+    },
+    "chevron": {
+      "tileWidth": 6,
+      "tileHeight": 3,
+      "pattern": "running_50",
+      "groutWidth": 0.125,
+      "soldAsMosaic": false,
+      "mosaicWidth": 12,
+      "mosaicHeight": 12,
+      "colorPattern": "single"
+    },
+    "hexagon": {
+      "tileWidth": 6,
+      "tileHeight": 6,
+      "pattern": "running_50",
+      "groutWidth": 0.125,
+      "soldAsMosaic": false,
+      "mosaicWidth": 12,
+      "mosaicHeight": 12,
+      "colorPattern": "single"
+    }
+  },
+  "foldLines": [
+    {
+      "id": "c23764cc-6798-4a91-89f7-9e48ddfef5ea",
+      "startNodeIndex": 10,
+      "endNodeIndex": 1
+    },
+    {
+      "id": "d1ea850d-6877-4851-bc73-0cd4b9be01ae",
+      "startNodeIndex": 7,
+      "endNodeIndex": 4
+    },
+    {
+      "id": "2793b1b9-2163-4a7e-b147-c069c9176319",
+      "startNodeIndex": 10,
+      "endNodeIndex": 7
+    },
+    {
+      "id": "d5b6f569-6a8f-489a-b4eb-12775458eae2",
+      "startNodeIndex": 1,
+      "endNodeIndex": 4
+    }
+  ]
+}

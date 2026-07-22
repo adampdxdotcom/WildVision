@@ -1,0 +1,47 @@
+--- src/store/slices/materialSlice.ts
++++ src/store/slices/materialSlice.ts
+@@ -116,33 +116,33 @@
+   setIsCanvasDirty: (val: boolean | ((prev: boolean) => boolean)) => void;
+   purchasingSettings: Record<string, {
+     purchaseType: 'carton' | 'sheet';
+-    sqFtPerCarton: number;
++    sqFtPerCarton: number | '';
+     pricePerSqFt: number;
+     pricePerSheet: number;
+   }>;
+   setPurchasingSettings: (val: Record<string, {
+     purchaseType: 'carton' | 'sheet';
+-    sqFtPerCarton: number;
++    sqFtPerCarton: number | '';
+     pricePerSqFt: number;
+     pricePerSheet: number;
+   }> | ((prev: Record<string, {
+     purchaseType: 'carton' | 'sheet';
+-    sqFtPerCarton: number;
++    sqFtPerCarton: number | '';
+     pricePerSqFt: number;
+     pricePerSheet: number;
+   }>) => Record<string, {
+     purchaseType: 'carton' | 'sheet';
+-    sqFtPerCarton: number;
++    sqFtPerCarton: number | '';
+     pricePerSqFt: number;
+     pricePerSheet: number;
+   }>)) => void;
+   updatePurchasingSetting: (areaId: string, settings: Partial<{
+     purchaseType: 'carton' | 'sheet';
+-    sqFtPerCarton: number;
++    sqFtPerCarton: number | '';
+     pricePerSqFt: number;
+     pricePerSheet: number;
+   }>) => void;
+   customPatternsList: any[];
+@@ -328,7 +328,7 @@
+   updatePurchasingSetting: (areaId, settings) => set((state: any) => {
+     const prev = state.purchasingSettings[areaId] || {
+       purchaseType: 'carton',
+-      sqFtPerCarton: 10,
++      sqFtPerCarton: '',
+       pricePerSqFt: 0,
+       pricePerSheet: 0,
+     };

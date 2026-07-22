@@ -1,0 +1,6 @@
+{
+  "name": "Wild Vision: Tile Layout Simulator",
+  "description": "An interactive web-based simulator to design, tessellate, and align square, rectangular, and hexagonal tile layouts on walls in real time.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

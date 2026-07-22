@@ -1,0 +1,314 @@
+# WILDVISION CODEBASE BREAKDOWN
+
+Below is a detailed analysis of all directories and files within the WildVision Interactive Tile Layout Simulator.* *might not be up to date.
+
+## 1. ROOT CONFIGURATION & MANIFESTS
+
+### index.html
+- The single-page application entry HTML file.
+- Mounts the React application into `<div id="root">`.
+
+### package.json & package-lock.json
+- Configures the development and build ecosystem.
+- Declares vital modern dependencies (React 18+, Vite, Tailwind CSS v4, Lucide React icons, and custom layout motion frameworks).
+
+### tsconfig.json
+- Defines global TypeScript type-checking directives and compiler settings to ensure high code quality.
+
+### vite.config.ts
+- Configures the Vite asset compiler, bundler targets, and localhost configurations.
+
+### metadata.json
+- Contains application metadata (name, description, active permissions parameters) and lists required server-side capacities.
+
+### .env.example
+- Documented template file for necessary environmental secret vars.
+
+### .gitignore
+- Configures paths that should be omitted from permanent project tracking (e.g., node_modules, dist, user local environments).
+
+## 2. APPLICATION CORE & STATE ROUTERS (src/)
+
+### src/main.tsx
+- Mounts the main React runtime module and roots the component trees.
+
+### src/index.css
+- Integrates the global Tailwind v4 imports (@import "tailwindcss";).
+- Explicitly loads typography bindings for the Inter (sans-serif) and JetBrains Mono fonts.
+
+### src/App.tsx
+- The centralized application state manager.
+- Orchestrates synchronized operations: links interactive layout metrics (grout sizes, active dimensions, unit increments) to the sidebar controls, procedural tile generator engine, and the visual canvas.
+- Refactored to delegate PDF export operations cleanly.
+
+### src/types.ts
+- Encapsulates shared domain TypeScript types:
+  - Tile shapes ('rectangle', 'hexagon', 'round', 'diamond', 'chevron', 'octagon_dot', 'octagon', 'triangle')
+  - Running patterns ('stack', 'running_50', 'third_33', 'herringbone', 'basket_weave', 'versailles')
+  - Structural sub-area schemas (bounding coordinates, distinct colors, nested offsets)
+  - Calculated metrics records.
+  - Active Tool types (including 'paint', 'pen', 'extrude', etc.).
+
+### src/presets.ts
+- Bundles structural starter templates for rooms such as a "Classic Herringbone Backsplash", "Hex Bathroom Floor", and "Balanced Grid Wall" with pre-set proportions and spacing.
+
+### src/hooks/useMultiplayer.ts
+- Manages the Supabase Realtime Channel (`room:project-id`) for active collaboration.
+- Broadcasts the local user's presence and CAD cursor coordinates (throttled).
+- Listens to presence syncs and broadcast payloads to populate the global `collaborationSlice`.
+
+## GLOBAL STATE MANAGEMENT (src/store/)
+
+### src/store/useAppStore.ts
+- The centralized state coordinator.
+- Dynamically merges all independent domain slices (Project, Drafting, Material, 3D, AI, Pattern, Integration) into a single, type-safe Zustand store.
+- Manages global ephemeral UI state (e.g., active view modes, open modals) and configures the persist middleware to cache specific application settings in session storage.
+
+### src/store/useAuthStore.ts
+- Dedicated Supabase authentication manager.
+- Subscribes to backend auth state changes, exposes user metadata, and manages Role-Based Access Control (RBAC) tiers (free, paid, admin).
+
+### src/store/slices/projectSlice.ts
+- Governs workspace file I/O and cloud synchronization.
+- Handles project names, database IDs, and auto-save toggles.
+- Contains massive cross-slice hydration routines to ensure clean transitions between local memory and Supabase JSON payloads.
+- Safely hydrates and snapshots Paint Mode color overrides (`tileColorOverrides` and `activeBrushColorIndex`) during project load, save, and workspace reset routines.
+
+### src/store/slices/draftingSlice.ts
+- The mathematical blueprint of the 2D CAD environment.
+- Stores all structural layout data including main wall vertices, spatial sub-areas (cutouts, features), wall extensions, fold lines, and active camera pan/zoom coordinates.
+
+### src/store/slices/materialSlice.ts
+- Controls the physical and aesthetic properties of the layout.
+- Manages geometric shape selections, tile dimensions, grout spacing, color arrays, and surface finishes.
+- Stores Paint Mode overrides (`tileColorOverrides`) mapping deterministic tile IDs to palette indices.
+- Features index-shifting logic during color removal to preserve overrides integrity, and triggers `wildvision:forceCanvasRedraw` for instant paint feedback.
+
+### src/store/slices/threeDEnvSlice.ts
+- Orchestrates the 3D Diorama and parametric scene graph.
+- Maintains the absolute bounds of the environmental room shell (floor, ceiling, walls) and manages the sceneObjects array.
+
+### src/store/slices/aiRenderSlice.ts
+- Powers the WildVision AI state machine.
+- Caches strict WebGL camera telemetry (position, target, FOV) for snapshot consistency.
+- Manages prompt engineering inputs, aspect ratio formatting, credit economy calculations, and historical render tracking.
+
+### src/store/slices/patternBuilderSlice.ts
+- The isolated operational state for the Pattern Studio sandbox.
+- Manages active tessellation macro-blocks, custom vertex coordinate matrices, and handles upserting and deleting custom layout schemas directly to/from the cloud database.
+
+### src/store/slices/collaborationSlice.ts
+- Controls real-time presence data including active user coordinates, assigned cursor colors, and avatar identities for multiplayer sessions.
+
+### src/store/slices/integrationSlice.ts
+- Manages connection and credentials state for Subfloor contracting application integration.
+- Stores type-safe properties: `subfloorUrl`, `subfloorApiKey`, `isSavingCredentials`, `saveError`, `subfloorProjects`, `subfloorProducts`, `linkedSubfloorProjectId`, `isFetchingIntegration`, and `integrationData`.
+- Executes Supabase updates on the `profiles` table to persist integration credentials, and synchronizes state seamlessly with `useAuthStore` via subscriber.
+- Includes actions to fetch projects/products from the `subfloor-proxy` edge function and manage active project linkage and active product synchronization data.
+
+## 3. MODULAR MATHEMATICAL, UTILITY & EXPORT ENGINES (src/utils/)
+
+### src/utils/geometry.ts
+- Houses the geometric layout and shape offset logic.
+- Computes individual tile coordinate matrices (getTileVertices), handles row pattern offset ratios, and determines layout centering adjustments.
+
+### src/utils/generator.ts
+- Acts as the centralized traffic coordinator, bounding-box calculator, and parameter validator.
+- Enforces strict, high-performance Axis-Aligned Bounding Box (AABB) grid projection limits and pre-computes spatial metrics.
+- Evaluates the active shape and pattern parameters, routing them seamlessly to specialized sub-generators.
+
+### src/utils/generators/
+- Subdirectory housing modular, single-responsibility coordinate generators for complex patterns.
+- **standardGenerator.ts**: Handles standard layouts, offsets, running bonds (running_50, third_33, plank), chevrons, regular hexagons, pickets, triangles, round penny tiles, and scallop patterns.
+- **herringboneGenerator.ts**: Houses the interlocking staircase basis vector math specifically for rectangular Herringbone layouts.
+- **basketweaveGenerator.ts**: Handles the block-offset and rotational math for rectangular Basketweave layouts.
+- **versaillesGenerator.ts**: Contains the self-contained 12-piece interlocking coordinate matrix and row-stagger calculations for Versailles layouts.
+- **flatsketGenerator.ts**: Handles the alternating rows of vertical soldiers and horizontal stacked bands for Flatsket layouts.
+- **customJsonGenerator.ts**: Handles rendering custom tessellations (e.g., Star & Cross) from loaded JSON activeCustomPattern schemas. Also parses dynamic `polarArray` properties to generate circular rotation arrays.
+- **rhombusLatticeGenerator.ts**: Houses the coordinate spacing and generation for our Rhombus layouts: the 3D Box (3d_cube) and the Star Lattice (star_lattice) patterns, keeping them mathematically isolated.
+
+### src/utils/analytics.ts
+- Governs real-time layout metrics, area intersections, and quality auditing.
+- Computes comprehensive color-grouped material estimates for Paint Mode, providing breakdowns of custom-painted tile counts, areas, and purchasing costs.
+
+### src/utils/segmentMath.ts
+- Houses the mathematical algorithms for layout geometry parsing and interval consolidation used for overlaying dimensional annotations.
+
+### src/utils/pdfExport.ts
+- Decoupled PDF generation and document compiler module.
+- Generates polished multi-page architectural layouts using jsPDF, including high-res diagrams, specification cards, and dynamically color-grouped pricing tables.
+
+## 4. MODULAR UI COMPONENTS (src/components/)
+
+### src/components/Sidebar/
+- Subdirectory housing modular option forms.
+
+### src/components/SidebarControls.tsx
+- Entry-point coordinator that mounts sidebar sections and exposes full parametric adjustments dynamically to App.tsx.
+
+### src/components/QuantitiesPanel.tsx
+- The interactive material estimation engine.
+- Reads active physical area metrics to calculate precise box/carton requirements, incorporates overage percentages, and groups custom-painted areas independently.
+- Connects directly with the Subfloor Integration suite to export calculated materials, quantities, net area, and total waste estimates directly back to the linked Subfloor project via our proxy Edge Function.
+
+### src/components/Sidebar/Universal/UniversalTileSpecs.tsx
+- A stateless, generic UI adapter for structural tile configuration.
+- Unifies the Main Wall and Accent Tile shape, size, and pattern configurations.
+
+### src/components/Sidebar/Universal/UniversalGroutControls.tsx
+- A stateless, generic UI adapter for grout size and color management.
+
+### src/components/Sidebar/Universal/UniversalColorPalette.tsx
+- A stateless, generic UI component for dynamic palettes, shading, and Paint Mode controls.
+- Automatically switches the active canvas tool to 'paint' upon activation, and safely bypasses native browser confirm dialogs for reset actions.
+
+### src/components/Sidebar/TileSpecsPanel.tsx & ColorControlsPanel.tsx
+- Lightweight Zustand wrappers for the Universal configuration panels on the Main Wall.
+
+### src/components/Sidebar/ActiveAccentEditor.tsx
+- Dedicated router for custom sub-areas.
+- Refactored to wrap the Universal tile/color/grout adapters, deprecating legacy accent-specific panels and enabling fully independent Paint Mode configurations for Accents.
+
+### src/components/Sidebar/ActivePropEditor.tsx
+- Property editor panel for Custom Box and Clay Model staging props.
+- Handles dimension modifications, 3D visibility toggles, cullTiles configuration (Ghost Cutout Engine), and texture/face color assignments.
+
+### src/components/Sidebar/BorderConfigPanel.tsx
+- UI to inject and configure perimeter border strips wrapping around layout footprints.
+
+### src/components/ProjectBrowser/LoadModal.tsx & SaveModal.tsx
+- Cloud and local file management overlays.
+- LoadModal features a unified relational fetch displaying visual categorization for "My Projects" and "Shared with Me" views with explicit owner/collaboration indicators, and smart deletion warnings for actively shared projects.
+
+### src/components/ProjectBrowser/ShareModal.tsx
+- Real-time collaborative projects access manager.
+- Features email lookup against the user directory and granular read/write permission tiers.
+- Built with explicit owner-only safety guards and UI fallbacks to prevent unauthorized operations.
+
+## 5. ADVANCED RENDER ENGINE (src/components/TileCanvas/)
+
+### src/components/TileCanvas/index.tsx
+- Organizes the canvas drawing area and handles primary user mouse/touch events.
+- Memoizes `subAreaTileMap` to share identical tile generation data between the drawing orchestrator and the physics/interaction engine.
+- Enforces strict hook initialization order to prevent runtime WebGL and interaction context crashes.
+
+### src/components/TileCanvas/MultiplayerCursors.tsx
+- An absolutely positioned SVG overlay rendering live collaborator cursors over the main 2D canvas.
+- Translates received CAD coordinates into screen coordinates using the real-time `wallToScreen` utility from the `useCanvasViewport` hook, ensuring accurate spatial rendering.
+
+### src/components/TileCanvas/useCanvasViewport.ts
+- Custom React Hook managing absolute viewport logic (pan, zoom, scale).
+- Implements a Camera Freeze during active dragging, and strictly bypasses `isDrafting` states during zoom/pan actions to keep renders high-fidelity.
+
+### src/components/TileCanvas/hooks/useCanvasRenderer.ts
+- Coordinates the 2D rendering loop. Passes the memoized `subAreaTileMap` to the drawer functions, enabling Accent tiles to correctly render custom Paint Mode overrides.
+
+### src/components/TileCanvas/painters/
+- Modular rendering sub-package that isolates drawing orchestrators and mathematical utilities.
+- **index.ts**: Central export coordinator that aggregates all painter sub-modules to maintain backwards-compatibility.
+- **colorUtils.ts**: Encapsulates tile pattern color selection math (`getPatternColor` and dynamic palette resolution helpers).
+- **geometryHelpers.ts**: Houses coordinate containment math and path definitions (`isPointInSubArea`, `isSubAreaInBenchMode`, and `definePolygonVerticesPath`).
+- **compassPainter.ts**: Visualizes cardinal direction edge labels (`drawCompassIndicators`) surrounding the 2D workspace.
+- **borderPainter.ts**: Standardizes framing layouts (`drawBorder`), supporting both mitered joint and straight-cut styles.
+- **mainTilePainter.ts**: The main wall tile renderer (`drawMainTiles`) that maps procedural grid positions onto the active canvas.
+- **subAreaPainter.ts**: Dedicated visual rendering loop for custom accent bands, niches, shelves, cutouts, and solid slabs (`drawSubAreas`). Supports organic edge masks and custom drop-shadow effects.
+
+### src/components/TileCanvas/components/FloatingToolbar.tsx & VisibilityMenu.tsx
+- Contextual HTML HUD elements. Toolbar features dynamic tool switching, including a dedicated Paintbrush tool.
+
+## 6. CANVAS PHYSICS & DECOUPLED EVENT HANDLERS (src/components/TileCanvas/hooks/)
+
+### src/components/TileCanvas/hooks/interactions/
+- Subdirectory housing modular gesture and coordinate interaction sub-hooks:
+  - **index.ts**: Lightweight event coordinator routing mouse/touch gestures cleanly to dedicated sub-handlers.
+  - **useCursorManager.ts**: Monitors active tools, panning state, and background locks to compute active cursor designs.
+  - **useLockBroker.ts**: Coordinates multi-user coordinate locks for wall nodes, sub-areas, and segments.
+  - **useDragStateMachine.ts**: Consolidates active dragging state variables and sets/releases associated locks.
+  - **useMarqueeSelector.ts**: Handles marquee selections and tracks multi-vertex coordinate limits.
+
+### src/components/TileCanvas/utils/interactionHelpers.ts
+- Houses pure math functions extracted from the main physics router (e.g., `getDistanceToSegment`, `getRegionCentroid`).
+
+### src/components/TileCanvas/hooks/dragHandlers/
+- **usePaintModeHandler.ts:** Isolated paint physics, Context-Aware tile raycasting, and override dispatching.
+- **useExtrudeHandler.ts:** Physics for extruding wall segments, validating line intersections, and computing epsilon back-offs.
+- **useFillHandler.ts:** Logic for tessellating bounds and spawning new sub-areas from enclosed wall regions.
+- **useSegmentDragHandler.ts:** Standard wall segment translation and grid snapping.
+- **useHoverHandler.ts:** Continuous raycasting for segment/fold-line hover states and cursor updates.
+- **useSelectionHandler.ts:** Raycasting and selection for walls and dimensions.
+- **usePenToolHandler.ts:** Pen hover math, scalar snapping, and node splicing.
+- **usePinToolHandler.ts:** Pin Tool hover math and centroid calculation.
+- **useTouchNavigation.ts:** Native mobile touch physics and 2-finger pinch-to-zoom math.
+- **useWallNodeDrag.ts:** Rigid-body CAD physics solver for drawing/sliding architectural nodes.
+- **useSubAreaDrag.ts:** Handles boundary collision checks for dragging Niches/Shelves/Cutouts.
+- **useExtensionDrag.ts:** Dedicated handler for resizing additive wall extensions.
+- **usePropDragHandler.ts:** Custom physics loop for dragging 2D staging props (Custom Boxes/Clay Models), syncing their world coordinates across the canvas while keeping them anchored relative to the wall origin.
+
+## 7. ADVANCED 3D FOLDING ROOM SIMULATOR (src/components/TileCanvas3D/)
+
+### src/components/TileCanvas3D/index.tsx
+- Exposes the main 3D canvas viewport, lighting assemblies, and OrbitControls.
+
+### src/components/TileCanvas3D/useD3Columns.ts
+- Custom hook extracted from the main 3D canvas to compute folding configurations, vertical/horizontal fold lines, and detailed 3D column panel structures dynamically.
+
+### src/components/TileCanvas3D/useTileTexture/
+- Subdirectory housing the modular, high-performance 3D texture baking pipeline:
+  - **index.ts**: Lightweight hook coordinator reading Zustand stores, preloading assets, and managing final ThreeJS CanvasTexture instantiation.
+  - **useAssetPreloader.ts**: Preloads main wall material textures and nested sub-area accent textures, returning loaded images and ready status.
+  - **useRedrawListener.ts**: Listens to custom global event forces and triggers canvas redrawing.
+  - **canvasSetup.ts**: Standardizes off-screen color and normal/bump HTMLCanvasElement setups scaled to high-resolution limits.
+  - **texturePainter.ts**: Pure, stateless rendering pipeline drawing main tiles, borders, and sub-areas chronologically onto both color and bump map contexts.
+
+### src/components/TileCanvas3D/WallPanel.tsx
+- Houses the WallPanel rendering pipeline, dynamic 2D-to-3D scaling, active cutout hole-punching logic, and additive feature mounting.
+
+## 8. WILD VISION AI RENDERING PIPELINE (src/features/WildVisionRender/)
+
+### src/features/WildVisionRender/WildVisionSidebar.tsx
+- Triggers 3D snapshots, formats parameters (renderAspectRatio, renderResolution), handles dynamic credit costs, and communicates with backend Edge Functions.
+
+### src/features/WildVisionRender/WildVisionGallery.tsx & WildVisionLightbox.tsx
+- Displays generated concepts, hosts interactive Before/After sliders, provides secure image downloading, and handles cloud sharing.
+- Features a secure upload bridge allowing users to export full-resolution Base64 visual rendering designs directly into their linked Subfloor project's media gallery.
+
+## 9. BACKEND, TELEMETRY & UTILS (src/utils/ & supabase/functions/)
+
+### src/utils/syncBroadcaster.ts
+- Houses the decoupled Supabase Realtime broadcaster, handling `cursor_move`, `state_sync`, and element locking/unlocking global events to avoid circular hook dependencies across Zustand slices.
+
+### src/utils/supabaseClient.ts & logger.ts
+- Initializes self-hosted Supabase connections and streams live telemetry (INFO, WARN, ERROR) via WebSockets to backend logs.
+
+### src/utils/dataExporter.ts
+- Data Portability ("Takeout") utility using jszip and file-saver to compile account history.
+
+### supabase/functions/admin-user-manager/index.ts
+- Secure Deno-based Edge Function for executing RLS-bypassing operations (user deletion/provisioning) securely via admin JWT verification.
+
+### supabase/functions/subfloor-proxy/index.ts
+- Secure, Deno-based Supabase Edge Function that acts as an authenticated reverse-proxy. Resolves user integration profiles (URL and API Key) and securely forwards request payloads to the external Subfloor contracting application APIs with full CORS support.
+## 10. PROJECT BROWSER & CLOUD SYNC
+### src/hooks/useCloudAutoSave.ts
+- Debounces and uploads full state payload snapshots to Supabase.
+- Delegates cloud-saving authority to the active project owner during multiplayer sessions to prevent race conditions and save storms.
+
+## 11. UNDO/REDO & MULTIPLAYER HISTORY
+### src/store/slices/projectSlice.ts & src/hooks/useUndoRedo.ts
+- Local state changes are debounced and pushed to `pastStateStack`.
+- When a user triggers Undo/Redo locally, the resulting state is broadcast to the room via `GLOBAL_HISTORY_RESTORE` to keep all clients in sync.
+- Incoming `GLOBAL_HISTORY_RESTORE` payloads overwrite the local state and clear the local future stack but do NOT double-log into the past stack, avoiding infinite loops and alternate timeline collisions.
+## 12. PATTERN STUDIO SANDBOX (src/features/PatternBuilder/)
+
+### src/features/PatternBuilder/PatternWorkspace.tsx
+- Central orchestrator for the Pattern Studio workspace views.
+- Renders the floating Viewport HUD absolute-positioned at the top-center to let users switch between Design, Split, and Preview modes.
+
+### src/features/PatternBuilder/TessellationPreview.tsx
+- Live lattice repeating preview component.
+- Features dynamic zoom-scaling, customizable layout themes (custom colors, blueprints, line-art grids), and a centralized floating HUD for on-canvas adjustments.
+
+### src/features/PatternBuilder/VertexEditorCanvas.tsx
+- Responsive custom coordinate-grid drawing plane allowing manual polygon vertex positioning and dynamic edge splitting.
+- Features a ResizeObserver interface to perfectly center and auto-scale the canvas square to fit available viewport dimensions dynamically.
+

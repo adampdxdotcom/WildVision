@@ -1,0 +1,149 @@
+{
+  "version": "1.0",
+  "projectName": "PizzaOven",
+  "wallWidth": 96,
+  "wallHeight": 24,
+  "wallVertices": [
+    {
+      "x": 0,
+      "y": 0
+    },
+    {
+      "x": 96,
+      "y": 0
+    },
+    {
+      "x": 96,
+      "y": 40.634214743589745
+    },
+    {
+      "x": 47.99999999999995,
+      "y": 53.927356630442226,
+      "isCurveNode": true
+    },
+    {
+      "x": 2.4881280510801462e-15,
+      "y": 40.63421474358938
+    }
+  ],
+  "unit": "in",
+  "shape": "hexagon",
+  "tileWidth": 6,
+  "tileHeight": 6,
+  "pattern": "running_50",
+  "groutWidth": 0.125,
+  "angle": 0,
+  "tileName": "White Gloss Ceramic Subway",
+  "tileColors": [
+    "#fdfbf7"
+  ],
+  "colorPattern": "single",
+  "tilesPerStripe": 1,
+  "groutColor": "#64748b",
+  "tileSpecular": true,
+  "offsetX": 45,
+  "offsetY": 10.5,
+  "subAreas": [
+    {
+      "id": "sa_1781304067977",
+      "name": "OvenEntrance",
+      "x": 36,
+      "y": 4,
+      "width": 24,
+      "height": 24.67680326617827,
+      "shape": "rectangle",
+      "tileWidth": 4,
+      "tileHeight": 4,
+      "pattern": "stack",
+      "tileColors": [
+        "#0f766e"
+      ],
+      "colorPattern": "single",
+      "groutColor": "#cbd5e1",
+      "groutWidth": 0.125,
+      "offsetX": 0,
+      "offsetY": 0,
+      "tileSpecular": true,
+      "tileName": "Accent Teal Glass Mosaic",
+      "useLabelColor": true,
+      "labelColor": "#ffffff",
+      "vertices": [
+        {
+          "x": 36,
+          "y": 4
+        },
+        {
+          "x": 60,
+          "y": 4
+        },
+        {
+          "x": 60,
+          "y": 20
+        },
+        {
+          "x": 48,
+          "y": 28.67680326617827,
+          "isCurveNode": true
+        },
+        {
+          "x": 36,
+          "y": 20
+        }
+      ],
+      "isCutout": true
+    }
+  ],
+  "activeSubAreaId": null,
+  "wallExtensions": [],
+  "activeWallExtensionId": null,
+  "isPainted": true,
+  "isBlankCanvasMode": false,
+  "activePresetId": "subway-backsplash",
+  "zoom": 1,
+  "soldAsMosaic": false,
+  "mosaicWidth": 12,
+  "mosaicHeight": 12,
+  "overage": 10,
+  "hasNotes": false,
+  "notes": "",
+  "printQuantities": true,
+  "backgroundImage": null,
+  "isBgUnlocked": false,
+  "bgScale": 1,
+  "bgOffsetX": 0,
+  "bgOffsetY": 0,
+  "tileOpacity": 1,
+  "bgOpacity": 1,
+  "exportPhotoBg": true,
+  "showAccentDistances": false,
+  "wallBoundaryShape": "rectangle",
+  "wallArchHeight": 24,
+  "wallActiveArches": {
+    "top": true,
+    "bottom": false,
+    "left": false,
+    "right": false
+  },
+  "wallArchDepth": 24,
+  "wallAngle": 0,
+  "wallBorder": {
+    "enabled": false,
+    "tileName": "Border Tile",
+    "tileWidth": 4,
+    "tileHeight": 2,
+    "cornerJoint": "straight",
+    "color": "#1e293b"
+  },
+  "mainShapeSettings": {
+    "rectangle": {
+      "tileWidth": 6,
+      "tileHeight": 3,
+      "pattern": "running_50",
+      "groutWidth": 0.125,
+      "soldAsMosaic": false,
+      "mosaicWidth": 12,
+      "mosaicHeight": 12,
+      "colorPattern": "single"
+    }
+  }
+}
