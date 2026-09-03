@@ -382,41 +382,49 @@ export const TileCanvas3D: React.FC = () => {
 
       const panelNodeMap = new Map<any, THREE.Object3D>();
 
+      const addFlapChain = (parentGroup: THREE.Object3D, flaps: any[], isTop: boolean, defaultOffsetX: number) => {
+        let currentParent = parentGroup;
+        flaps.forEach((flap, idx) => {
+          const isFirst = idx === 0;
+          const posY = isFirst ? 0 : (isTop ? flaps[idx - 1].d3Height : -flaps[idx - 1].d3Height);
+          const foldAngleDeg = flap.foldAngle ?? 90;
+          const foldAngleRad = (foldAngleDeg * Math.PI) / 180;
+          const rotX = isTop ? foldAngleRad : -foldAngleRad;
+          const meshX = defaultOffsetX !== undefined ? defaultOffsetX : flap.d3Width / 2;
+
+          const hinge = new THREE.Object3D();
+          hinge.position.set(0, posY, 0);
+          hinge.rotation.set(rotX, 0, 0);
+          currentParent.add(hinge);
+
+          const panelObj = new THREE.Object3D();
+          panelObj.position.set(meshX, isTop ? flap.d3Height / 2 : -flap.d3Height / 2, 0);
+          hinge.add(panelObj);
+          panelNodeMap.set(flap, panelObj);
+
+          currentParent = hinge;
+        });
+      };
+
       if (rootCol && rootCol.mainRow) {
         const g = new THREE.Object3D();
         g.position.set(rootCol.d3Width / 2, rootCol.mainRow.d3CenterY, 0);
         modelGroup.add(g);
         panelNodeMap.set(rootCol.mainRow, g);
-        
-        let currentParent = modelGroup;
-        let posY = rootCol.mainRow.d3CenterY + rootCol.mainRow.d3Height / 2;
-        rootCol.topFlaps?.forEach((flap: any) => {
-           const hinge = new THREE.Object3D();
-           hinge.position.set(0, posY, 0);
-           hinge.rotation.x = (flap.foldAngle ?? 90) * Math.PI / 180;
-           currentParent.add(hinge);
-           const p = new THREE.Object3D();
-           p.position.set(0, flap.d3Height / 2, 0);
-           hinge.add(p);
-           panelNodeMap.set(flap, p);
-           currentParent = hinge;
-           posY = flap.d3Height;
-        });
 
-        currentParent = modelGroup;
-        posY = rootCol.mainRow.d3CenterY - rootCol.mainRow.d3Height / 2;
-        rootCol.bottomFlaps?.forEach((flap: any) => {
-           const hinge = new THREE.Object3D();
-           hinge.position.set(0, posY, 0);
-           hinge.rotation.x = -(flap.foldAngle ?? 90) * Math.PI / 180;
-           currentParent.add(hinge);
-           const p = new THREE.Object3D();
-           p.position.set(0, -flap.d3Height / 2, 0);
-           hinge.add(p);
-           panelNodeMap.set(flap, p);
-           currentParent = hinge;
-           posY = -flap.d3Height;
-        });
+        if (rootCol.topFlaps && rootCol.topFlaps.length > 0) {
+          const topMount = new THREE.Object3D();
+          topMount.position.set(0, rootCol.mainRow.d3CenterY + rootCol.mainRow.d3Height / 2, 0);
+          modelGroup.add(topMount);
+          addFlapChain(topMount, rootCol.topFlaps, true, rootCol.d3Width / 2);
+        }
+
+        if (rootCol.bottomFlaps && rootCol.bottomFlaps.length > 0) {
+          const btmMount = new THREE.Object3D();
+          btmMount.position.set(0, rootCol.mainRow.d3CenterY - rootCol.mainRow.d3Height / 2, 0);
+          modelGroup.add(btmMount);
+          addFlapChain(btmMount, rootCol.bottomFlaps, false, rootCol.d3Width / 2);
+        }
       }
 
       let leftParent = modelGroup;
@@ -427,10 +435,26 @@ export const TileCanvas3D: React.FC = () => {
         hinge.position.set(i === rootIdx - 1 ? 0 : -prevCol.d3Width, 0, 0);
         hinge.rotation.y = (col.rightFoldAngle ?? col.foldAngle ?? 90) * Math.PI / 180;
         leftParent.add(hinge);
+
         const p = new THREE.Object3D();
         p.position.set(-col.d3Width / 2, col.mainRow.d3CenterY, 0);
         hinge.add(p);
         panelNodeMap.set(col.mainRow, p);
+
+        if (col.topFlaps && col.topFlaps.length > 0) {
+          const topMount = new THREE.Object3D();
+          topMount.position.set(0, col.mainRow.d3CenterY + col.mainRow.d3Height / 2, 0);
+          hinge.add(topMount);
+          addFlapChain(topMount, col.topFlaps, true, -col.d3Width / 2);
+        }
+
+        if (col.bottomFlaps && col.bottomFlaps.length > 0) {
+          const btmMount = new THREE.Object3D();
+          btmMount.position.set(0, col.mainRow.d3CenterY - col.mainRow.d3Height / 2, 0);
+          hinge.add(btmMount);
+          addFlapChain(btmMount, col.bottomFlaps, false, -col.d3Width / 2);
+        }
+
         leftParent = hinge;
       }
 
@@ -442,10 +466,26 @@ export const TileCanvas3D: React.FC = () => {
         hinge.position.set(prevCol.d3Width, 0, 0);
         hinge.rotation.y = -(col.foldAngle ?? 90) * Math.PI / 180;
         rightParent.add(hinge);
+
         const p = new THREE.Object3D();
         p.position.set(col.d3Width / 2, col.mainRow.d3CenterY, 0);
         hinge.add(p);
         panelNodeMap.set(col.mainRow, p);
+
+        if (col.topFlaps && col.topFlaps.length > 0) {
+          const topMount = new THREE.Object3D();
+          topMount.position.set(0, col.mainRow.d3CenterY + col.mainRow.d3Height / 2, 0);
+          hinge.add(topMount);
+          addFlapChain(topMount, col.topFlaps, true, col.d3Width / 2);
+        }
+
+        if (col.bottomFlaps && col.bottomFlaps.length > 0) {
+          const btmMount = new THREE.Object3D();
+          btmMount.position.set(0, col.mainRow.d3CenterY - col.mainRow.d3Height / 2, 0);
+          hinge.add(btmMount);
+          addFlapChain(btmMount, col.bottomFlaps, false, col.d3Width / 2);
+        }
+
         rightParent = hinge;
       }
 
@@ -502,12 +542,16 @@ export const TileCanvas3D: React.FC = () => {
                const worldDir = new THREE.Vector3(0, 0, 1);
                worldDir.transformDirection(nicheNode.matrixWorld);
                
-               let hitPlane = '';
-               if (worldDir.z > 0.99) hitPlane = 'back';
-               else if (worldDir.x > 0.99) hitPlane = 'left';
-               else if (worldDir.x < -0.99) hitPlane = 'right';
-               else if (worldDir.y > 0.99) hitPlane = 'floor';
-               else if (worldDir.y < -0.99) hitPlane = 'ceiling';
+               const candidates = [
+                 { plane: 'back', dot: worldDir.z },
+                 { plane: 'left', dot: worldDir.x },
+                 { plane: 'right', dot: -worldDir.x },
+                 { plane: 'floor', dot: worldDir.y },
+                 { plane: 'ceiling', dot: -worldDir.y },
+               ];
+               candidates.sort((a, b) => b.dot - a.dot);
+               const best = candidates[0];
+               const hitPlane = best && best.dot > 0.7 ? best.plane : '';
 
                if (hitPlane) {
                   let hX = 0, hY = 0;
@@ -528,7 +572,6 @@ export const TileCanvas3D: React.FC = () => {
          }
       });
     }
-
 
     // Isolate the mainRow of the tile layout so we don't cut holes for floor/ceiling flaps
     let holeW = 0, holeH = 0, localHingeY3D = 0;
@@ -630,83 +673,20 @@ export const TileCanvas3D: React.FC = () => {
         hole.closePath();
 
         shape.holes.push(hole);
-      } else if (!isRecessed && attachedPlane === planeKey && subAreas && subAreas.length > 0) {
-        let rootCol: any = null;
-        if (d3Columns && d3Columns.length > 0) {
-          let rootIdx = 0;
-          let maxWidth = 0;
-          d3Columns.forEach((col, i) => { if (col.width > maxWidth) { maxWidth = col.width; rootIdx = i; } });
-          rootCol = d3Columns[rootIdx];
-        }
-
-        if (rootCol && rootCol.mainRow && !rootCol.mainRow.isGhost) {
-          const px = to3D(-(roomDimensions.width / 2) + layoutTransform.position[0]);
-          const py = to3D(-(roomDimensions.height / 2) + layoutTransform.position[1]);
-          const pz = to3D(layoutTransform.position[2]);
-
-          let hX = 0, hY = 0;
-          // Map global XYZ to local Wall 2D Space
-          if (planeKey === 'back') { hX = px; hY = py; }
-          else if (planeKey === 'left') { hX = -pz; hY = py; }
-          else if (planeKey === 'right') { hX = pz; hY = py; }
-          else if (planeKey === 'floor') { hX = px; hY = -pz; }
-          else if (planeKey === 'ceiling') { hX = px; hY = pz; }
-
-          const panel = rootCol.mainRow;
-          const totalBottomFlapsHeight = rootCol.bottomFlaps ? rootCol.bottomFlaps.reduce((sum: number, flap: any) => sum + flap.d3Height, 0) : 0;
-
-          subAreas.forEach((sa) => {
-            const rawType = (sa.accentType as string) || (sa.isCutout ? 'cutout' : (sa.hasSill ? 'niche' : 'flat'));
-            const resolvedType = (rawType === 'bench' ? 'shelf' : rawType) as 'flat' | 'niche' | 'shelf' | 'cutout';
-
-            if (resolvedType === 'niche' || resolvedType === 'cutout') {
-              const borderThickness = sa.border?.enabled ? Math.min(sa.border.tileWidth, sa.border.tileHeight) : 0;
-              const isCutoutVal = resolvedType === 'cutout';
-              const inset = isCutoutVal ? -borderThickness : borderThickness;
-
-              const activeX = sa.x + inset;
-              const activeWidth = Math.max(0.01, sa.width - 2 * inset);
-              const activeY = sa.y + inset;
-              const activeHeight = Math.max(0.01, sa.height - 2 * inset);
-
-              const toD3X_sa = (x: number) => ((x - panel.startX) / panel.width - 0.5) * panel.d3Width;
-              const toD3Y_sa = (y: number) => ((y - panel.startY) / panel.height - 0.5) * panel.d3Height;
-
-              const saLeft_3D = toD3X_sa(activeX);
-              const saRight_3D = toD3X_sa(activeX + activeWidth);
-              const saBottom_3D = toD3Y_sa(activeY);
-              const saTop_3D = toD3Y_sa(activeY + activeHeight);
-
-              const saLocalX = (saLeft_3D + saRight_3D) / 2;
-              const saLocalY = (saBottom_3D + saTop_3D) / 2;
-
-              const saD3Width = saRight_3D - saLeft_3D;
-              const saD3Height = saTop_3D - saBottom_3D;
-
-              const saCenterX_wall = hX + saLocalX;
-              const saCenterY_wall = hY + totalBottomFlapsHeight + panel.d3CenterY + saLocalY;
-
-              const startX = saCenterX_wall - (saD3Width / 2);
-              const startY = saCenterY_wall - (saD3Height / 2);
-
-              const xLeft = clampX(startX);
-              const xRight = clampX(startX + saD3Width);
-              const yBottom = clampY(startY);
-              const yTop = clampY(startY + saD3Height);
-
-              const hole = new THREE.Path();
-              // Draw CLOCKWISE winding-order to ensure earcut works perfectly
-              hole.moveTo(xLeft, yBottom); // Bottom-Left
-              hole.lineTo(xLeft, yTop); // Top-Left
-              hole.lineTo(xRight, yTop); // Top-Right
-              hole.lineTo(xRight, yBottom); // Bottom-Right
-              hole.closePath();
-
-              shape.holes.push(hole);
-            }
-          });
-        }
+      } else {
+        const nicheHoles = holeConfigByPlane[planeKey] || [];
+        nicheHoles.forEach((hc) => {
+          const hole = new THREE.Path();
+          // Draw CLOCKWISE so Three.js triangulation recognizes it as a hole
+          hole.moveTo(clampX(hc.xLeft), clampY(hc.yBottom));
+          hole.lineTo(clampX(hc.xLeft), clampY(hc.yTop));
+          hole.lineTo(clampX(hc.xRight), clampY(hc.yTop));
+          hole.lineTo(clampX(hc.xRight), clampY(hc.yBottom));
+          hole.closePath();
+          shape.holes.push(hole);
+        });
       }
+
       return shape;
     };
 
