@@ -4,6 +4,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { X, Save, Cloud, FileDown, Check, RefreshCw, AlertCircle, Copy } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { logger } from '../../utils/logger';
+import { uploadProjectGlbModel } from '../../utils/glbUploader';
 
 interface SaveModalProps {
   isOpen: boolean;
@@ -156,6 +157,11 @@ export const SaveModal: React.FC<SaveModalProps> = ({
           useAppStore.getState().setIsCanvasDirty(false);
           setSuccessMsg('Project synchronized successfully!');
           logger.info('Project saved to cloud', { projectId: currentProjectId });
+          
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('wildvision:exportGlb', { detail: { projectId: currentProjectId } }));
+          }
+
           // Auto close modal shortly
           setTimeout(() => onClose(), 1000);
         }
@@ -177,8 +183,14 @@ export const SaveModal: React.FC<SaveModalProps> = ({
         } else if (data) {
           setProjectMetadata(data.id, data.name);
           useAppStore.getState().setIsCanvasDirty(false);
+
           setSuccessMsg('Project published and saved to Cloud!');
           logger.info('Project saved to cloud', { projectId: data.id });
+          
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('wildvision:exportGlb', { detail: { projectId: data.id } }));
+          }
+
           setTimeout(() => onClose(), 1000);
         }
       }
@@ -386,6 +398,77 @@ export const SaveModal: React.FC<SaveModalProps> = ({
                 </p>
               </div>
             </button>
+          )}
+
+          {/* Option D: Sync 3D to Mobile */}
+          {user && currentProjectId ? (
+            <button
+              type="button"
+              onClick={async () => {
+                const export3DSceneToGlbFn = useAppStore.getState().export3DSceneToGlbFn;
+                if (export3DSceneToGlbFn) {
+                  try {
+                    setLoading(true);
+                    setSuccessMsg('Uploading 3D model to cloud...');
+                    setErrorMsg('');
+                    console.log("[GLB EXPORT] Starting 'Sync 3D to Mobile' export...");
+
+                    const glbBlob = await export3DSceneToGlbFn();
+                    if (glbBlob) {
+                      console.log("[GLB EXPORT] Parse complete! Uploading to Supabase Storage...");
+                      
+                      // Upload generated GLB Blob directly to Supabase Storage
+                      const glbUrl = await uploadProjectGlbModel(user.id, currentProjectId, glbBlob);
+                      
+                      if (!glbUrl) {
+                        throw new Error("Supabase Storage upload returned empty URL.");
+                      }
+                      console.log("[GLB EXPORT] Upload success! URL: " + glbUrl);
+
+                      setSuccessMsg('GLB file uploaded successfully!');
+                      setTimeout(() => onClose(), 1200);
+                    } else {
+                      setErrorMsg('Failed to generate GLB file. Make sure 3D scene is ready.');
+                    }
+                  } catch (err: any) {
+                    console.error("[GLB EXPORT] Failed:", err);
+                    setErrorMsg('Error syncing to Mobile: ' + (err?.message || String(err)));
+                  } finally {
+                    setLoading(false);
+                  }
+                } else {
+                  setErrorMsg('3D scene is not active or ready for export.');
+                }
+              }}
+              disabled={loading}
+              className="flex items-start text-left p-4 rounded-xl border border-indigo-200 dark:border-indigo-900/50 hover:border-indigo-300 dark:hover:border-indigo-800 bg-indigo-50/10 dark:bg-indigo-950/5 hover:bg-indigo-50/20 dark:hover:bg-indigo-950/10 shadow-xs cursor-pointer transition select-none group"
+            >
+              <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-650 group-hover:text-indigo-750 group-hover:bg-indigo-100/85 rounded-lg mr-4 border border-indigo-100 dark:border-indigo-950">
+                <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-sm font-bold text-indigo-900 dark:text-indigo-400">
+                  Sync 3D to Mobile
+                </h4>
+                <p className="text-[11px] text-slate-550 dark:text-slate-400 leading-relaxed mt-1">
+                  Compile and upload the full 3D room diorama to the cloud for viewing in the WildVision Mobile App.
+                </p>
+              </div>
+            </button>
+          ) : (
+            <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-550/5 dark:bg-slate-950/10">
+              <div className="flex gap-2.5 items-start">
+                <Cloud size={16} className="text-slate-400 mt-0.5 shrink-0" />
+                <div>
+                  <h4 className="text-xs font-bold text-slate-550 dark:text-slate-400">
+                    Sync to Mobile Disabled
+                  </h4>
+                  <p className="text-[10px] text-slate-400 leading-relaxed mt-1">
+                    Connect an account and save your active project to the cloud to synchronize its 3D assets with mobile.
+                  </p>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

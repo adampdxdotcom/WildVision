@@ -6,7 +6,8 @@ export const useCursorManager = (
   isActiveContextPainting: boolean,
   activeTool: string,
   isBgUnlocked: boolean,
-  backgroundImage: any
+  backgroundImage: any,
+  hoveredSubAreaEdge?: { id: string; handle: 'l' | 'r' | 't' | 'b' } | null
 ) => {
   const [activeCursor, setActiveCursor] = useState<string>('grab');
 
@@ -23,6 +24,14 @@ export const useCursorManager = (
       setActiveCursor('crosshair');
       return;
     }
+    if (hoveredSubAreaEdge) {
+      if (hoveredSubAreaEdge.handle === 'l' || hoveredSubAreaEdge.handle === 'r') {
+        setActiveCursor('ew-resize');
+      } else {
+        setActiveCursor('ns-resize');
+      }
+      return;
+    }
     if (activeTool === 'pen' || activeTool === 'pen-arch') {
       setActiveCursor('crosshair');
     } else if (activeTool === 'eraser') {
@@ -34,7 +43,7 @@ export const useCursorManager = (
     } else {
       setActiveCursor(isBgUnlocked && backgroundImage ? 'grab' : 'default');
     }
-  }, [isPanningCanvas, isBgUnlocked, backgroundImage, activeTool, isActiveContextPainting, isReadOnly]);
+  }, [isPanningCanvas, isBgUnlocked, backgroundImage, activeTool, isActiveContextPainting, isReadOnly, hoveredSubAreaEdge]);
 
   return { activeCursor, setActiveCursor };
 };

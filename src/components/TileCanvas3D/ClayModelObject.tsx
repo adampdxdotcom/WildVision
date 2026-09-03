@@ -110,7 +110,9 @@ const ClayModelInner: React.FC<ClayModelObjectProps> = ({
   let posZ = to3D(data.position[2]);
 
   const onDown = (e: any) => {
-    if (data.isLocked) return;
+    const isPublicViewer = useAppStore.getState().isPublicViewer;
+    const isReadOnly = useAppStore.getState().isReadOnly;
+    if (data.isLocked || isPublicViewer || isReadOnly) return;
     e.stopPropagation();
     handlePointerDown(e, data.id);
   };

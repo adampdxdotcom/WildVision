@@ -1,6 +1,8 @@
 import React from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { MeasurementUnit } from '../../types';
+import { switchMeasurementUnit } from '../../utils/unitUtils';
+import { ClientActivityCard } from './ClientActivityCard';
 import {
   ArrowLeft,
   Info,
@@ -11,61 +13,20 @@ import {
 
 export const SettingsPanel: React.FC = () => {
   const {
-    unit, setUnit,
-    wallWidth, setWallWidth,
-    wallHeight, setWallHeight,
-    tileWidth, setTileWidth,
-    tileHeight, setTileHeight,
-    groutWidth, setGroutWidth,
-    setSubAreas,
-    setWallExtensions,
-    wallArchHeight, setWallArchHeight,
+    unit,
     overage, setOverage,
     viewSettings, updateViewSetting,
     setTutorialStepIndex,
-    autoSavePatterns, setAutoSavePatterns
+    autoSavePatterns, setAutoSavePatterns,
+    publicShowQuantities, setPublicShowQuantities,
+    publicShowPricing, setPublicShowPricing
   } = useAppStore();
 
   const [showHelp, setShowHelp] = React.useState<boolean>(false);
   const [helpTab, setHelpTab] = React.useState<'instructions' | 'features'>('instructions');
 
   const handleUnitChange = (newUnit: MeasurementUnit) => {
-    if (newUnit === unit) return;
-    setUnit(newUnit);
-
-    const ratio = newUnit === 'cm' ? 2.54 : 1 / 2.54;
-    setWallWidth(Number((wallWidth * ratio).toFixed(1)));
-    setWallHeight(Number((wallHeight * ratio).toFixed(1)));
-    setTileWidth(Number((tileWidth * ratio).toFixed(2)));
-    setTileHeight(Number((tileHeight * ratio).toFixed(2)));
-    setGroutWidth(Number((groutWidth * ratio).toFixed(3)));
-
-    if (wallArchHeight && setWallArchHeight) {
-      setWallArchHeight(Number((wallArchHeight * ratio).toFixed(1)));
-    }
-
-    setSubAreas((prev) =>
-      prev.map((sa) => ({
-        ...sa,
-        x: Number((sa.x * ratio).toFixed(2)),
-        y: Number((sa.y * ratio).toFixed(2)),
-        width: Number((sa.width * ratio).toFixed(2)),
-        height: Number((sa.height * ratio).toFixed(2)),
-        tileWidth: Number((sa.tileWidth * ratio).toFixed(2)),
-        tileHeight: Number((sa.tileHeight * ratio).toFixed(2)),
-        groutWidth: Number((sa.groutWidth * ratio).toFixed(3)),
-      }))
-    );
-
-    setWallExtensions((prev) =>
-      prev.map((ext) => ({
-        ...ext,
-        x: Number((ext.x * ratio).toFixed(2)),
-        y: Number((ext.y * ratio).toFixed(2)),
-        width: Number((ext.width * ratio).toFixed(2)),
-        height: Number((ext.height * ratio).toFixed(2)),
-      }))
-    );
+    switchMeasurementUnit(newUnit);
   };
 
   return (
@@ -350,6 +311,50 @@ export const SettingsPanel: React.FC = () => {
                 <span>Enable Glazed Ceramic Reflection</span>
               </label>
             </div>
+
+            {/* CLIENT LINK PREFERENCES */}
+            <div className="border-t border-slate-100 pt-3 space-y-3 text-xs text-slate-650">
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                CLIENT LINK PREFERENCES
+              </span>
+
+              <label className="flex flex-col gap-1 cursor-pointer font-semibold">
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={!!publicShowQuantities}
+                    onChange={(e) => setPublicShowQuantities(e.target.checked)}
+                    className="accent-indigo-600 rounded-xs cursor-pointer"
+                  />
+                  <span>Allow Clients to View Material Quantities</span>
+                </div>
+                <span className="text-[9px] text-slate-400 ml-6 block leading-normal font-sans font-normal">
+                  Controls whether clients can view tile counts and material specifications in shared public CAD links.
+                </span>
+              </label>
+
+              <label
+                className={`flex flex-col gap-1 font-semibold transition-opacity ${
+                  !publicShowQuantities ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={!!publicShowPricing}
+                    disabled={!publicShowQuantities}
+                    onChange={(e) => setPublicShowPricing(e.target.checked)}
+                    className="accent-indigo-600 rounded-xs cursor-pointer disabled:cursor-not-allowed"
+                  />
+                  <span>Include Pricing & Cost Estimator</span>
+                </div>
+                <span className="text-[9px] text-slate-400 ml-6 block leading-normal font-sans font-normal">
+                  Allows clients to see estimated costs based on material calculations. Requires material quantities to be enabled.
+                </span>
+              </label>
+            </div>
+
+            <ClientActivityCard />
 
           </div>
         </div>

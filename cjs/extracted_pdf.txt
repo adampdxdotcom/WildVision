@@ -1,0 +1,438 @@
+async function hpe(n, e, t, s) {
+  const {
+      wallWidth: i,
+      wallHeight: r,
+      wallVertices: a,
+      unit: o,
+      wallExtensions: l,
+      shape: u,
+      tileWidth: h,
+      tileHeight: f,
+      pattern: g,
+      groutWidth: p,
+      offsetX: b,
+      offsetY: v,
+      angle: w,
+      activeSubAreaId: y,
+      isBlankCanvasMode: A,
+      soldAsMosaic: M,
+      mosaicWidth: C,
+      mosaicHeight: E,
+      overage: k,
+      disableTileColorOnPdf: R,
+      exportPhotoBg: P,
+      backgroundImage: N,
+      bgScale: I,
+      bgOffsetX: D,
+      bgOffsetY: O,
+      tileOpacity: B,
+      bgOpacity: L,
+      showAccentDistances: Y,
+      wallBoundaryShape: H,
+      wallArchHeight: U,
+      wallActiveArches: J,
+      wallArchDepth: X,
+      wallAngle: se,
+      colorVariation: V,
+      tileDotColor: z,
+      isPicket: Z,
+      picketLength: te,
+      canvasLabels: ie,
+      foldLines: ne,
+      tileColors: ce,
+      tileColor: ve,
+      groutColor: ge,
+      tileSpecular: xe,
+      isPainted: be,
+      colorPattern: Ne,
+      tilesPerStripe: Pe,
+      angleDisplayMode: G,
+      activeCustomPattern: q,
+      flatsketVerticalRows: ue,
+      flatsketHorizontalRows: ee,
+    } = n,
+    le = window.devicePixelRatio || 1,
+    de = e.width / le,
+    re = e.height / le,
+    Te = s.width,
+    _e = s.height,
+    ke = s.minX,
+    Se = s.minY;
+  let Ee = Te,
+    he = _e;
+  if (se && se !== 0) {
+    const Ut = (se * Math.PI) / 180;
+    ((Ee = Te * Math.abs(Math.cos(Ut)) + _e * Math.abs(Math.sin(Ut))),
+      (he = Te * Math.abs(Math.sin(Ut)) + _e * Math.abs(Math.cos(Ut))));
+  }
+  const fe = 80,
+    je = Math.min((de - fe * 2) / (Ee || 1), (re - fe * 2) / (he || 1)) * 1,
+    Oe = Te * je,
+    ze = _e * je,
+    Je = (de - Oe) / 2,
+    We = (re - ze) / 2,
+    Ke = {
+      cornerX: Je,
+      cornerY: We,
+      renderW: Oe,
+      renderH: ze,
+      scale: je,
+      minX: ke,
+      minY: Se,
+    },
+    ot = 42,
+    De = Ee * je,
+    Ge = he * je,
+    He = Math.max(0, (de - De) / 2 - ot),
+    at = Math.max(0, (re - Ge) / 2 - ot),
+    pt = Math.min(de - He, De + ot * 2),
+    At = Math.min(re - at, Ge + ot * 2),
+    qe = 4;
+  let Fe = null;
+  if (P && N)
+    try {
+      Fe = await mz(N);
+    } catch (Ut) {
+      console.error("Error loading background image for PDF export:", Ut);
+    }
+  const Be = document.createElement("canvas");
+  ((Be.width = de * qe), (Be.height = re * qe));
+  const it = Be.getContext("2d");
+  if (!it) return null;
+  if ((it.scale(qe, qe), it.clearRect(0, 0, de, re), Fe)) {
+    (it.save(), (it.globalAlpha = L || 1));
+    const Ut = de / 2,
+      Xt = re / 2;
+    (it.translate(Ut + (D || 0), Xt + (O || 0)),
+      it.scale(I || 1, I || 1),
+      it.drawImage(Fe, -Fe.width / 2, -Fe.height / 2),
+      it.restore());
+  }
+  if ((D6(it, de, re, !!Fe, !0, Ke, o), it.save(), se && se !== 0)) {
+    const Ut = Ke.cornerX + Ke.renderW / 2,
+      Xt = Ke.cornerY + Ke.renderH / 2;
+    (it.translate(Ut, Xt),
+      it.rotate((se * Math.PI) / 180),
+      it.translate(-Ut, -Xt));
+  }
+  if (
+    (it.save(),
+    (it.fillStyle = "#1e293b"),
+    (it.strokeStyle = "#1e293b"),
+    (it.lineJoin = "round"),
+    (it.lineWidth = 7),
+    To(it, Ke, i, r, l, H, U, J, X, 0, a),
+    it.fill(),
+    it.stroke(),
+    (it.globalAlpha = B || 1),
+    (it.fillStyle = be ? ge : "rgba(226, 232, 240, 0.8)"),
+    To(it, Ke, i, r, l, H, U, J, X, 0, a),
+    it.fill(),
+    be ||
+      ((it.fillStyle = "#64748b"),
+      (it.font = "13px system-ui, sans-serif"),
+      (it.textAlign = "center"),
+      it.fillText(
+        "Click 'Paint Canvas' to layout tiles",
+        Ke.cornerX + Ke.renderW / 2,
+        Ke.cornerY + Ke.renderH / 2,
+      )),
+    it.restore(),
+    be)
+  ) {
+    if ((it.save(), To(it, Ke, i, r, l, H, U, J, X, 0, a), it.clip(), A)) {
+      (it.save(),
+        (it.fillStyle = "rgba(255, 255, 255, 0.16)"),
+        (it.font = 'bold 15px "Space Grotesk", "Inter", system-ui, sans-serif'),
+        (it.textAlign = "center"),
+        (it.textBaseline = "middle"));
+      const Xt = Math.sqrt(de * de + re * re),
+        en = 145,
+        _n = 64;
+      (it.translate(de / 2, re / 2), it.rotate((-25 * Math.PI) / 180));
+      let gn = 0;
+      for (let Pn = -Xt; Pn < Xt; Pn += _n) {
+        const an = (gn % 2) * (en / 2);
+        for (let Nn = -Xt + an; Nn < Xt; Nn += en)
+          it.fillText("Blank Canvas", Nn, Pn);
+        gn++;
+      }
+      it.restore();
+    } else {
+      const Xt = hg({
+        wallWidth: i,
+        wallHeight: r,
+        shape: u,
+        tileWidth: h,
+        tileHeight: f,
+        pattern: g,
+        groutWidth: p,
+        offsetX: b,
+        offsetY: v,
+        angle: w,
+        extensions: l,
+        isPicket: Z,
+        picketLength: te,
+        wallVertices: a,
+        activeCustomPattern: q,
+        flatsketVerticalRows: ue,
+        flatsketHorizontalRows: ee,
+        layoutId: "main",
+      });
+      (it.save(),
+        (it.globalAlpha = B || 1),
+        wb(
+          it,
+          Xt,
+          Ke,
+          ce || (ve ? [ve] : ["#f1f5f9"]),
+          Ne || "single",
+          xe,
+          t,
+          i,
+          r,
+          h,
+          f,
+          u,
+          l,
+          R,
+          V,
+          z,
+          p,
+          Pe,
+          a,
+        ),
+        it.restore());
+    }
+    it.restore();
+    const Ut = n.wallBorder;
+    if (Ut != null && Ut.enabled) {
+      const Xt = ce && ce.length > 0 ? ce[0] : "#f1f5f9",
+        en = Ut.color || Xt;
+      Ov(
+        it,
+        { x: 0, y: 0, w: i, h: r },
+        Ut,
+        !1,
+        Ke,
+        0,
+        R ? "#ffffff" : en,
+        ge,
+        p,
+      );
+    }
+    (_b(it, t, y, Ke, xe, o, i, r, l, !1, B, R, H, U, J, X, a, !1, null),
+      T3(it, Ke, t, Y || !1, o, !!Fe, !0, G));
+  }
+  (N3(it, Ke, Te, _e, o, i, r, l, !!Fe, [], !1, a, !0, G),
+    ne &&
+      ne.length > 0 &&
+      a &&
+      B6(it, ne, a, (Xt, en) => {
+        const _n = ti(Xt, en, Ke);
+        return { px: _n.x, py: _n.y };
+      }),
+    ie &&
+      ie.length > 0 &&
+      (it.save(),
+      (it.font =
+        'bold 11.5px "Space Grotesk", "Inter", "Helvetica Neue", sans-serif'),
+      (it.textAlign = "center"),
+      (it.textBaseline = "middle"),
+      ie.forEach((Ut) => {
+        const Xt = ti(Ut.x, Ut.y, Ke);
+        ((it.fillStyle = "#ffffff"),
+          [
+            [-1, -1],
+            [1, -1],
+            [-1, 1],
+            [1, 1],
+            [0, -1.2],
+            [0, 1.2],
+            [-1.2, 0],
+            [1.2, 0],
+          ].forEach(([_n, gn]) =>
+            it.fillText(Ut.text, Xt.x + _n * 0.8, Xt.y + gn * 0.8),
+          ),
+          (it.fillStyle = "#0f172a"),
+          it.fillText(Ut.text, Xt.x, Xt.y));
+      }),
+      it.restore()),
+    it.restore());
+  const vt = He * qe,
+    gt = at * qe,
+    Pt = pt * qe,
+    _t = At * qe,
+    Nt = document.createElement("canvas");
+  ((Nt.width = Pt), (Nt.height = _t));
+  const Tt = Nt.getContext("2d");
+  if (!Tt) return ((Be.width = 0), (Be.height = 0), null);
+  Tt.drawImage(Be, vt, gt, Pt, _t, 0, 0, Pt, _t);
+  const Dt = Nt.toDataURL("image/png");
+  return (
+    (Be.width = 0),
+    (Be.height = 0),
+    (Nt.width = 0),
+    (Nt.height = 0),
+    { dataUrl: Dt, width: Pt, height: _t }
+  );
+}
+function G2(n, e, t, s, i, r, a, o) {
+  (n.setFont("helvetica", "bold"),
+    n.setFontSize(22),
+    n.setTextColor(15, 23, 42),
+    n.text(t || "Untitled Tile Layout Project", 15, 20),
+    n.setFont("helvetica", "bold"),
+    n.setFontSize(11),
+    n.setTextColor(79, 70, 229));
+  const l = `Wall Size: ${s} x ${i} ${r}`,
+    u = n.getTextWidth(l);
+  (n.text(l, 195 - u, 20),
+    n.setFont("helvetica", "normal"),
+    n.setFontSize(10),
+    n.setTextColor(100, 116, 139));
+  const h = new Date().toLocaleDateString();
+  (n.text(`Tile Layout Report - Generated ${h}`, 15, 27),
+    n.setDrawColor(226, 232, 240),
+    n.setLineWidth(0.5),
+    n.line(15, 31, 195, 31),
+    n.setFont("helvetica", "italic"),
+    n.setFontSize(8),
+    n.setTextColor(148, 163, 184),
+    n.text("Generated using WildVision Tile Layout Engine", 15, 285),
+    a &&
+      (n.setFont("helvetica", "normal"),
+      n.setTextColor(148, 163, 184),
+      n.text(`Page ${e} of ${o}`, 105, 285, { align: "center" })),
+    n.setFont("helvetica", "italic"),
+    n.setTextColor(148, 163, 184),
+    n.text("Layout and quantities are only estimates.", 195, 285, {
+      align: "right",
+    }));
+}
+function fpe(n, e, t, s, i, r, a, o, l, u) {
+  const {
+    unit: h,
+    wallWidth: f,
+    wallHeight: g,
+    wallVertices: p,
+    wallBoundaryShape: b,
+    wallArchHeight: v,
+    wallActiveArches: w,
+    wallArchDepth: y,
+    wallExtensions: A,
+    isBlankCanvasMode: M,
+    tileName: C,
+    shape: E,
+    tileWidth: k,
+    tileHeight: R,
+    pattern: P,
+    printQuantities: N,
+    soldAsMosaic: I,
+    mosaicWidth: D,
+    mosaicHeight: O,
+    overage: B = 10,
+  } = u;
+  (n.setFillColor(248, 250, 252),
+    n.setDrawColor(203, 213, 225),
+    n.setLineWidth(0.35),
+    n.rect(e, t, s, i, "F"),
+    n.rect(e, t, s, i, "D"),
+    n.setFillColor(79, 70, 229),
+    n.rect(e, t, s, 8, "F"),
+    n.setFont("helvetica", "bold"),
+    n.setFontSize(8.5),
+    n.setTextColor(255, 255, 255),
+    n.text("SPECIFICATIONS & TILES", e + 6, t + 5.5),
+    n.setDrawColor(226, 232, 240),
+    n.setLineWidth(0.2),
+    n.line(e + 58, t + 12, e + 58, t + i - 6),
+    n.line(e + 118, t + 12, e + 118, t + i - 6));
+  const L = e + 6;
+  let Y = t + 14;
+  (n.setFont("helvetica", "bold"),
+    n.setFontSize(9),
+    n.setTextColor(71, 85, 105),
+    n.text("Wall Configuration", L, Y),
+    (Y += 5),
+    n.setFont("helvetica", "normal"),
+    n.setFontSize(8),
+    n.setTextColor(51, 65, 85),
+    n.text(`Overall Size: ${a} x ${o} ${h}`, L + 2, Y),
+    (Y += 4.5));
+  const U = U5(u).mainReport.netArea || 0;
+  (n.text(
+    `Total Area: ${h === "in" ? (U / 144).toFixed(2) + " sq ft" : U.toFixed(1) + " sq " + h}`,
+    L + 2,
+    Y,
+  ),
+    (Y += 4.5));
+  const J = e + 62;
+  let X = t + 14;
+  if (M)
+    (n.setFont("helvetica", "bold"),
+      n.setFontSize(9),
+      n.setTextColor(71, 85, 105),
+      n.text("Main Wall Tile", J, X),
+      (X += 5),
+      n.setFont("helvetica", "italic"),
+      n.setFontSize(8),
+      n.setTextColor(148, 163, 184),
+      n.text("Blank Canvas Mode Active", J + 2, X),
+      (X += 4.5),
+      n.text("(Main tile layer is disabled)", J + 2, X));
+  else {
+    (n.setFont("helvetica", "bold"),
+      n.setFontSize(9),
+      n.setTextColor(71, 85, 105),
+      n.text("Main Wall Tile", J, X),
+      (X += 5),
+      n.setFont("helvetica", "bold"),
+      n.setFontSize(8.5),
+      n.setTextColor(15, 23, 42));
+    const z = C || "Main Wall Tile",
+      Z = n.splitTextToSize(z, 52);
+    (n.text(Z, J + 2, X),
+      (X += Z.length * 4),
+      n.setFont("helvetica", "normal"),
+      n.setFontSize(8),
+      n.setTextColor(51, 65, 85));
+    const te =
+      E === "rectangle" || E === "diamond"
+        ? `${k} x ${R} ${h}`
+        : `${k} x ${k} ${h} (${E})`;
+    (n.text(`Dimensions: ${te}`, J + 2, X), (X += 4.5));
+    let ie = P.toUpperCase();
+    if (
+      (P === "running_50"
+        ? (ie = "1/2 Running Bond")
+        : P === "third_33"
+          ? (ie = "1/3 Running Bond")
+          : P === "stack"
+            ? (ie = "Stacked Grid")
+            : P === "herringbone"
+              ? (ie = "Herringbone (45°)")
+              : P === "basket_weave"
+                ? (ie = "Basket Weave")
+                : P === "plank" && (ie = "Plank (Vertical Columns)"),
+      n.text(`Layout: ${ie}`, J + 2, X),
+      (X += 4.5),
+      N !== !1)
+    ) {
+      const ne = U5(u);
+      let ce = f * g;
+      (p && p.length >= 3
+        ? (ce = uf(p))
+        : b &&
+          b !== "rectangle" &&
+          (ce = Go({
+            width: f,
+            height: g,
+            boundaryShape: b,
+            archHeight: v,
+            activeArches: w,
+            archDepth: y,
+          })),
+        !p && A && A.length > 0 && (ce += A.reduce((Pe, G) => Pe + Go(G), 0)));
+      const ve = l.reduce((Pe, G) => Pe + Go(G), 0),
+        ge = Math.max(0

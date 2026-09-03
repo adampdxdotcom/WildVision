@@ -1,10 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { Sparkles, ChevronsLeftRight } from 'lucide-react';
+import { logProjectView } from '../../utils/telemetry';
 
 export const PresentationView: React.FC = () => {
-  const { projectName, featuredRenderId, generatedRenders } = useAppStore();
+  const { projectName, featuredRenderId, generatedRenders, shareToken } = useAppStore();
   const [sliderPosition, setSliderPosition] = useState<number>(50);
+  const hasLoggedRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    const token = shareToken || new URLSearchParams(window.location.search).get('share');
+    if (token && !hasLoggedRef.current) {
+      hasLoggedRef.current = true;
+      logProjectView(token, 'ai_presentation');
+    }
+  }, [shareToken]);
 
   // Check if the user/designer deleted the featured image
   const isImageDeleted = featuredRenderId ? !generatedRenders.some(r => r.id === featuredRenderId) : false;

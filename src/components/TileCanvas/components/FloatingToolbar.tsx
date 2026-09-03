@@ -9,10 +9,11 @@ export const FloatingToolbar: React.FC = React.memo(() => {
   const setActiveWallExtensionId = useAppStore(state => state.setActiveWallExtensionId);
   const tutorialStepIndex = useAppStore(state => state.tutorialStepIndex);
   const isReadOnly = useAppStore(state => state.isReadOnly);
+  const isPublicViewer = useAppStore(state => state.isPublicViewer);
   
   const [isHovered, setIsHovered] = useState(false);
 
-  if (isReadOnly) return null;
+  if (isReadOnly || isPublicViewer) return null;
 
   const isExpanded = isHovered || tutorialStepIndex === 4 || tutorialStepIndex === 5;
   const isSelectorTutorialHighlight = tutorialStepIndex === 4;
@@ -155,7 +156,12 @@ export const FloatingToolbar: React.FC = React.memo(() => {
   return (
     <div 
       id="floating-toolbar" 
-      className="absolute top-3 left-3 z-10"
+      className="absolute top-3 left-3 z-30 pointer-events-auto"
+      onPointerDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+      onPointerUp={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >

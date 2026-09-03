@@ -32,7 +32,7 @@ export const useSelectionHandler = ({
 }: UseSelectionHandlerProps) => {
 
   const handleSelectionClick = (clientX: number, clientY: number, hoveredSegment: any): boolean => {
-    if (hoveredSegment && wallVertices) {
+    if (!activeSubAreaId && hoveredSegment && wallVertices) {
       const nodeA = wallVertices[hoveredSegment.indexA];
       const nodeB = wallVertices[hoveredSegment.indexB];
       if (nodeA && nodeB) {
@@ -110,7 +110,7 @@ export const useSelectionHandler = ({
     }
 
     // Check wall segments if no subarea segment was hit
-    if (!hitSegment && wallVertices && wallVertices.length >= 3) {
+    if (!hitSegment && !activeSubAreaId && wallVertices && wallVertices.length >= 3) {
       const n = wallVertices.length;
       for (let i = 0; i < n; i++) {
         const p1 = wallVertices[i] as any;

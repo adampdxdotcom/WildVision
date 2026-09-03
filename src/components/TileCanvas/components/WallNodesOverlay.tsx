@@ -476,7 +476,8 @@ export const WallNodesOverlay: React.FC<WallNodesOverlayProps> = ({
                     const newFold = {
                       id,
                       startNodeIndex: draftFoldNodeIndex,
-                      endNodeIndex: i
+                      endNodeIndex: i,
+                      foldAngle: 90
                     };
                     setFoldLines([...foldLines, newFold]);
                     setDraftFoldNodeIndex(null);

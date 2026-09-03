@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { TileShape, RectanglePattern, MeasurementUnit, SubArea, WallExtension, ColorVariation, ColorPattern, ComprehensiveReport, BorderConfig } from '../types';
-import { Sliders, Grid, Layers, Compass, Palette, Image, BarChart2, Link2, RefreshCw, ExternalLink, Lock } from 'lucide-react';
+import { Sliders, Grid, Layers, Compass, Palette, Image, BarChart2, Link2, RefreshCw, ExternalLink, Lock, Download } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { supabase } from '../utils/supabaseClient';
 import { WallSetupPanel } from './Sidebar/WallSetupPanel';
@@ -44,7 +44,11 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
     linkProject,
     syncLinkToSubfloor,
     currentProjectId,
-    isReadOnly
+    isReadOnly,
+    before_splat_url,
+    after_splat_url,
+    viewMode,
+    projectName
   } = useAppStore();
 
   const subfloorApiKey = useAuthStore(state => state.subfloor_api_key);
@@ -75,6 +79,31 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
 
   const activeSubfloorUrl = globalSubfloorUrl || subfloorUrl;
   const showSubfloorBlock = !!globalSubfloorApiKey || !!subfloorApiKey;
+
+  const [isDownloadingSplat, setIsDownloadingSplat] = React.useState(false);
+
+  const handleDownloadSplat = async () => {
+    const targetUrl = after_splat_url || before_splat_url;
+    if (!targetUrl) return;
+
+    try {
+      setIsDownloadingSplat(true);
+      const response = await fetch(targetUrl);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${projectName.replace(/\s+/g, '_')}_Model.splat`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error('Error downloading .splat file:', err);
+    } finally {
+      setIsDownloadingSplat(false);
+    }
+  };
 
   React.useEffect(() => {
     if ((globalSubfloorApiKey || subfloorApiKey) && subfloorProjects.length === 0) {
@@ -285,6 +314,25 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                     )}
                   </div>
                 )}
+              </div>
+            )}
+
+            {viewMode === 'splatter' && (before_splat_url || after_splat_url) && (
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-indigo-800 uppercase tracking-wider font-sans">
+                    3D Spatial Data
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadSplat}
+                  disabled={isDownloadingSplat}
+                  className="flex items-center justify-center gap-2 w-full bg-white border border-slate-200 shadow-sm rounded-lg p-2 text-sm font-bold text-slate-700 hover:bg-slate-50 transition disabled:opacity-50 cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>{isDownloadingSplat ? 'Downloading...' : 'Download .splat File'}</span>
+                </button>
               </div>
             )}
 

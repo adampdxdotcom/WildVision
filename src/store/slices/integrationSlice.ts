@@ -141,9 +141,11 @@ export const createIntegrationSlice: StateCreator<any, [], [], IntegrationSlice>
       try {
         const { useAuthStore } = await import('../useAuthStore');
         const authState = useAuthStore.getState();
-        const apiKey = authState.subfloor_api_key;
-        if (!apiKey) {
-          set({ isFetchingIntegration: false });
+        const apiKey = authState.subfloor_api_key || get().subfloorApiKey;
+        const url = authState.subfloor_url || get().subfloorUrl;
+
+        if (!apiKey || !url) {
+          set({ isFetchingIntegration: false, subfloorProjects: [] });
           return;
         }
 
@@ -157,8 +159,14 @@ export const createIntegrationSlice: StateCreator<any, [], [], IntegrationSlice>
         const projects = Array.isArray(data) ? data : (data?.projects || []);
         set({ subfloorProjects: projects, isFetchingIntegration: false });
       } catch (err: any) {
-        console.error('Failed to fetch Subfloor projects:', err);
-        set({ isFetchingIntegration: false });
+        const { useAuthStore } = await import('../useAuthStore');
+        const linkedId = get().linkedSubfloorProjectId;
+        if (linkedId !== null && linkedId !== undefined) {
+          useAuthStore.getState().showToast('Warning: Could not connect to linked Subfloor project', 'error');
+        } else {
+          console.warn('Failed to fetch Subfloor projects:', err);
+        }
+        set({ subfloorProjects: [], isFetchingIntegration: false });
       }
     },
 
@@ -167,8 +175,13 @@ export const createIntegrationSlice: StateCreator<any, [], [], IntegrationSlice>
       try {
         const { useAuthStore } = await import('../useAuthStore');
         const authState = useAuthStore.getState();
-        const apiKey = authState.subfloor_api_key;
-        if (!apiKey) return;
+        const apiKey = authState.subfloor_api_key || get().subfloorApiKey;
+        const url = authState.subfloor_url || get().subfloorUrl;
+
+        if (!apiKey || !url) {
+          set({ isFetchingIntegration: false, subfloorProducts: [] });
+          return;
+        }
 
         const endpoint = projectId ? `/products?project_id=${projectId}` : '/products';
         const { data, error } = await supabase.functions.invoke('subfloor-proxy', {
@@ -181,8 +194,14 @@ export const createIntegrationSlice: StateCreator<any, [], [], IntegrationSlice>
         const products = Array.isArray(data) ? data : (data?.products || []);
         set({ subfloorProducts: products, isFetchingIntegration: false });
       } catch (err: any) {
-        console.error('Failed to fetch Subfloor products:', err);
-        set({ isFetchingIntegration: false });
+        const { useAuthStore } = await import('../useAuthStore');
+        const linkedId = get().linkedSubfloorProjectId;
+        if (linkedId !== null && linkedId !== undefined) {
+          useAuthStore.getState().showToast('Warning: Could not connect to linked Subfloor project', 'error');
+        } else {
+          console.warn('Failed to fetch Subfloor products:', err);
+        }
+        set({ subfloorProducts: [], isFetchingIntegration: false });
       }
     },
 

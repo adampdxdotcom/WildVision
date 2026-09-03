@@ -74,6 +74,7 @@ function drawPushpin(ctx: CanvasRenderingContext2D, x: number, y: number, isActi
 
 export interface UseCanvasRendererArgs {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
+  overlayCanvasRef: React.RefObject<HTMLCanvasElement | null>;
   dimensions: { width: number; height: number };
   viewport: Viewport;
   combinedWidth: number;
@@ -88,10 +89,14 @@ export interface UseCanvasRendererArgs {
   hoveredSegment?: { type: 'wall' | 'fold'; indexA: number; indexB: number } | null;
   draggingSegment?: { type: 'wall' | 'fold'; indexA: number; indexB: number } | null;
   subAreaTileMap?: Record<string, any[]>;
+  hoveredSubAreaEdge?: { id: string; handle: 'l' | 'r' | 't' | 'b' } | null;
+  draggingSubAreaHandle?: 'bl' | 'br' | 'tl' | 'tr' | 'l' | 'r' | 't' | 'b' | null;
+  draggingSubAreaId?: string | null;
 }
 
 export function useCanvasRenderer({
   canvasRef,
+  overlayCanvasRef,
   dimensions,
   viewport,
   combinedWidth,
@@ -106,6 +111,9 @@ export function useCanvasRenderer({
   hoveredSegment,
   draggingSegment,
   subAreaTileMap,
+  hoveredSubAreaEdge,
+  draggingSubAreaHandle,
+  draggingSubAreaId,
 }: UseCanvasRendererArgs) {
   const wallWidth = useAppStore(state => state.wallWidth);
   const wallHeight = useAppStore(state => state.wallHeight);
@@ -192,7 +200,7 @@ export function useCanvasRenderer({
         subAreas
           .map((sa) => sa.materialTexture)
           .filter((t): t is string => !!t && t !== 'none')
-      )
+       )
     );
 
     if (texturesToLoad.length === 0) return;
@@ -229,24 +237,23 @@ export function useCanvasRenderer({
   const visibility = viewSettings.canvas;
 
   const canvasSizeRef = useRef({ width: 0, height: 0, dpr: 1 });
-  const drawRef = useRef<(() => void) | null>(null);
+  const overlayCanvasSizeRef = useRef({ width: 0, height: 0, dpr: 1 });
 
-  drawRef.current = () => {
+  const drawBaseRef = useRef<(() => void) | null>(null);
+  const drawOverlayRef = useRef<(() => void) | null>(null);
+
+  drawBaseRef.current = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     if (visibility.showTextures && materialTexture !== 'none' && (!materialImage || materialImage.src.indexOf(materialTexture) === -1)) {
-      // Pause drawing to prevent blank canvas when loading textures!
       return;
     }
 
-    // HD scale for high-DPI retina rendering
     const dpr = window.devicePixelRatio || 1;
     
-    // STRICT SIZING GUARD: Only resize physical canvas buffer if the logical dimensions actually changed.
-    // Constantly re-assigning canvas.width forces the GPU to destroy and reallocate the backing store.
     if (
       canvasSizeRef.current.width !== dimensions.width ||
       canvasSizeRef.current.height !== dimensions.height ||
@@ -257,27 +264,21 @@ export function useCanvasRenderer({
       canvasSizeRef.current = { width: dimensions.width, height: dimensions.height, dpr };
     }
 
-    // Since we are skipping the width assignment on most frames, we MUST manually reset 
-    // the transform matrix before applying the base high-DPI scale.
     ctx.resetTransform();
     ctx.scale(dpr, dpr);
 
     const panOffsetX = panXRef.current - panX;
     const panOffsetY = panYRef.current - panY;
 
-    // -- STATIC NON-ROTATING ELEMENTS --
-    // Clear canvas fully to reveal photo background behind it
     if (isBgUnlocked) {
       ctx.clearRect(0, 0, dimensions.width, dimensions.height);
     } else {
       drawCanvasBacking(ctx, dimensions.width, dimensions.height, !!backgroundImage, false, viewport, unit, panOffsetX, panOffsetY);
     }
 
-    // Now translate the canvas to hardware-accelerate panning
     ctx.translate(panOffsetX, panOffsetY);
 
-    // -- APPLY WALL ROTATION --
-    ctx.save(); // We save the unrotated state
+    ctx.save();
     if (wallAngle !== 0) {
       const cx = viewport.cornerX + viewport.renderW / 2;
       const cy = viewport.cornerY + viewport.renderH / 2;
@@ -287,17 +288,15 @@ export function useCanvasRenderer({
     }
 
     if (isBgUnlocked) {
-      // Draw perimeter outline of combined wall
       ctx.save();
-      ctx.strokeStyle = '#4f46e5'; // Indigo-600
+      ctx.strokeStyle = '#4f46e5';
       ctx.lineWidth = 4;
       defineCombinedWallPath(ctx, viewport, wallWidth, wallHeight, wallExtensions, wallBoundaryShape, wallArchHeight, wallActiveArches, wallArchDepth, 0, wallVertices);
       ctx.stroke();
       ctx.restore();
 
-      // Draw bounding box rectangles for sub-areas
       ctx.save();
-      ctx.strokeStyle = '#d97706'; // Amber-600
+      ctx.strokeStyle = '#d97706';
       ctx.lineWidth = 3;
       subAreas.forEach((sa) => {
         const minVal = {
@@ -310,32 +309,32 @@ export function useCanvasRenderer({
       });
       ctx.restore();
 
-      // Draw wall measurements as coordinates guides
-      drawWallMeasurements(
-        ctx,
-        viewport,
-        combinedWidth,
-        combinedHeight,
-        unit,
-        wallWidth,
-        wallHeight,
-        wallExtensions,
-        !!backgroundImage,
-        [],
-        false,
-        wallVertices,
-        false,
-        angleDisplayMode
-      );
+      if (!activeSubAreaId) {
+        drawWallMeasurements(
+          ctx,
+          viewport,
+          combinedWidth,
+          combinedHeight,
+          unit,
+          wallWidth,
+          wallHeight,
+          wallExtensions,
+          !!backgroundImage,
+          [],
+          false,
+          wallVertices,
+          false,
+          angleDisplayMode
+        );
+      }
       drawSubAreaDimensions(ctx, viewport, subAreas, showAccentDistances, unit, !!backgroundImage, false, angleDisplayMode);
-      ctx.restore(); // Restore unrotated state
+      ctx.restore();
+
+      if (drawOverlayRef.current) drawOverlayRef.current();
       return;
     }
 
-    // 2. SILHOUETTE MASK (Merges all extensions seamlessly)
     ctx.save();
-    
-    // A. Draw solid dark blob (fills internal seams)
     ctx.fillStyle = '#1e293b';
     ctx.strokeStyle = '#1e293b';
     ctx.lineJoin = 'round';
@@ -344,13 +343,11 @@ export function useCanvasRenderer({
     ctx.fill();
     ctx.stroke();
     
-    // B. Draw grout color over the blob (leaves only the outer 3.5px border!)
     ctx.globalAlpha = tileOpacity;
     ctx.fillStyle = isPainted ? groutColor : 'rgba(226, 232, 240, 0.8)';
     defineCombinedWallPath(ctx, viewport, wallWidth, wallHeight, wallExtensions, wallBoundaryShape, wallArchHeight, wallActiveArches, wallArchDepth, 0, wallVertices);
     ctx.fill();
 
-    // If not painted, draw the placeholder text
     if (!isPainted) {
       ctx.fillStyle = '#64748b';
       ctx.font = '13px system-ui, sans-serif';
@@ -364,14 +361,12 @@ export function useCanvasRenderer({
     ctx.restore();
 
     if (isPainted) {
-      // 4. Clip drawing context strictly to the wall frame bounding box (including extensions!)
       ctx.save();
       const borderThickness = wallBorder?.enabled ? Math.min(wallBorder.tileWidth, wallBorder.tileHeight) : 0;
       defineCombinedWallPath(ctx, viewport, wallWidth, wallHeight, wallExtensions, wallBoundaryShape, wallArchHeight, wallActiveArches, wallArchDepth, borderThickness, wallVertices);
       ctx.clip();
 
       if (!isBlankCanvasMode && !isDrafting) {
-        // 5. Generate and draw our main wall tiles
         const mainTiles = subAreaTileMap ? subAreaTileMap['main'] || [] : [];
 
         ctx.save();
@@ -390,7 +385,7 @@ export function useCanvasRenderer({
           tileHeight,
           shape,
           wallExtensions,
-          disableTileColorOnPdf || false, // default or stored value
+          disableTileColorOnPdf || false,
           colorVariation as ColorVariation,
           tileDotColor,
           groutWidth,
@@ -401,19 +396,16 @@ export function useCanvasRenderer({
         );
         ctx.restore();
       } else if (!isDrafting) {
-        // Draw repeating "Blank Canvas" diagonal watermark inside the clipped region
         ctx.save();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.16)'; // Light grey translucent font against the dark background
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
         ctx.font = 'bold 15px "Space Grotesk", "Inter", system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
-        // Calculate diagonal boundary to fully cover the viewport
         const diag = Math.sqrt(dimensions.width * dimensions.width + dimensions.height * dimensions.height);
-        const stepX = 145; // Spacing between watermarks
-        const stepY = 64;  // Vertical line offset
+        const stepX = 145;
+        const stepY = 64;
         
-        // Translate to the visual center, rotate at a subtle diagonal slant, and draw relative to it
         ctx.translate(dimensions.width / 2, dimensions.height / 2);
         ctx.rotate(-25 * Math.PI / 180);
         
@@ -433,10 +425,8 @@ export function useCanvasRenderer({
         ctx.restore();
       }
 
-      // 6. Close wall frame clipping
       ctx.restore();
 
-      // 7. Draw wall borders
       if (wallBorder?.enabled) {
         const defaultBColor = (tileColors?.[0] ? (typeof tileColors[0] === 'string' ? tileColors[0] : tileColors[0].hex) : '') || '#1e293b';
         const selectedBColor = wallBorder.color || defaultBColor;
@@ -444,7 +434,6 @@ export function useCanvasRenderer({
         drawBorder(ctx, { x: 0, y: 0, w: wallWidth, h: wallHeight }, wallBorder, false, viewport, 0, finalBColor, groutColor, groutWidth);
       }
 
-      // 8. Draw nested custom accent bands (sub-areas) and their respective tiles ON TOP of the wall and boundaries
       drawSubAreas(
         ctx,
         subAreas,
@@ -455,7 +444,7 @@ export function useCanvasRenderer({
         wallWidth,
         wallHeight,
         wallExtensions,
-        false, // Always show labels and boundaries
+        false,
         tileOpacity,
         disableTileColorOnPdf || false,
         wallBoundaryShape,
@@ -467,11 +456,77 @@ export function useCanvasRenderer({
         visibility.showTextures ? materialImage : null,
         isDrafting,
         visibility.showTextures,
-        subAreaTileMap
+        subAreaTileMap,
+        null,
+        null,
+        null
       );
     }
 
-    // Draw fold lines
+    if (!activeSubAreaId) {
+      drawWallMeasurements(
+        ctx,
+        viewport,
+        combinedWidth,
+        combinedHeight,
+        unit,
+        wallWidth,
+        wallHeight,
+        wallExtensions,
+        !!backgroundImage,
+        [],
+        false,
+        wallVertices,
+        false,
+        angleDisplayMode
+      );
+    }
+
+    drawSubAreaDimensions(ctx, viewport, subAreas, showAccentDistances, unit, !!backgroundImage, false, angleDisplayMode);
+
+    ctx.restore();
+
+    if (drawOverlayRef.current) {
+      drawOverlayRef.current();
+    }
+  };
+
+  drawOverlayRef.current = () => {
+    const canvas = overlayCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    if (
+      overlayCanvasSizeRef.current.width !== dimensions.width ||
+      overlayCanvasSizeRef.current.height !== dimensions.height ||
+      overlayCanvasSizeRef.current.dpr !== dpr
+    ) {
+      canvas.width = dimensions.width * dpr;
+      canvas.height = dimensions.height * dpr;
+      overlayCanvasSizeRef.current = { width: dimensions.width, height: dimensions.height, dpr };
+    }
+
+    ctx.resetTransform();
+    ctx.scale(dpr, dpr);
+
+    ctx.clearRect(0, 0, dimensions.width, dimensions.height);
+
+    const panOffsetX = panXRef.current - panX;
+    const panOffsetY = panYRef.current - panY;
+
+    ctx.translate(panOffsetX, panOffsetY);
+
+    ctx.save();
+    if (wallAngle !== 0) {
+      const cx = viewport.cornerX + viewport.renderW / 2;
+      const cy = viewport.cornerY + viewport.renderH / 2;
+      ctx.translate(cx, cy);
+      ctx.rotate((wallAngle * Math.PI) / 180);
+      ctx.translate(-cx, -cy);
+    }
+
     drawFoldLines(
       ctx,
       foldLines,
@@ -484,7 +539,6 @@ export function useCanvasRenderer({
       activeTool
     );
 
-    // Draw Anchor Pins for Sliced Wall Regions (if pin tool is active)
     if (activeTool === 'pin' && wallVertices && wallVertices.length >= 3) {
       const regionsForPin = sliceWallIntoRegions(wallVertices, foldLines);
       for (const reg of regionsForPin) {
@@ -506,7 +560,6 @@ export function useCanvasRenderer({
       }
     }
 
-    // Draw stitches
     drawStitches(
       ctx,
       stitches,
@@ -519,25 +572,6 @@ export function useCanvasRenderer({
       mouseScreenPos || null
     );
 
-    // 9. Draw dimension measurement lines
-    drawWallMeasurements(
-      ctx,
-      viewport,
-      combinedWidth,
-      combinedHeight,
-      unit,
-      wallWidth,
-      wallHeight,
-      wallExtensions,
-      !!backgroundImage,
-      [],
-      false,
-      wallVertices,
-      false,
-      angleDisplayMode
-    );
-
-    // Highlight hovered or dragging perpendicular segment for visual CAD feedback!
     const activeHighlight = draggingSegment || hoveredSegment;
     if (activeHighlight && wallVertices && wallVertices[activeHighlight.indexA] && wallVertices[activeHighlight.indexB]) {
       const pA = wallVertices[activeHighlight.indexA];
@@ -547,12 +581,12 @@ export function useCanvasRenderer({
 
       ctx.save();
       if (draggingSegment) {
-        ctx.strokeStyle = '#0284c7'; // Brighter blue (sky-600) for active drag
+        ctx.strokeStyle = '#0284c7';
         ctx.lineWidth = 5.5;
         ctx.shadowColor = 'rgba(2, 132, 199, 0.45)';
         ctx.shadowBlur = 8;
       } else {
-        ctx.strokeStyle = '#06b6d4'; // Cyan-500 for hover status
+        ctx.strokeStyle = '#06b6d4';
         ctx.lineWidth = 4.5;
         ctx.shadowColor = 'rgba(6, 182, 212, 0.35)';
         ctx.shadowBlur = 6;
@@ -565,43 +599,57 @@ export function useCanvasRenderer({
       ctx.restore();
     }
 
-    // 11. Draw detailed custom subarea measurements on top of the tiles and grout
-    drawSubAreaDimensions(ctx, viewport, subAreas, showAccentDistances, unit, !!backgroundImage, false, angleDisplayMode);
+    let targetSubArea: any = null;
+    let targetEdgeHandle: 'l' | 'r' | 't' | 'b' | null = null;
 
-    // 12. Draw Origin crosshair (Diagnostic tool)
-    const originPt = mapToCanvas(0, 0, viewport);
-    ctx.save();
-    ctx.strokeStyle = '#ef4444'; // Bright red
-    ctx.fillStyle = '#ef4444';
-    ctx.lineWidth = 1.5;
-    
-    // Draw crosshair lines
-    ctx.beginPath();
-    // Horizontal line
-    ctx.moveTo(originPt.x - 20, originPt.y);
-    ctx.lineTo(originPt.x + 20, originPt.y);
-    // Vertical line
-    ctx.moveTo(originPt.x, originPt.y - 20);
-    ctx.lineTo(originPt.x, originPt.y + 20);
-    ctx.stroke();
+    for (const sa of subAreas) {
+      if (sa.visible === false) continue;
+      if (draggingSubAreaId === sa.id && draggingSubAreaHandle && ['l', 'r', 't', 'b'].includes(draggingSubAreaHandle)) {
+        targetSubArea = sa;
+        targetEdgeHandle = draggingSubAreaHandle as 'l' | 'r' | 't' | 'b';
+        break;
+      } else if (hoveredSubAreaEdge && hoveredSubAreaEdge.id === sa.id) {
+        targetSubArea = sa;
+        targetEdgeHandle = hoveredSubAreaEdge.handle;
+        break;
+      }
+    }
 
-    // Draw red circle
-    ctx.beginPath();
-    ctx.arc(originPt.x, originPt.y, 6, 0, 2 * Math.PI);
-    ctx.fill();
+    if (targetSubArea && targetEdgeHandle) {
+      const sa = targetSubArea;
+      const saCanvasMin = mapToCanvas(sa.x, sa.y + sa.height, viewport);
+      const saCanvasMax = mapToCanvas(sa.x + sa.width, sa.y, viewport);
+      const xLeft = saCanvasMin.x;
+      const xRight = saCanvasMax.x;
+      const yTop = saCanvasMin.y;
+      const yBottom = saCanvasMax.y;
 
-    // Add small text label "0,0" next to it
-    ctx.font = '10px monospace';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('0,0', originPt.x + 10, originPt.y);
-    ctx.restore();
+      ctx.save();
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      if (targetEdgeHandle === 'l') {
+        ctx.moveTo(xLeft, yTop);
+        ctx.lineTo(xLeft, yBottom);
+      } else if (targetEdgeHandle === 'r') {
+        ctx.moveTo(xRight, yTop);
+        ctx.lineTo(xRight, yBottom);
+      } else if (targetEdgeHandle === 't') {
+        ctx.moveTo(xLeft, yTop);
+        ctx.lineTo(xRight, yTop);
+      } else if (targetEdgeHandle === 'b') {
+        ctx.moveTo(xLeft, yBottom);
+        ctx.lineTo(xRight, yBottom);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
 
-    // Restore the unrotated state
     ctx.restore();
   };
 
   useEffect(() => {
-    if (drawRef.current) drawRef.current();
+    if (drawBaseRef.current) drawBaseRef.current();
   }, [
     dimensions,
     wallWidth,
@@ -647,24 +695,41 @@ export function useCanvasRenderer({
     tileDotColor,
     wallBorder,
     angleDisplayMode,
-    foldLines,
-    anchoredRegionCenter,
-    mouseScreenPos,
     viewSettings,
-    hoveredSegment,
-    draggingSegment,
     materialTexture,
     materialImage,
     accentTexturesLoadedKey,
     tileColorOverrides,
-    tileColors,
     disableColorWithTexture,
     sceneObjects
   ]);
 
   useEffect(() => {
+    if (drawOverlayRef.current) drawOverlayRef.current();
+  }, [
+    mouseScreenPos,
+    hoveredFoldIndex,
+    hoveredSegment,
+    draggingSegment,
+    hoveredSubAreaEdge,
+    draggingSubAreaHandle,
+    draggingSubAreaId,
+    activeTool,
+    foldLines,
+    wallVertices,
+    viewport,
+    anchoredRegionCenter,
+    stitches,
+    draftStitchNodeIndex,
+    subAreas,
+    panX,
+    panY,
+    wallAngle
+  ]);
+
+  useEffect(() => {
     const handleForceRedraw = () => {
-      if (drawRef.current) drawRef.current();
+      if (drawBaseRef.current) drawBaseRef.current();
     };
 
     if (typeof window !== 'undefined') {

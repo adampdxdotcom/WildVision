@@ -64,7 +64,7 @@ export const NicheFeature: React.FC<FeatureProps> = ({
   return (
     <group>
       {/* Recessed Niche Backing Plane */}
-      <mesh position={[localX, localY, -depthD3]} key={bumpTex ? 'niche_bump' : 'niche_flat'}>
+      <mesh position={[localX, localY, -depthD3]} key={bumpTex ? 'niche_bump' : 'niche_flat'} castShadow receiveShadow>
         <planeGeometry args={[d3Width, d3Height]} />
         <meshStandardMaterial
           map={texture}
@@ -76,29 +76,29 @@ export const NicheFeature: React.FC<FeatureProps> = ({
         />
       </mesh>
 
-      {/* Connection Sills */}
+      {/* Connection Sills / Drywall Tunnel Casing */}
       {/* Bottom Sill */}
-      <mesh position={[localX, localY - d3Height / 2, -depthD3 / 2]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh position={[localX, localY - d3Height / 2, -depthD3 / 2]} rotation={[-Math.PI / 2, 0, 0]} castShadow receiveShadow>
         <planeGeometry args={[d3Width, depthD3]} />
-        <meshStandardMaterial color={sillColor} roughness={finishProps.roughness} metalness={finishProps.metalness} side={THREE.DoubleSide} />
+        <meshStandardMaterial color={sillColor} roughness={finishProps.roughness} metalness={finishProps.metalness} side={THREE.DoubleSide} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
       </mesh>
 
       {/* Top Sill */}
-      <mesh position={[localX, localY + d3Height / 2, -depthD3 / 2]} rotation={[Math.PI / 2, 0, 0]}>
+      <mesh position={[localX, localY + d3Height / 2, -depthD3 / 2]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
         <planeGeometry args={[d3Width, depthD3]} />
-        <meshStandardMaterial color={sillColor} roughness={finishProps.roughness} metalness={finishProps.metalness} side={THREE.DoubleSide} />
+        <meshStandardMaterial color={sillColor} roughness={finishProps.roughness} metalness={finishProps.metalness} side={THREE.DoubleSide} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
       </mesh>
 
       {/* Left Sill */}
-      <mesh position={[localX - d3Width / 2, localY, -depthD3 / 2]} rotation={[0, Math.PI / 2, 0]}>
+      <mesh position={[localX - d3Width / 2, localY, -depthD3 / 2]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
         <planeGeometry args={[depthD3, d3Height]} />
-        <meshStandardMaterial color={sillColor} roughness={finishProps.roughness} metalness={finishProps.metalness} side={THREE.DoubleSide} />
+        <meshStandardMaterial color={sillColor} roughness={finishProps.roughness} metalness={finishProps.metalness} side={THREE.DoubleSide} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
       </mesh>
 
       {/* Right Sill */}
-      <mesh position={[localX + d3Width / 2, localY, -depthD3 / 2]} rotation={[0, -Math.PI / 2, 0]}>
+      <mesh position={[localX + d3Width / 2, localY, -depthD3 / 2]} rotation={[0, -Math.PI / 2, 0]} castShadow receiveShadow>
         <planeGeometry args={[depthD3, d3Height]} />
-        <meshStandardMaterial color={sillColor} roughness={finishProps.roughness} metalness={finishProps.metalness} side={THREE.DoubleSide} />
+        <meshStandardMaterial color={sillColor} roughness={finishProps.roughness} metalness={finishProps.metalness} side={THREE.DoubleSide} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
       </mesh>
     </group>
   );

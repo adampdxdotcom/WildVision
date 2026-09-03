@@ -1,6 +1,6 @@
 import { TileShape, RectanglePattern, AreaReport, SubArea, ComprehensiveReport, WallExtension, BorderConfig } from '../types';
 import { generateTiles } from './generator';
-import { getTrueArea, getPolygonArea, getTessellatedPath, isPointInPolygon } from './geometry';
+import { getTrueArea, getPolygonArea, getTessellatedPath, isPointInPolygon, clipPolygon } from './geometry';
 import { useAppStore } from '../store/useAppStore';
 
 
@@ -31,6 +31,7 @@ interface ComputeStatsParams {
   isPicket?: boolean;
   picketLength?: number;
   wallVertices?: {x: number, y: number}[];
+  reuseCuts?: boolean;
 }
 
 /**
@@ -115,13 +116,14 @@ export function computeTileStatistics(params: ComputeStatsParams): AreaReport {
   const layoutId = (params as any).layoutId || 'main';
 
   const state = useAppStore.getState();
+  const reuseCuts = params.reuseCuts ?? state.reuseCuts;
   const isSubArea = layoutId !== 'main';
   const sa = isSubArea ? state.subAreas.find(s => s.id === layoutId) : null;
   const tileColors = isSubArea ? (sa?.tileColors || state.tileColors || []) : (state.tileColors || []);
   const colorPattern = isSubArea ? (sa?.colorPattern || state.colorPattern) : state.colorPattern;
   const tileColorOverrides = state.tileColorOverrides || {};
 
-  const groups: { [color: string]: { count: number; area: number } } = {};
+  const groups: { [color: string]: { count: number; area: number; strictCutCount?: number; fractionalCutCount?: number; fullCount?: number } } = {};
   let totalVisibleTilesCount = 0;
 
   // Initialize report
@@ -303,6 +305,78 @@ export function computeTileStatistics(params: ComputeStatsParams): AreaReport {
       const isPointOutside = tile.vertices.some((v) => !isInsideWall(v.x, v.y));
       const isCut = isPointOutside || cutBySubArea;
 
+      let strictCutCountAdd = 0;
+      let fractionalCutCountAdd = 0;
+      let isFull = !isCut;
+
+      if (isCut) {
+        strictCutCountAdd = 1;
+        
+        if (reuseCuts) {
+           let clippedArea = 0;
+           if (isSubArea && sa) {
+               const saPoly = subAreaTessellatedMap.get(sa.id) || [
+                  {x: 0, y: 0},
+                  {x: sa.width, y: 0},
+                  {x: sa.width, y: sa.height},
+                  {x: 0, y: sa.height}
+               ];
+               const clipped = clipPolygon(tile.vertices, saPoly);
+               clippedArea = getPolygonArea(clipped);
+           } else {
+               let mainPoly = wallVertices && wallVertices.length >= 3 ? wallVertices : [
+                  {x: 0, y: 0},
+                  {x: wallWidth, y: 0},
+                  {x: wallWidth, y: wallHeight},
+                  {x: 0, y: wallHeight}
+               ];
+               const mainClipped = clipPolygon(tile.vertices, mainPoly);
+               clippedArea += getPolygonArea(mainClipped);
+
+               if (extensions) {
+                  for (const ext of extensions) {
+                     const extPoly = [
+                        {x: ext.x, y: ext.y},
+                        {x: ext.x + ext.width, y: ext.y},
+                        {x: ext.x + ext.width, y: ext.y + ext.height},
+                        {x: ext.x, y: ext.y + ext.height}
+                     ];
+                     const extClipped = clipPolygon(tile.vertices, extPoly);
+                     clippedArea += getPolygonArea(extClipped);
+                  }
+               }
+
+               if (subAreas && subAreas.length > 0) {
+                  for (const subSa of subAreas) {
+                     const tessellatedVertices = subAreaTessellatedMap.get(subSa.id);
+                     const subSaPoly = tessellatedVertices || [
+                        {x: subSa.x, y: subSa.y},
+                        {x: subSa.x + subSa.width, y: subSa.y},
+                        {x: subSa.x + subSa.width, y: subSa.y + subSa.height},
+                        {x: subSa.x, y: subSa.y + subSa.height}
+                     ];
+                     const subClipped = clipPolygon(tile.vertices, subSaPoly);
+                     clippedArea -= getPolygonArea(subClipped);
+                  }
+               }
+           }
+
+           if (clippedArea < 0) clippedArea = 0;
+           let fullArea = getPolygonArea(tile.vertices);
+           if (fullArea === 0) {
+              const tW = tile.actualWidth || tileWidth;
+              const tH = tile.actualHeight || tileHeight;
+              fullArea = tW * tH;
+           }
+           let fraction = fullArea > 0 ? clippedArea / fullArea : 0;
+           if (fraction > 1) fraction = 1;
+           if (fraction < 0) fraction = 0;
+           fractionalCutCountAdd = fraction;
+        } else {
+           fractionalCutCountAdd = 1;
+        }
+      }
+
       report.totalTilesUsed++;
       if (tile.role === 'secondary') {
         report.secondaryPieceCount = (report.secondaryPieceCount || 0) + 1;
@@ -312,6 +386,8 @@ export function computeTileStatistics(params: ComputeStatsParams): AreaReport {
 
       if (isCut) {
         report.cutTilesCount++;
+        report.strictCutCount = (report.strictCutCount || 0) + strictCutCountAdd;
+        report.fractionalCutCount = (report.fractionalCutCount || 0) + fractionalCutCountAdd;
       } else {
         report.fullTilesCount++;
       }
@@ -327,9 +403,17 @@ export function computeTileStatistics(params: ComputeStatsParams): AreaReport {
       }
       
       if (!groups[resolvedColor]) {
-        groups[resolvedColor] = { count: 0, area: 0 };
+        groups[resolvedColor] = { count: 0, area: 0, strictCutCount: 0, fractionalCutCount: 0, fullCount: 0 };
       }
       groups[resolvedColor].count++;
+      
+      if (isCut) {
+        groups[resolvedColor].strictCutCount += strictCutCountAdd;
+        groups[resolvedColor].fractionalCutCount += fractionalCutCountAdd;
+      } else {
+        groups[resolvedColor].fullCount++;
+      }
+      
       const tW = tile.actualWidth || tileWidth;
       const tH = tile.actualHeight || tileHeight;
       groups[resolvedColor].area += (tW * tH);
@@ -359,12 +443,31 @@ export function computeTileStatistics(params: ComputeStatsParams): AreaReport {
 
   if (colorPattern === 'paint' && totalVisibleTilesCount > 0) {
     const totalAreaSum = Object.values(groups).reduce((sum, g) => sum + g.area, 0);
-    report.colorGroups = Object.entries(groups).map(([color, g]) => ({
-      color,
-      count: g.count,
-      netArea: g.area,
-      percentage: totalAreaSum > 0 ? (g.area / totalAreaSum) * 100 : 0,
-    }));
+    report.colorGroups = Object.entries(groups).map(([color, g]) => {
+      const gExt = g as any;
+      const fractionRaw = gExt.fractionalCutCount || 0;
+      const penalty = fractionRaw * 0.15; 
+      const fractionalCutsRounded = Math.ceil(fractionRaw + penalty);
+      const newCount = (gExt.fullCount || 0) + (params.reuseCuts ? fractionalCutsRounded : (gExt.strictCutCount || 0));
+      
+      return {
+        color,
+        count: newCount,
+        netArea: g.area,
+        percentage: totalAreaSum > 0 ? (g.area / totalAreaSum) * 100 : 0,
+        strictCutCount: gExt.strictCutCount,
+        fractionalCutCount: fractionalCutsRounded,
+        fullCount: gExt.fullCount,
+      };
+    });
+  }
+  
+  if (params.reuseCuts) {
+     const fractionRaw = report.fractionalCutCount || 0;
+     const penalty = fractionRaw * 0.15;
+     const fractionalCutsRounded = Math.ceil(fractionRaw + penalty);
+     report.totalTilesUsed = (report.fullTilesCount || 0) + fractionalCutsRounded;
+     report.fractionalCutCount = fractionalCutsRounded;
   }
 
   const baseArea = (wallVertices && wallVertices.length >= 3) ? getPolygonArea(wallVertices) : (wallWidth * wallHeight);
@@ -420,6 +523,7 @@ export function computeComprehensiveStatistics(params: ComputeStatsParams): Comp
     activeCustomPattern: params.activeCustomPattern,
     flatsketVerticalRows: params.flatsketVerticalRows,
     flatsketHorizontalRows: params.flatsketHorizontalRows,
+    reuseCuts: params.reuseCuts,
   });
 
   // Calculate scaling factor for the main wall, comparing true area vs standard bounding boxes

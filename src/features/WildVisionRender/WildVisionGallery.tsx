@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { supabase } from '../../utils/supabaseClient';
-import { Pencil, Maximize2, Download, Sparkles, RefreshCw, ArrowLeft, Camera, Compass, Eye, Box } from 'lucide-react';
+import { Pencil, Maximize2, Download, Sparkles, RefreshCw, ArrowLeft, Camera, Compass, Eye, Box, Trash2 } from 'lucide-react';
 import { WildVisionLightbox } from './WildVisionLightbox';
 import { WildVisionAnnotator } from './WildVisionAnnotator';
+import { DeleteRenderModal } from './DeleteRenderModal';
 import { base64ToBlob } from '../../utils/blobUtils';
 import { downloadImageSecurely } from '../../utils/imageUtils';
 
@@ -66,10 +67,11 @@ const GalleryCardSpecs: React.FC<GalleryCardSpecsProps> = ({ imageUrl }) => {
 };
 
 export const WildVisionGallery: React.FC = () => {
-  const { user } = useAuthStore();
+  const { user, showToast } = useAuthStore();
   const {
     generatedRenders,
     setGeneratedRenders,
+    deleteRender,
     setIsWildVisionOpen,
     captured3DImage,
     setActiveView,
@@ -88,6 +90,34 @@ export const WildVisionGallery: React.FC = () => {
   const [editingImage, setEditingImage] = useState<any | null>(null);
   const [fetchingHistory, setFetchingHistory] = useState(false);
   const [activeFamilyId, setActiveFamilyId] = useState<string | null>(null);
+  const [deletingRenderItem, setDeletingRenderItem] = useState<any | null>(null);
+
+  const handleOpenDeleteModal = (e: React.MouseEvent, renderItem: any) => {
+    e.stopPropagation();
+    setDeletingRenderItem(renderItem);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingRenderItem) return;
+    try {
+      const isRoot = !deletingRenderItem.parent_id;
+      const childCount = isRoot
+        ? generatedRenders.filter((r) => r.parent_id === deletingRenderItem.id).length
+        : 0;
+
+      await deleteRender(deletingRenderItem.id);
+
+      if (childCount > 0) {
+        showToast(`Concept and ${childCount} variation(s) deleted.`, 'success');
+      } else {
+        showToast('AI render & 3D snapshot deleted.', 'success');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to delete render.', 'error');
+    } finally {
+      setDeletingRenderItem(null);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -545,6 +575,17 @@ Inside the masked boundary, make the following change: ${editRequest}`;
                     </button>
                   )}
 
+                  {/* Delete Button */}
+                  <button
+                    type="button"
+                    title="Delete AI Render & 3D Snapshot"
+                    onClick={(e) => handleOpenDeleteModal(e, render)}
+                    className="aspect-square w-full max-w-[56px] sm:max-w-[70px] p-1 bg-white/10 hover:bg-red-600/90 text-slate-100 hover:text-white border border-white/10 hover:border-red-500/50 rounded-lg shadow-xs transition-all duration-150 flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[9px] sm:text-[10px] font-bold tracking-wide cursor-pointer text-center group"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-red-400 group-hover:text-white" />
+                    <span className="hidden sm:block truncate">Delete</span>
+                  </button>
+
                   {/* View Variants button inside hover state (if it is a root card and has variants) */}
                   {isRootCard && rootVariations.length > 0 && (
                     <button
@@ -745,6 +786,14 @@ Inside the masked boundary, make the following change: ${editRequest}`;
           onClose={() => setActiveLightboxData(null)} 
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteRenderModal
+        isOpen={!!deletingRenderItem}
+        renderItem={deletingRenderItem}
+        onClose={() => setDeletingRenderItem(null)}
+        onConfirm={handleConfirmDelete}
+      />
 
 
     </div>

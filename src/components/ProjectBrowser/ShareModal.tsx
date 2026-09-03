@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useAppStore } from '../../store/useAppStore';
-import { X, Search, Shield, UserX, UserPlus, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { X, Search, Shield, UserX, UserPlus, CheckCircle2, ShieldAlert, Globe, Copy, Check, Link } from 'lucide-react';
 
 interface ShareModalProps {
   isOpen: boolean;
@@ -23,8 +23,8 @@ interface ShareRecord {
 }
 
 export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose }) => {
-  const { user } = useAuthStore();
-  const { currentProjectId, currentProjectPermission } = useAppStore();
+  const { user, showToast } = useAuthStore();
+  const { currentProjectId, currentProjectPermission, shareToken, generateShareLink } = useAppStore();
   const isOwner = currentProjectPermission === 'owner';
 
   const [shares, setShares] = useState<ShareRecord[]>([]);
@@ -35,11 +35,68 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose }) => {
   const [inviteTier, setInviteTier] = useState<'read' | 'write'>('read');
   const [inviteStatus, setInviteStatus] = useState<{ type: 'success' | 'error' | 'loading' | null, message: string }>({ type: null, message: '' });
 
+  const [publicToken, setPublicToken] = useState<string | null>(shareToken);
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  const [copied, setCopied] = useState(false);
+
   useEffect(() => {
     if (isOpen && currentProjectId) {
       fetchShares();
+      fetchPublicShareToken();
     }
   }, [isOpen, currentProjectId]);
+
+  const fetchPublicShareToken = async () => {
+    if (!currentProjectId) return;
+    try {
+      const { data, error: projErr } = await supabase
+        .from('projects')
+        .select('is_shared, share_token')
+        .eq('id', currentProjectId)
+        .maybeSingle();
+
+      if (!projErr && data?.share_token) {
+        setPublicToken(data.share_token);
+      }
+    } catch (err) {
+      console.error('Failed to fetch public share token:', err);
+    }
+  };
+
+  const handleCopyPublicLink = async () => {
+    if (!currentProjectId) return;
+    setIsGeneratingLink(true);
+    try {
+      let token = publicToken || shareToken;
+      if (!token) {
+        await generateShareLink();
+        const updatedToken = useAppStore.getState().shareToken;
+        token = updatedToken;
+      } else {
+        await supabase
+          .from('projects')
+          .update({ is_shared: true })
+          .eq('id', currentProjectId);
+      }
+
+      if (!token) {
+        throw new Error('Failed to obtain share token');
+      }
+
+      setPublicToken(token);
+      const fullUrl = `${window.location.origin}/?share=${token}&view=cad`;
+      await navigator.clipboard.writeText(fullUrl);
+
+      setCopied(true);
+      showToast('Public interactive link copied to clipboard!', 'success');
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err: any) {
+      console.error('Failed to copy public link:', err);
+      showToast('Failed to generate or copy public share link.', 'error');
+    } finally {
+      setIsGeneratingLink(false);
+    }
+  };
 
   const fetchShares = async () => {
     setLoading(true);
@@ -308,6 +365,58 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose }) => {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Public Interactive Link */}
+          <div className="pt-4 border-t border-slate-200 space-y-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Globe className="w-4 h-4 text-indigo-600" />
+                Public Interactive Link
+              </h3>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Generate a public link to allow anyone to open and interact with this CAD layout in view-only mode.
+              </p>
+            </div>
+
+            <div className="flex gap-2 items-center">
+              <div className="relative flex-1">
+                <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  readOnly
+                  value={
+                    (publicToken || shareToken)
+                      ? `${window.location.origin}/?share=${publicToken || shareToken}&view=cad`
+                      : ''
+                  }
+                  placeholder={
+                    isGeneratingLink
+                      ? 'Generating link...'
+                      : 'Click Copy Link to generate public CAD link'
+                  }
+                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono text-slate-600 outline-none select-all focus:border-indigo-500"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyPublicLink}
+                disabled={isGeneratingLink}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs transition-colors flex items-center gap-2 shrink-0 disabled:opacity-50 cursor-pointer"
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-4 h-4 text-emerald-400" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    Copy Link
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
         </div>

@@ -182,8 +182,14 @@ export const ActivePropEditor: React.FC = () => {
             </span>
             <input
               type="color"
-              value={activeObject.color || '#ffffff'}
-              onChange={(e) => updateSceneObject(activeObjectId, { color: e.target.value })}
+              value={activeObject.metadata?.color || activeObject.color || '#333333'}
+              onChange={(e) => {
+                const newColor = e.target.value;
+                updateSceneObject(activeObjectId, {
+                  color: newColor,
+                  metadata: { ...activeObject.metadata, color: newColor }
+                });
+              }}
               className="w-full h-8 border border-slate-200 rounded cursor-pointer"
             />
           </div>

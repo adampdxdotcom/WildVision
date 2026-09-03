@@ -17,7 +17,10 @@ export interface DraftingSlice {
   activeTool: ActiveTool;
   setActiveTool: (tool: ActiveTool) => void;
   foldLines: FoldLine[];
+  layoutFoldType: 'inward' | 'outward';
+  setLayoutFoldType: (type: 'inward' | 'outward') => void;
   setFoldLines: (val: FoldLine[] | ((prev: FoldLine[]) => FoldLine[])) => void;
+  setFoldAngle: (id: string, angle: number) => void;
   removeFold: (index: number) => void;
   draftFoldNodeIndex: number | null;
   setDraftFoldNodeIndex: (val: number | null | ((prev: number | null) => number | null)) => void;
@@ -99,7 +102,36 @@ export const createDraftingSlice: StateCreator<any, [], [], DraftingSlice> = (se
   activeTool: 'select',
   setActiveTool: (tool) => set({ activeTool: tool }),
   foldLines: [],
-  setFoldLines: (updater) => set((state: any) => ({ foldLines: typeof updater === 'function' ? updater(state.foldLines) : updater })),
+  layoutFoldType: 'inward',
+  setLayoutFoldType: (type) => set((state: any) => {
+    const targetAngle = type === 'outward' ? -90 : 90;
+    const nextFoldLines = (state.foldLines || []).map((f: FoldLine) => ({
+      ...f,
+      foldAngle: targetAngle,
+    }));
+    return {
+      layoutFoldType: type,
+      foldLines: nextFoldLines,
+      isCanvasDirty: true,
+    };
+  }),
+  setFoldLines: (updater) => set((state: any) => {
+    const rawLines = typeof updater === 'function' ? updater(state.foldLines) : updater;
+    const defaultAngle = state.layoutFoldType === 'outward' ? -90 : 90;
+    const nextFoldLines = Array.isArray(rawLines)
+      ? rawLines.map((f: FoldLine) => ({
+          ...f,
+          foldAngle: f.foldAngle !== undefined && f.foldAngle !== null ? f.foldAngle : defaultAngle
+        }))
+      : [];
+    return { foldLines: nextFoldLines };
+  }),
+  setFoldAngle: (id, angle) => set((state: any) => ({
+    foldLines: (state.foldLines || []).map((f: FoldLine) => 
+      f.id === id ? { ...f, foldAngle: angle } : f
+    ),
+    isCanvasDirty: true
+  })),
   removeFold: (index) => set((state: any) => {
     const targetFold = state.foldLines[index];
     if (!targetFold) return {};

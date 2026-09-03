@@ -65,7 +65,7 @@ export const useWallNodeDrag = ({
       });
     }
 
-    if (draggingVertexIndex !== null) {
+    if (draggingVertexIndex !== null && !activeSubAreaId) {
       return handleMainWallNodeDrag({
         clientX,
         clientY,

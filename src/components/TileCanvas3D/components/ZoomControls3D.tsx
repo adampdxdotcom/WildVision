@@ -42,6 +42,9 @@ export const ZoomControls3D: React.FC = () => {
       id="floating-zoom-controls-3d" 
       className="relative z-10 pointer-events-auto"
       ref={containerRef}
+      onPointerDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
     >
       <div 
         className="flex items-center justify-end bg-white/95 backdrop-blur-sm p-1 rounded-lg shadow-sm border border-slate-200 select-none overflow-hidden transition-all duration-300 ease-in-out"

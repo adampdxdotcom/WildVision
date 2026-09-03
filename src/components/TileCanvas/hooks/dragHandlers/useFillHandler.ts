@@ -46,7 +46,7 @@ export const useFillHandler = ({
         y: Number(minY.toFixed(2)),
         width: Number((maxX - minX).toFixed(2)),
         height: Number((maxY - minY).toFixed(2)),
-        shape: 'rectangle' as const,
+        shape: 'custom_polygon' as const,
         tileWidth: isCm ? 10 : 4,
         tileHeight: isCm ? 10 : 4,
         pattern: 'stack' as const,

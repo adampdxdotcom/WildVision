@@ -386,6 +386,9 @@ export const drawFoldLines = (
   hoveredFoldIndex?: number | null,
   activeTool?: string
 ) => {
+  const isPublicViewer = useAppStore.getState?.().isPublicViewer;
+  if (isPublicViewer) return;
+
   const visibility = useAppStore.getState?.().viewSettings?.canvas || {
     showNodes: true,
     showDimensions: true,

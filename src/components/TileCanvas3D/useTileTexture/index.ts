@@ -52,6 +52,7 @@ export function useTileTexture() {
     tileColorOverrides,
     disableColorWithTexture,
     sceneObjects,
+    isDrafting,
   } = useAppStore();
 
   const subAreas = rawSubAreas;
@@ -62,8 +63,19 @@ export function useTileTexture() {
   const tileSpecular = viewSettings.render.enableReflection;
   const disableTileColorOnPdf = viewSettings.pdf.disableTileColor;
 
+  // Dedicated cleanup effect to avoid memory leaks on unmount
   useEffect(() => {
-    if (!isReady) {
+    return () => {
+      setTextures(prev => {
+        if (prev.color) prev.color.dispose();
+        if (prev.bump) prev.bump.dispose();
+        return { color: null, bump: null };
+      });
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isReady || isDrafting) {
       return;
     }
 
@@ -132,17 +144,15 @@ export function useTileTexture() {
       newBumpTexture.needsUpdate = true;
     }
 
-    setTextures({
-      color: newColorTexture,
-      bump: newBumpTexture,
+    setTextures(prev => {
+      // Safely dispose old textures
+      if (prev.color) prev.color.dispose();
+      if (prev.bump) prev.bump.dispose();
+      return {
+        color: newColorTexture,
+        bump: newBumpTexture,
+      };
     });
-
-    return () => {
-      newColorTexture.dispose();
-      if (newBumpTexture) {
-        newBumpTexture.dispose();
-      }
-    };
   }, [
     wallWidth,
     wallHeight,
@@ -188,6 +198,7 @@ export function useTileTexture() {
     flatsketHorizontalRows,
     tileSpecular,
     disableTileColorOnPdf,
+    isDrafting,
   ]);
 
   return textures;

@@ -40,6 +40,7 @@ Below is a detailed analysis of all directories and files within the WildVision 
 - The centralized application state manager.
 - Orchestrates synchronized operations: links interactive layout metrics (grout sizes, active dimensions, unit increments) to the sidebar controls, procedural tile generator engine, and the visual canvas.
 - Refactored to delegate PDF export operations cleanly.
+- Conditionally renders SplatterViewer when spatial capture data is present and active.
 
 ### src/types.ts
 - Encapsulates shared domain TypeScript types:
@@ -48,6 +49,9 @@ Below is a detailed analysis of all directories and files within the WildVision 
   - Structural sub-area schemas (bounding coordinates, distinct colors, nested offsets)
   - Calculated metrics records.
   - Active Tool types (including 'paint', 'pen', 'extrude', etc.).
+  - ColorCard interface supports optional `printConfig` ({ setName: string; opacity: number }) for print set assignments.
+  - SavedProjectData interface supports `before_splat_url` and `after_splat_url`.
+  - ViewMode type includes `'splatter'`.
 
 ### src/presets.ts
 - Bundles structural starter templates for rooms such as a "Classic Herringbone Backsplash", "Hex Bathroom Floor", and "Balanced Grid Wall" with pre-set proportions and spacing.
@@ -70,7 +74,8 @@ Below is a detailed analysis of all directories and files within the WildVision 
 
 ### src/store/slices/projectSlice.ts
 - Governs workspace file I/O and cloud synchronization.
-- Handles project names, database IDs, and auto-save toggles.
+- Handles project names, database IDs, auto-save toggles, and tracks 3D Gaussian Splat URLs (`before_splat_url`, `after_splat_url`).
+- Successfully hydrates `before_splat_url` and `after_splat_url` during `loadProjectState` execution, allowing the header to conditionally render the "Splatter" viewer button.
 - Contains massive cross-slice hydration routines to ensure clean transitions between local memory and Supabase JSON payloads.
 - Safely hydrates and snapshots Paint Mode color overrides (`tileColorOverrides` and `activeBrushColorIndex`) during project load, save, and workspace reset routines.
 
@@ -81,6 +86,7 @@ Below is a detailed analysis of all directories and files within the WildVision 
 ### src/store/slices/materialSlice.ts
 - Controls the physical and aesthetic properties of the layout.
 - Manages geometric shape selections, tile dimensions, grout spacing, color arrays, and surface finishes.
+- Handles Master-Instance Parent/Child material propagation: when a parent SubArea receives aesthetic updates, changes are automatically pushed to all linked child SubAreas. When a child links to a parent, it hydtates parent material settings.
 - Stores Paint Mode overrides (`tileColorOverrides`) mapping deterministic tile IDs to palette indices.
 - Features index-shifting logic during color removal to preserve overrides integrity, and triggers `wildvision:forceCanvasRedraw` for instant paint feedback.
 
@@ -130,6 +136,7 @@ Below is a detailed analysis of all directories and files within the WildVision 
 ### src/utils/analytics.ts
 - Governs real-time layout metrics, area intersections, and quality auditing.
 - Computes comprehensive color-grouped material estimates for Paint Mode, providing breakdowns of custom-painted tile counts, areas, and purchasing costs.
+- Houses the main math logic for calculating required tiles, tracking cut tile counts (both strict geometric counts and true fractional area usages), generating reports, applying 15% kerf/waste penalties, and compiling color-group breakouts.
 
 ### src/utils/segmentMath.ts
 - Houses the mathematical algorithms for layout geometry parsing and interval consolidation used for overlaying dimensional annotations.
@@ -137,19 +144,46 @@ Below is a detailed analysis of all directories and files within the WildVision 
 ### src/utils/pdfExport.ts
 - Decoupled PDF generation and document compiler module.
 - Generates polished multi-page architectural layouts using jsPDF, including high-res diagrams, specification cards, and dynamically color-grouped pricing tables.
+- Synchronized with active Calculation Method toggle (reuseCuts) to ensure printed specification sheets, recommended square footages, and carton/sheet/piece purchasing estimates strictly match unified physical tile piece math.
+
+### src/utils/printSetManager.ts
+- Discovers, preloads, and manages print set images from `src/assets/sets/*/*.{png,jpg,jpeg}` using Vite's `import.meta.glob`.
+- Groups print set images by set name, preloads and caches `HTMLImageElement` instances, and exposes set name getters for UI components.
+- Implements a deterministic 2D spatial hash (`hash2DCoordinates`) that selects specific print set images based on tile coordinates, preventing identical neighboring prints.
 
 ## 4. MODULAR UI COMPONENTS (src/components/)
+
+### src/components/Layout/
+- Subdirectory for high-level application layout components.
+
+### src/components/Layout/HeaderControls.tsx
+- Main application header containing file menus (New, Save, Load, Share, Export), undo/redo controls, workspace navigation tabs (Layout, Wild Vision, Gallery, Pattern Studio, Splatter), and user authentication dropdowns.
+- Displays multiplayer collaborator avatars and dynamic cross-tab lock warnings.
+- Conditionally routes to SplatterViewer if the project contains spatial capture data.
+
+### src/components/Layout/NotFoundView.tsx
+- Fallback UI component displayed when a route or project cannot be found.
 
 ### src/components/Sidebar/
 - Subdirectory housing modular option forms.
 
 ### src/components/SidebarControls.tsx
 - Entry-point coordinator that mounts sidebar sections and exposes full parametric adjustments dynamically to App.tsx.
+- Conditionally renders a Blob-based download handler for 3D Gaussian Splat models when in the 'splatter' view mode.
 
 ### src/components/QuantitiesPanel.tsx
 - The interactive material estimation engine.
-- Reads active physical area metrics to calculate precise box/carton requirements, incorporates overage percentages, and groups custom-painted areas independently.
+- Reads active physical area metrics to calculate precise box/carton requirements, incorporates overage percentages, groups custom-painted areas independently, and aggregates parent and linked child metrics when viewing parent material tabs.
+- Features a "Calculation Method: Strict Pieces vs. Reuse Cuts" toggle that binds to `reuseCuts` state and unifies physical tile piece counts with purchasing math, recommended sq ft calculations, and Subfloor integration estimates.
 - Connects directly with the Subfloor Integration suite to export calculated materials, quantities, net area, and total waste estimates directly back to the linked Subfloor project via our proxy Edge Function.
+
+### src/components/ClientQuantitiesView.tsx
+- Read-only presentation component for public/client CAD viewer modes to present material quantities, tile/sheet breakdown cards, and waste recommendations without authoring inputs or guest lock overlays.
+- Displays a non-interactive calculation method badge ("Strict Pieces" vs "Reuse Cuts") and conditionally renders the Purchasing & Costs Estimator section based on the author's `publicShowPricing` preference.
+
+### src/components/ClientQuantitiesDrawer.tsx
+- Slide-out presentation drawer anchored to the left edge over the canvas in public CAD viewer mode (`?view=cad`).
+- Houses `<ClientQuantitiesView />` and features smooth left-to-right CSS slide transitions, click-outside handling, escape-key listeners, and header bar trigger controls.
 
 ### src/components/Sidebar/Universal/UniversalTileSpecs.tsx
 - A stateless, generic UI adapter for structural tile configuration.
@@ -161,6 +195,7 @@ Below is a detailed analysis of all directories and files within the WildVision 
 ### src/components/Sidebar/Universal/UniversalColorPalette.tsx
 - A stateless, generic UI component for dynamic palettes, shading, and Paint Mode controls.
 - Automatically switches the active canvas tool to 'paint' upon activation, and safely bypasses native browser confirm dialogs for reset actions.
+- Includes a nested pattern pocket with a segmented toggle system to seamlessly switch between Vector SVG pattern uploads and Print Set configurations (set selector dropdown and print opacity slider).
 
 ### src/components/Sidebar/TileSpecsPanel.tsx & ColorControlsPanel.tsx
 - Lightweight Zustand wrappers for the Universal configuration panels on the Main Wall.
@@ -179,6 +214,7 @@ Below is a detailed analysis of all directories and files within the WildVision 
 ### src/components/ProjectBrowser/LoadModal.tsx & SaveModal.tsx
 - Cloud and local file management overlays.
 - LoadModal features a unified relational fetch displaying visual categorization for "My Projects" and "Shared with Me" views with explicit owner/collaboration indicators, and smart deletion warnings for actively shared projects.
+- LoadModal dynamically injects top-level Supabase columns (`before_splat_url` and `after_splat_url`) into the state payload before hydration, bypassing the need for JSON server modifications.
 
 ### src/components/ProjectBrowser/ShareModal.tsx
 - Real-time collaborative projects access manager.
@@ -210,8 +246,18 @@ Below is a detailed analysis of all directories and files within the WildVision 
 - **geometryHelpers.ts**: Houses coordinate containment math and path definitions (`isPointInSubArea`, `isSubAreaInBenchMode`, and `definePolygonVerticesPath`).
 - **compassPainter.ts**: Visualizes cardinal direction edge labels (`drawCompassIndicators`) surrounding the 2D workspace.
 - **borderPainter.ts**: Standardizes framing layouts (`drawBorder`), supporting both mitered joint and straight-cut styles.
-- **mainTilePainter.ts**: The main wall tile renderer (`drawMainTiles`) that maps procedural grid positions onto the active canvas.
-- **subAreaPainter.ts**: Dedicated visual rendering loop for custom accent bands, niches, shelves, cutouts, and solid slabs (`drawSubAreas`). Supports organic edge masks and custom drop-shadow effects.
+- **mainTilePainter.ts**: The main wall tile renderer (`drawMainTiles`) that maps procedural grid positions onto the active canvas. Resolves `printConfig` from color cards via `getPrintForLocation` and passes print images to tile renderers.
+- **subAreaPainter.ts**: Dedicated visual rendering loop for custom accent bands, niches, shelves, cutouts, and solid slabs (`drawSubAreas`). Supports organic edge masks, custom drop-shadow effects, and print set images.
+
+### src/components/TileCanvas/tileRenderers.ts
+- Low-level individual tile shape rendering routines (`drawRoundTile`, `drawScallopTile`, `drawHexagonTileDirect`, `drawPolygonTile`, `drawPebbleTile`).
+- Includes aspect-ratio-preserving print set image rendering (`drawPrintImagePreservingAspect`), ensuring print images maintain original proportions without distortion and are drawn centered.
+
+### src/utils/printSetManager.ts
+- Utility module automatically discovering, preloading, and caching print set images from `src/assets/sets/*` using Vite's `import.meta.glob`.
+- Parses and formats subfolder directory names into Title Case human-readable strings (e.g. `sub_folder` -> `Sub Folder`) for set names used in UI dropdowns and internal mapping keys.
+- Preloads HTMLImageElement instances and sets the canvas dirty state on image load.
+- Exposes `getAvailableSetNames()`, `getSetUrls()`, `getSetImages()`, `formatSubfolderName()`, and `getPrintForLocation()` which uses a deterministic 2D spatial hash (`hash2DCoordinates`) to pick an image for tile coordinates to prevent adjacent identical prints.
 
 ### src/components/TileCanvas/components/FloatingToolbar.tsx & VisibilityMenu.tsx
 - Contextual HTML HUD elements. Toolbar features dynamic tool switching, including a dedicated Paintbrush tool.
@@ -274,6 +320,12 @@ Below is a detailed analysis of all directories and files within the WildVision 
 
 ## 9. BACKEND, TELEMETRY & UTILS (src/utils/ & supabase/functions/)
 
+### src/utils/shapeTransformations.ts
+- Pure utility functions (`translateSubArea`, `resizeSubArea`) for translating and resizing SubArea objects and scaling their polygon vertices.
+
+### src/utils/geometry.ts
+- Geometric core containing area (Shoelace) calculations, tessellation, point-in-polygon checks, and Sutherland-Hodgman polygon clipping approximations (`clipPolygon`) for determining fractional cut areas.
+
 ### src/utils/syncBroadcaster.ts
 - Houses the decoupled Supabase Realtime broadcaster, handling `cursor_move`, `state_sync`, and element locking/unlocking global events to avoid circular hook dependencies across Zustand slices.
 
@@ -296,6 +348,7 @@ Below is a detailed analysis of all directories and files within the WildVision 
 ## 11. UNDO/REDO & MULTIPLAYER HISTORY
 ### src/store/slices/projectSlice.ts & src/hooks/useUndoRedo.ts
 - Local state changes are debounced and pushed to `pastStateStack`.
+- When a project is loaded or the workspace is reset, `pastStateStack` and `futureStateStack` are explicitly reset (`[]`), and `lastSavedState` / `initialPristineState` are synchronously updated to match the newly loaded state snapshot. This establishes the newly loaded project as the absolute base state and prevents undoing past the loaded file.
 - When a user triggers Undo/Redo locally, the resulting state is broadcast to the room via `GLOBAL_HISTORY_RESTORE` to keep all clients in sync.
 - Incoming `GLOBAL_HISTORY_RESTORE` payloads overwrite the local state and clear the local future stack but do NOT double-log into the past stack, avoiding infinite loops and alternate timeline collisions.
 ## 12. PATTERN STUDIO SANDBOX (src/features/PatternBuilder/)
@@ -311,4 +364,24 @@ Below is a detailed analysis of all directories and files within the WildVision 
 ### src/features/PatternBuilder/VertexEditorCanvas.tsx
 - Responsive custom coordinate-grid drawing plane allowing manual polygon vertex positioning and dynamic edge splitting.
 - Features a ResizeObserver interface to perfectly center and auto-scale the canvas square to fit available viewport dimensions dynamically.
+
+## 14. CUSTOM BOX PROPS & ACTIVE PROP EDITOR
+### src/components/Sidebar/ActivePropEditor.tsx & src/components/TileCanvas3D/CustomBoxObject.tsx
+- Active Prop Editor color dispatch updates both `metadata.color` and root `color` on the `sceneObject`, matching the Master Color property used in `CustomBoxesPanel.tsx`.
+- Custom Box 3D mesh rendering incorporates auto-generated 3D edges via `@react-three/drei` `<Edges>` with `getContrastingEdgeColor` lightness evaluation (22% contrast shift) and `polygonOffset={true}` (`polygonOffsetFactor={-1}`) line basic material to prevent Z-fighting against box faces.
+
+## 15. WILD VISION RENDER & AI LOGGING
+### src/features/WildVisionRender/WildVisionSidebar.tsx
+- Updated with enhanced telemetry logging to capture rich metadata during the AI generation process.
+- Logs include `renderResolution`, `renderAspectRatio`, active model `api_slug`, and payload lengths (`baseImageLength`, `styleImageLength`).
+- Provides precise tracking of the Proxy API response size and token usage, and captures the full stringified trace of any generation errors for admin terminal debugging.
+
+## 16. FIREPLACE SURROUND & OUTWARD FOLDING 3D ENGINE
+### src/components/Sidebar/MainWallEditor.tsx & src/presets/classic_fireplace_surround.json
+- Layout Fold Type toggle allowing users to switch between Inward (Shower / Alcove: +90°) and Outward (Fireplace / Bump-Out: -90°) folding fold line modes.
+- Added "Classic Fireplace Surround" starter template preset featuring a main front wall with two outward-folding side returns (-90° fold lines), a centered recessed firebox niche, and an integrated hearth staging bench.
+- WallPanel 2D/3D polygon hole generator punches cutout geometry through both front and back faces, rendering realistic drywall tunnel casing depth and recessed backing planes into the fireplace structure without mesh intersection or Z-fighting artifacts.
+
+
+
 

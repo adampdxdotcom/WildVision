@@ -82,7 +82,7 @@ export const MainWallEditor: React.FC<MainWallEditorProps> = ({
   onResetWorkspace,
   onLoadCustomPreset,
 }) => {
-  const { isCanvasDirty, currentProjectId } = useAppStore();
+  const { isCanvasDirty, currentProjectId, layoutFoldType, setLayoutFoldType } = useAppStore();
 
   return (
     <div id="wall-setup-area" className="bg-white rounded border border-slate-200 p-5 shadow-xs animate-fade-in">
@@ -99,6 +99,47 @@ export const MainWallEditor: React.FC<MainWallEditorProps> = ({
             <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 rotate-45"></div>
             Use this area to set up your basic canvas dimensions, or choose a preset. Once you make any change, most options on this tab will lock.
           </div>
+        </div>
+      </div>
+
+      {/* Layout Fold Type Segmented Control */}
+      <div className="mb-4 p-3 bg-slate-50 border border-slate-200/60 rounded flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-[11px] font-bold text-slate-800">Layout Fold Type</span>
+            <span className="text-[9px] text-slate-500 font-medium leading-normal">
+              {layoutFoldType === 'outward' ? 'Fireplace / Bump-Out (-90° Outward)' : 'Shower / Alcove (+90° Inward)'}
+            </span>
+          </div>
+          <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded border border-indigo-200/60 font-mono">
+            {layoutFoldType === 'outward' ? '-90°' : '+90°'}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-200/60 rounded-md">
+          <button
+            type="button"
+            id="layout-fold-type-shower"
+            onClick={() => setLayoutFoldType('inward')}
+            className={`px-2.5 py-1.5 rounded text-[11px] font-bold transition-all ${
+              layoutFoldType === 'inward' || !layoutFoldType
+                ? 'bg-white text-indigo-600 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Shower / Alcove (Inward)
+          </button>
+          <button
+            type="button"
+            id="layout-fold-type-fireplace"
+            onClick={() => setLayoutFoldType('outward')}
+            className={`px-2.5 py-1.5 rounded text-[11px] font-bold transition-all ${
+              layoutFoldType === 'outward'
+                ? 'bg-white text-indigo-600 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Fireplace / Bump-Out (Outward)
+          </button>
         </div>
       </div>
 

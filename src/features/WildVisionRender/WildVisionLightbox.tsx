@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { X, Download, SplitSquareHorizontal, ChevronsLeftRight, Box, Share2, UploadCloud } from 'lucide-react';
+import { X, Download, SplitSquareHorizontal, ChevronsLeftRight, Box, Share2, UploadCloud, Trash2 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { downloadImageSecurely } from '../../utils/imageUtils';
+import { DeleteRenderModal } from './DeleteRenderModal';
 
 interface WildVisionLightboxProps {
   id: string;
@@ -14,9 +15,38 @@ interface WildVisionLightboxProps {
 }
 
 export const WildVisionLightbox: React.FC<WildVisionLightboxProps> = ({ id, aiImage, sourceImage, name, notes, onClose }) => {
-  const { currentProjectId, generateShareLink, projectName } = useAppStore();
+  const { currentProjectId, generateShareLink, projectName, deleteRender, generatedRenders } = useAppStore();
   const [isSharing, setIsSharing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+  const currentRender = generatedRenders.find((r) => r.id === id) || {
+    id,
+    imageUrl: aiImage,
+    sourceImage,
+    name,
+    notes,
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      const isRoot = !currentRender.parent_id;
+      const childCount = isRoot
+        ? generatedRenders.filter((r) => r.parent_id === id).length
+        : 0;
+
+      onClose();
+      await deleteRender(id);
+
+      if (childCount > 0) {
+        showToast(`Concept and ${childCount} variation(s) deleted.`, 'success');
+      } else {
+        showToast('AI render & 3D snapshot deleted.', 'success');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to delete render.', 'error');
+    }
+  };
 
   // Subfloor Integration hooks
   const subfloorApiKey = useAuthStore(state => state.subfloor_api_key);
@@ -307,6 +337,20 @@ export const WildVisionLightbox: React.FC<WildVisionLightboxProps> = ({ id, aiIm
             </button>
           )}
 
+          {/* Delete Render Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsDeleteModalOpen(true);
+            }}
+            title="Delete AI Render & 3D Snapshot"
+            className="p-2 bg-slate-800/80 hover:bg-red-600/90 text-red-400 hover:text-white rounded-lg border border-slate-700 hover:border-red-500/50 transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 text-xs font-semibold shadow-sm"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Delete</span>
+          </button>
+
           {/* Send to Subfloor Gallery Button */}
           {subfloorApiKey && (
             <button
@@ -372,6 +416,14 @@ export const WildVisionLightbox: React.FC<WildVisionLightboxProps> = ({ id, aiIm
           </button>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteRenderModal
+        isOpen={isDeleteModalOpen}
+        renderItem={currentRender}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 };

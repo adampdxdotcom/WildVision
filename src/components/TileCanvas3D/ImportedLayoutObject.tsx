@@ -47,7 +47,9 @@ export const ImportedLayoutObject: React.FC<ImportedLayoutObjectProps> = ({
   const posZ = to3D(data.position[2]);
 
   const onDown = (e: any) => {
-    if (data.isLocked) return;
+    const isPublicViewer = useAppStore.getState().isPublicViewer;
+    const isReadOnly = useAppStore.getState().isReadOnly;
+    if (data.isLocked || isPublicViewer || isReadOnly) return;
     e.stopPropagation();
     handlePointerDown(e, data.id);
   };
@@ -96,34 +98,50 @@ export const ImportedLayoutObject: React.FC<ImportedLayoutObjectProps> = ({
 
   const dynamicRotation = getRotation(data.attachedPlane);
 
-  const totalDepth3D = React.useMemo(() => {
-    let maxD = 0;
+  const { outwardReturnDepth, inwardDepth } = React.useMemo(() => {
+    let maxOutward = 0;
+    let maxInward = 0;
+
     if (rootCol) {
       if (rootCol.topFlaps && rootCol.topFlaps.length > 0) {
-        maxD = Math.max(maxD, rootCol.topFlaps[0].d3Height);
+        const fa = rootCol.topFlaps[0].foldAngle ?? 90;
+        if (fa < 0) maxOutward = Math.max(maxOutward, rootCol.topFlaps[0].d3Height);
+        else maxInward = Math.max(maxInward, rootCol.topFlaps[0].d3Height);
       }
       if (rootCol.bottomFlaps && rootCol.bottomFlaps.length > 0) {
-        maxD = Math.max(maxD, rootCol.bottomFlaps[0].d3Height);
+        const fa = rootCol.bottomFlaps[0].foldAngle ?? 90;
+        if (fa < 0) maxOutward = Math.max(maxOutward, rootCol.bottomFlaps[0].d3Height);
+        else maxInward = Math.max(maxInward, rootCol.bottomFlaps[0].d3Height);
       }
     }
     if (d3Columns) {
       const leftCol = d3Columns[rootIdx - 1];
       if (leftCol) {
-        maxD = Math.max(maxD, leftCol.d3Width);
+        const fa = leftCol.rightFoldAngle ?? leftCol.foldAngle ?? 90;
+        if (fa < 0) maxOutward = Math.max(maxOutward, leftCol.d3Width);
+        else maxInward = Math.max(maxInward, leftCol.d3Width);
       }
       const rightCol = d3Columns[rootIdx + 1];
       if (rightCol) {
-        maxD = Math.max(maxD, rightCol.d3Width);
+        const fa = rightCol.foldAngle ?? 90;
+        if (fa < 0) maxOutward = Math.max(maxOutward, rightCol.d3Width);
+        else maxInward = Math.max(maxInward, rightCol.d3Width);
       }
     }
-    return maxD;
+    return { outwardReturnDepth: maxOutward, inwardDepth: maxInward };
   }, [rootCol, d3Columns, rootIdx]);
 
   const recessDepth = data.metadata?.recessDepth || 0;
   const recess3D = to3D(recessDepth);
 
   const anchor = data.metadata?.mountAnchor || 'back';
-  const normalZOffset = anchor === 'back' ? -totalDepth3D / 2 : 0;
+  let normalZOffset = 0;
+  if (outwardReturnDepth > 0) {
+    if (anchor === 'back') normalZOffset = outwardReturnDepth;
+    else if (anchor === 'center') normalZOffset = outwardReturnDepth / 2;
+  } else if (inwardDepth > 0) {
+    if (anchor === 'back') normalZOffset = -inwardDepth / 2;
+  }
   const localZOffset = normalZOffset - recess3D;
 
   return (

@@ -52,6 +52,7 @@ export function useUndoRedo() {
     activeCustomPattern,
     tileColorOverrides,
     activeBrushColorIndex,
+    layoutFoldType,
     isRestoringHistory,
     setIsRestoringHistory,
     setPastStateStack,
@@ -158,6 +159,7 @@ export function useUndoRedo() {
     roomColors,
     tileColorOverrides,
     activeBrushColorIndex,
+    layoutFoldType,
     isRestoringHistory,
   ]);
 

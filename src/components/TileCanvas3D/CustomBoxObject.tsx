@@ -2,8 +2,29 @@ import * as React from 'react';
 import * as THREE from 'three';
 import { useAppStore } from '../../store/useAppStore';
 import { SceneObject, BoxFaceConfig } from '../../types';
-import { Html, useTexture } from '@react-three/drei';
+import { Html, useTexture, Edges } from '@react-three/drei';
 import { SmartDimensionsHUD } from './SmartDimensionsHUD';
+
+/**
+ * Utility to calculate a contrasting edge color based on the box's active master color.
+ * Darkens light colors by ~22% and lightens dark colors by ~22%.
+ */
+function getContrastingEdgeColor(baseHex: string): string {
+  try {
+    const color = new THREE.Color(baseHex || '#333333');
+    const hsl = { h: 0, s: 0, l: 0 };
+    color.getHSL(hsl);
+    if (hsl.l > 0.5) {
+      hsl.l = Math.max(0, hsl.l - 0.22);
+    } else {
+      hsl.l = Math.min(1, hsl.l + 0.22);
+    }
+    color.setHSL(hsl.h, hsl.s, hsl.l);
+    return '#' + color.getHexString();
+  } catch {
+    return '#111111';
+  }
+}
 
 export interface CustomBoxObjectProps {
   data: SceneObject;
@@ -45,7 +66,8 @@ export const CustomBoxObject: React.FC<CustomBoxObjectProps> = ({
 
   const isWallLocked = data.metadata?.isWallLocked === true;
 
-  const color = data.metadata?.color || '#333333'; // default dark gray color
+  const color = data.metadata?.color || data.color || '#333333'; // default dark gray color
+  const edgeColor = React.useMemo(() => getContrastingEdgeColor(color), [color]);
   const faces = data.metadata?.faces || {};
 
   const getFaceConfig = (key: 'top'|'bottom'|'front'|'back'|'left'|'right'): BoxFaceConfig => {
@@ -82,7 +104,9 @@ export const CustomBoxObject: React.FC<CustomBoxObjectProps> = ({
   }, [uniqueUrls, texturesArray]);
 
   const onDown = (e: any) => {
-    if (data.isLocked) return;
+    const isPublicViewer = useAppStore.getState().isPublicViewer;
+    const isReadOnly = useAppStore.getState().isReadOnly;
+    if (data.isLocked || isPublicViewer || isReadOnly) return;
     e.stopPropagation();
     handlePointerDown(e, data.id);
   };
@@ -143,6 +167,15 @@ export const CustomBoxObject: React.FC<CustomBoxObjectProps> = ({
               />
             );
           })}
+          {/* Auto-generated 3D Edges */}
+          <Edges threshold={15} color={edgeColor}>
+            <lineBasicMaterial
+              color={edgeColor}
+              polygonOffset={true}
+              polygonOffsetFactor={-1}
+              polygonOffsetUnits={-1}
+            />
+          </Edges>
         </mesh>
 
         {/* Visual outline if selected */}

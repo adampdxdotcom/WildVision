@@ -16,9 +16,10 @@ export interface WallPanelProps {
   globalBumpTexture?: THREE.Texture;
   margin?: number;
   isFloor?: boolean;
+  invertMaterials?: boolean;
 }
 
-export const WallPanel: React.FC<WallPanelProps> = ({ panel, globalTexture, globalBumpTexture, margin, isFloor }) => {
+export const WallPanel: React.FC<WallPanelProps> = ({ panel, globalTexture, globalBumpTexture, margin, isFloor, invertMaterials }) => {
   const context = useLayoutConfig();
 
   const wallWidthStore = useAppStore((state) => state.wallWidth);
@@ -36,6 +37,18 @@ export const WallPanel: React.FC<WallPanelProps> = ({ panel, globalTexture, glob
   const tileFinish = context ? context.tileFinish : tileFinishStore;
 
   const finishProps = React.useMemo(() => getMaterialFinishProps(tileFinish), [tileFinish]);
+
+  const isInv = invertMaterials ?? panel.invertMaterials ?? false;
+
+  const frontMap = isInv ? panel.backingTexture : panel.texture;
+  const frontBumpMap = isInv ? undefined : (panel.bumpTexture || undefined);
+  const frontRoughness = isInv ? 0.6 : finishProps.roughness;
+  const frontMetalness = isInv ? 0.03 : finishProps.metalness;
+
+  const backMap = isInv ? panel.texture : panel.backingTexture;
+  const backBumpMap = isInv ? (panel.bumpTexture || undefined) : undefined;
+  const backRoughness = isInv ? finishProps.roughness : 0.6;
+  const backMetalness = isInv ? finishProps.metalness : 0.03;
 
   const bounds = React.useMemo(() => {
     return getCombinedWallBounds(wallWidth, wallHeight, wallExtensions, wallVertices);
@@ -239,10 +252,11 @@ export const WallPanel: React.FC<WallPanelProps> = ({ panel, globalTexture, glob
               }
               case 'rectangle':
               default: {
-                holePath.moveTo(clampX(xLeft), clampY(yBottom));
-                holePath.lineTo(clampX(xRight), clampY(yBottom));
-                holePath.lineTo(clampX(xRight), clampY(yTop));
-                holePath.lineTo(clampX(xLeft), clampY(yTop));
+                // Holes MUST be drawn CLOCKWISE to prevent Earcut triangulation failures
+                holePath.moveTo(clampX(xLeft), clampY(yBottom)); // Bottom-Left
+                holePath.lineTo(clampX(xLeft), clampY(yTop));    // Top-Left
+                holePath.lineTo(clampX(xRight), clampY(yTop));   // Top-Right
+                holePath.lineTo(clampX(xRight), clampY(yBottom));// Bottom-Right
                 holePath.closePath();
                 break;
               }
@@ -282,11 +296,26 @@ export const WallPanel: React.FC<WallPanelProps> = ({ panel, globalTexture, glob
     }
   }, [panel.bumpTexture, panel.texture]);
 
+  const extrusionArgs = React.useMemo(() => {
+    let extShape = shape;
+    if (!extShape) {
+      extShape = new THREE.Shape();
+      const w2 = panel.d3Width / 2;
+      const h2 = panel.d3Height / 2;
+      extShape.moveTo(-w2, -h2);
+      extShape.lineTo(w2, -h2);
+      extShape.lineTo(w2, h2);
+      extShape.lineTo(-w2, h2);
+      extShape.closePath();
+    }
+    return [extShape, { depth: 0.004, bevelEnabled: false, steps: 1 }];
+  }, [shape, panel.d3Width, panel.d3Height]);
+
   return (
     <>
       {/* Front face (interior of folded room) */}
       {shape ? (
-        <mesh position={[0, 0, 0.002]}>
+        <mesh position={[0, 0, 0.002]} castShadow receiveShadow>
           <shapeGeometry
             args={[shape]}
             onUpdate={(geo) => {
@@ -302,30 +331,31 @@ export const WallPanel: React.FC<WallPanelProps> = ({ panel, globalTexture, glob
                 }
                 geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
               }
+              geo.computeVertexNormals();
             }}
           />
           <meshStandardMaterial
             ref={materialRef1}
-            map={panel.texture}
-            bumpMap={panel.bumpTexture || undefined}
-            bumpScale={0.8}
-            roughness={finishProps.roughness}
-            metalness={finishProps.metalness}
+            map={frontMap}
+            bumpMap={frontBumpMap}
+            bumpScale={frontBumpMap ? 0.8 : 0}
+            roughness={frontRoughness}
+            metalness={frontMetalness}
             side={THREE.FrontSide}
             transparent={true}
             alphaTest={0.5}
           />
         </mesh>
       ) : (
-        <mesh position={[0, 0, 0.002]}>
+        <mesh position={[0, 0, 0.002]} castShadow receiveShadow>
           <planeGeometry args={[width, height]} />
           <meshStandardMaterial
             ref={materialRef2}
-            map={panel.texture}
-            bumpMap={panel.bumpTexture || undefined}
-            bumpScale={0.8}
-            roughness={finishProps.roughness}
-            metalness={finishProps.metalness}
+            map={frontMap}
+            bumpMap={frontBumpMap}
+            bumpScale={frontBumpMap ? 0.8 : 0}
+            roughness={frontRoughness}
+            metalness={frontMetalness}
             side={THREE.FrontSide}
             transparent={true}
             alphaTest={0.5}
@@ -335,7 +365,7 @@ export const WallPanel: React.FC<WallPanelProps> = ({ panel, globalTexture, glob
 
       {/* Back face (drywall watermark backing - faces exterior) */}
       {shape ? (
-        <mesh position={[0, 0, -0.002]} rotation={[0, Math.PI, 0]}>
+        <mesh position={[0, 0, -0.002]} rotation={[0, Math.PI, 0]} castShadow receiveShadow>
           <shapeGeometry
             args={[shape]}
             onUpdate={(geo) => {
@@ -351,30 +381,42 @@ export const WallPanel: React.FC<WallPanelProps> = ({ panel, globalTexture, glob
                 }
                 geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
               }
+              geo.computeVertexNormals();
             }}
           />
           <meshStandardMaterial
-            map={panel.backingTexture}
-            roughness={0.6}
-            metalness={0.03}
+            map={backMap}
+            bumpMap={backBumpMap}
+            bumpScale={backBumpMap ? 0.8 : 0}
+            roughness={backRoughness}
+            metalness={backMetalness}
             side={THREE.FrontSide}
             transparent={true}
             alphaTest={0.5}
           />
         </mesh>
       ) : (
-        <mesh position={[0, 0, -0.002]} rotation={[0, Math.PI, 0]}>
+        <mesh position={[0, 0, -0.002]} rotation={[0, Math.PI, 0]} castShadow receiveShadow>
           <planeGeometry args={[width, height]} />
           <meshStandardMaterial
-            map={panel.backingTexture}
-            roughness={0.6}
-            metalness={0.03}
+            map={backMap}
+            bumpMap={backBumpMap}
+            bumpScale={backBumpMap ? 0.8 : 0}
+            roughness={backRoughness}
+            metalness={backMetalness}
             side={THREE.FrontSide}
             transparent={true}
             alphaTest={0.5}
           />
         </mesh>
       )}
+
+      {/* Solid Volume Edge Caps (Seals the 4mm hollow gap between front and back planes) */}
+      <mesh position={[0, 0, -0.002]} castShadow receiveShadow>
+        <extrudeGeometry args={extrusionArgs as any} />
+        <meshBasicMaterial attach="material-0" visible={false} />
+        <meshStandardMaterial attach="material-1" color={invertMaterials ? "#f1f5f9" : "#e2e8f0"} roughness={0.9} />
+      </mesh>
 
       {/* Active volumetric features */}
       {intersectingSubAreas.map(({ sa, resolvedType, isOwner }, idx) => {

@@ -81,54 +81,57 @@ export const InteractiveNodes: React.FC<InteractiveNodesProps> = React.memo(({
   );
 
   const viewSettings = useAppStore(state => state.viewSettings);
+  const isPublicViewer = useAppStore(state => state.isPublicViewer);
   const lockedElements = useAppStore(state => state.lockedElements);
   const onlineUsers = useAppStore(state => state.onlineUsers);
   const user = useAuthStore(state => state.user);
 
 
-  if (!viewSettings.canvas.showNodes) {
+  if (isPublicViewer || !viewSettings.canvas.showNodes) {
     return null;
   }
 
   return (
     <>
-      <WallNodesOverlay
-        wallToScreen={wallToScreen}
-        dimensions={dimensions}
-        setDraggingVertexIndex={setDraggingVertexIndex}
-        editingLengthIndex={editingLengthIndex}
-        setEditingLengthIndex={setEditingLengthIndex}
-        editingAngleIndex={editingAngleIndex}
-        setEditingAngleIndex={setEditingAngleIndex}
-        angleInputValue={angleInputValue}
-        setAngleInputValue={setAngleInputValue}
-        lengthInputValue={lengthInputValue}
-        setLengthInputValue={setLengthInputValue}
-        editingRiseIndex={editingRiseIndex}
-        setEditingRiseIndex={setEditingRiseIndex}
-        riseInputValue={riseInputValue}
-        setRiseInputValue={setRiseInputValue}
-        handleLengthSubmit={handleLengthSubmit}
-        handleRiseSubmit={handleRiseSubmit}
-        handleAngleSubmit={handleAngleSubmit}
-        setEditingAngleSubAreaId={setEditingAngleSubAreaId}
-        setEditingRiseSubAreaId={setEditingRiseSubAreaId}
+      {!activeSubAreaId && (
+        <WallNodesOverlay
+          wallToScreen={wallToScreen}
+          dimensions={dimensions}
+          setDraggingVertexIndex={setDraggingVertexIndex}
+          editingLengthIndex={editingLengthIndex}
+          setEditingLengthIndex={setEditingLengthIndex}
+          editingAngleIndex={editingAngleIndex}
+          setEditingAngleIndex={setEditingAngleIndex}
+          angleInputValue={angleInputValue}
+          setAngleInputValue={setAngleInputValue}
+          lengthInputValue={lengthInputValue}
+          setLengthInputValue={setLengthInputValue}
+          editingRiseIndex={editingRiseIndex}
+          setEditingRiseIndex={setEditingRiseIndex}
+          riseInputValue={riseInputValue}
+          setRiseInputValue={setRiseInputValue}
+          handleLengthSubmit={handleLengthSubmit}
+          handleRiseSubmit={handleRiseSubmit}
+          handleAngleSubmit={handleAngleSubmit}
+          setEditingAngleSubAreaId={setEditingAngleSubAreaId}
+          setEditingRiseSubAreaId={setEditingRiseSubAreaId}
 
-        // Phase 3 State Selectors & Event Delegation handlers
-        wallVertices={wallVertices}
-        activeTool={activeTool}
-        selectedVertexIndices={selectedVertexIndices}
-        handleDeleteWallVertex={handleDeleteWallVertex}
-        handleToggleWallAngleConstraint={handleToggleWallAngleConstraint}
-        handleToggleWallLengthConstraint={handleToggleWallLengthConstraint}
-        handleDoubleClickDeleteWallCurveNode={handleDoubleClickDeleteWallCurveNode}
-        handleWallVertexClick={handleWallVertexClick}
-        handleWallVertexMouseDown={handleWallVertexMouseDown}
-        foldLines={foldLines}
-        setFoldLines={setFoldLines}
-        draftFoldNodeIndex={draftFoldNodeIndex}
-        setDraftFoldNodeIndex={setDraftFoldNodeIndex}
-      />
+          // Phase 3 State Selectors & Event Delegation handlers
+          wallVertices={wallVertices}
+          activeTool={activeTool}
+          selectedVertexIndices={selectedVertexIndices}
+          handleDeleteWallVertex={handleDeleteWallVertex}
+          handleToggleWallAngleConstraint={handleToggleWallAngleConstraint}
+          handleToggleWallLengthConstraint={handleToggleWallLengthConstraint}
+          handleDoubleClickDeleteWallCurveNode={handleDoubleClickDeleteWallCurveNode}
+          handleWallVertexClick={handleWallVertexClick}
+          handleWallVertexMouseDown={handleWallVertexMouseDown}
+          foldLines={foldLines}
+          setFoldLines={setFoldLines}
+          draftFoldNodeIndex={draftFoldNodeIndex}
+          setDraftFoldNodeIndex={setDraftFoldNodeIndex}
+        />
+      )}
 
       
       {subAreas.map((sa) => {

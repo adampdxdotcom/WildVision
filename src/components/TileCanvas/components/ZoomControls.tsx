@@ -16,10 +16,12 @@ export const ZoomControls: React.FC<ZoomControlsProps> = React.memo(({ onCenter 
   const tutorialStepIndex = useAppStore(state => state.tutorialStepIndex);
   
   const [isHovered, setIsHovered] = useState(false);
+  const [isToggledOpen, setIsToggledOpen] = useState(false);
 
-  const isExpanded = isHovered || tutorialStepIndex === 1;
+  const showExpanded = isToggledOpen || isHovered || tutorialStepIndex === 1;
 
-  const handleZoomOut = () => {
+  const handleZoomOut = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     const currentIndex = ZOOM_LEVELS.findIndex(level => level >= zoom);
     if (currentIndex > 0) {
       setZoom(ZOOM_LEVELS[currentIndex - 1]);
@@ -28,7 +30,8 @@ export const ZoomControls: React.FC<ZoomControlsProps> = React.memo(({ onCenter 
     }
   };
 
-  const handleZoomIn = () => {
+  const handleZoomIn = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     const currentIndex = ZOOM_LEVELS.findIndex(level => level > zoom);
     if (currentIndex !== -1) {
       setZoom(ZOOM_LEVELS[currentIndex]);
@@ -37,27 +40,38 @@ export const ZoomControls: React.FC<ZoomControlsProps> = React.memo(({ onCenter 
     }
   };
 
-  const handleReset = () => {
+  const handleReset = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     const triggerFitWorkspace = useAppStore.getState().triggerFitWorkspace;
     if (triggerFitWorkspace) {
       triggerFitWorkspace();
     }
   };
 
+  const handleCenter = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onCenter();
+  };
+
   return (
     <div 
       id="floating-zoom-controls" 
-      className="absolute top-3 right-3 z-10 flex flex-row items-center gap-1.5"
+      className="absolute top-3 right-3 z-30 flex flex-row items-center gap-1.5 pointer-events-auto"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onPointerDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+      onPointerUp={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
     >
       <div 
         className="flex items-center justify-end bg-white/95 backdrop-blur-sm p-1 rounded-lg shadow-sm border border-slate-200 select-none overflow-hidden transition-all duration-300 ease-in-out"
-        style={{ width: isExpanded ? '180px' : '56px' }}
+        style={{ width: showExpanded ? '180px' : '56px' }}
       >
         <div className="flex items-center justify-end gap-2.5 w-[172px] shrink-0">
           
-          <div className={`flex items-center gap-2.5 transition-opacity duration-300 ${isExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+          <div className={`flex items-center gap-2.5 transition-opacity duration-300 ${showExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
             <button
               type="button"
               onClick={handleZoomOut}
@@ -85,19 +99,26 @@ export const ZoomControls: React.FC<ZoomControlsProps> = React.memo(({ onCenter 
  
           <button
             type="button"
-            onClick={handleReset}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!showExpanded) {
+                setIsToggledOpen(true);
+              } else {
+                handleReset(e);
+              }
+            }}
             className="w-12 h-7 text-[10px] font-bold uppercase tracking-widest text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border border-indigo-200 rounded-md transition cursor-pointer flex items-center justify-center shadow-2xs shrink-0"
-            title="Reset Zoom to Fit"
+            title={showExpanded ? "Reset Zoom to Fit" : "Toggle Zoom Controls"}
           >
-            {isExpanded ? 'FIT' : 'ZOOM'}
+            {showExpanded ? 'FIT' : 'ZOOM'}
           </button>
- 
+
         </div>
       </div>
  
       <button
         type="button"
-        onClick={onCenter}
+        onClick={handleCenter}
         className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/95 hover:bg-indigo-50 border border-indigo-200 text-indigo-600 hover:text-indigo-700 shadow-xs transition cursor-pointer shrink-0"
         title="Center Layout"
       >

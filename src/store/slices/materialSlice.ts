@@ -2,6 +2,7 @@ import { StateCreator } from 'zustand';
 import { broadcastStateSync } from '../../utils/syncBroadcaster';
 import { supabase } from '../../utils/supabaseClient';
 import { calculateCenteredOffsets, roundTo } from '../../utils/geometry';
+import { translateSubArea, resizeSubArea as resizeSubAreaUtil } from '../../utils/shapeTransformations';
 import { 
   TileShape, 
   RectanglePattern, 
@@ -65,6 +66,9 @@ export interface MaterialSlice {
   setOffsetY: (val: number | ((prev: number) => number)) => void;
   subAreas: SubArea[];
   setSubAreas: (val: SubArea[] | ((prev: SubArea[]) => SubArea[])) => void;
+  updateSubArea: (id: string, updates: Partial<SubArea>) => void;
+  moveSubArea: (id: string, dx: number, dy: number) => void;
+  resizeSubArea: (id: string, handle: string, targetX: number, targetY: number, minSize?: number) => void;
   activeSubAreaId: string | null;
   setActiveSubAreaId: (val: string | null | ((prev: string | null) => string | null)) => void;
   wallExtensions: WallExtension[];
@@ -87,6 +91,8 @@ export interface MaterialSlice {
   setMosaicHeight: (val: number | ((prev: number) => number)) => void;
   overage: number;
   setOverage: (val: number | ((prev: number) => number)) => void;
+  reuseCuts: boolean;
+  setReuseCuts: (val: boolean | ((prev: boolean) => boolean)) => void;
   angleDisplayMode: AngleDisplayMode;
   setAngleDisplayMode: (val: AngleDisplayMode | ((prev: AngleDisplayMode) => AngleDisplayMode)) => void;
   showAccentDistances: boolean;
@@ -169,6 +175,8 @@ export interface MaterialSlice {
   disableColorWithTexture: boolean;
   setDisableColorWithTexture: (val: boolean | ((prev: boolean) => boolean)) => void;
 }
+
+const AESTHETIC_KEYS = ['shape', 'tileWidth', 'tileHeight', 'pattern', 'tileColors', 'tileColor', 'colorPattern', 'tilesPerStripe', 'groutColor', 'groutWidth', 'shapeSettings', 'tileSpecular', 'tileFinish', 'materialTexture', 'colorVariation', 'tileDotColor', 'soldAsMosaic', 'mosaicWidth', 'mosaicHeight', 'isPicket', 'picketLength', 'flatsketVerticalRows', 'flatsketHorizontalRows', 'customPatternPayload', 'surfaceUrl', 'tileName', 'border'];
 
 export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (set) => ({
   shape: 'rectangle',
@@ -329,6 +337,59 @@ export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (se
     if (!state.isReceivingRemoteUpdate) broadcastStateSync('setSubAreas', nextVal);
     return { subAreas: nextVal };
   }),
+
+  updateSubArea: (id, updates) => set((state: any) => {
+    // PASS 1: Apply the direct updates to the target SubArea
+    let nextSubAreas = state.subAreas.map((item: SubArea) =>
+      item.id === id ? { ...item, ...updates } : item
+    );
+
+    let nextPurchasingSettings = { ...state.purchasingSettings };
+
+    // PASS 2: Top-Down Strict Synchronization
+    // Sweep the entire array. If an area is a child, force it to exactly mirror its parent.
+    nextSubAreas = nextSubAreas.map((item: SubArea) => {
+      if (item.linkedMaterialId) {
+        const parent = nextSubAreas.find((p: SubArea) => p.id === item.linkedMaterialId);
+        if (parent) {
+          const syncedChild = { ...item };
+          AESTHETIC_KEYS.forEach(key => {
+            if ((parent as any)[key] !== undefined) {
+              // Deep clone to prevent reference collisions
+              (syncedChild as any)[key] = JSON.parse(JSON.stringify((parent as any)[key]));
+            }
+          });
+          if (state.purchasingSettings[parent.id]) {
+            nextPurchasingSettings[item.id] = { ...state.purchasingSettings[parent.id] };
+          }
+          return syncedChild;
+        }
+      }
+      return item;
+    });
+
+    const hasAestheticUpdates = Object.keys(updates).some(key => AESTHETIC_KEYS.includes(key));
+    if (typeof window !== 'undefined' && hasAestheticUpdates) {
+      window.dispatchEvent(new CustomEvent('wildvision:forceCanvasRedraw'));
+    }
+
+    if (!state.isReceivingRemoteUpdate) broadcastStateSync('setSubAreas', nextSubAreas);
+    return { subAreas: nextSubAreas, purchasingSettings: nextPurchasingSettings, isCanvasDirty: true };
+  }),
+  moveSubArea: (id, dx, dy) => set((state: any) => {
+    const nextSubAreas = state.subAreas.map((item: SubArea) =>
+      item.id === id ? translateSubArea(item, dx, dy) : item
+    );
+    if (!state.isReceivingRemoteUpdate) broadcastStateSync('setSubAreas', nextSubAreas);
+    return { subAreas: nextSubAreas };
+  }),
+  resizeSubArea: (id, handle, targetX, targetY, minSize) => set((state: any) => {
+    const nextSubAreas = state.subAreas.map((item: SubArea) =>
+      item.id === id ? resizeSubAreaUtil(item, handle, targetX, targetY, minSize) : item
+    );
+    if (!state.isReceivingRemoteUpdate) broadcastStateSync('setSubAreas', nextSubAreas);
+    return { subAreas: nextSubAreas };
+  }),
   activeSubAreaId: null,
   setActiveSubAreaId: (updater) => set((state: any) => ({ activeSubAreaId: typeof updater === 'function' ? updater(state.activeSubAreaId) : updater })),
   wallExtensions: [],
@@ -351,6 +412,8 @@ export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (se
   setMosaicHeight: (updater) => set((state: any) => ({ mosaicHeight: typeof updater === 'function' ? updater(state.mosaicHeight) : updater })),
   overage: 10,
   setOverage: (updater) => set((state: any) => ({ overage: typeof updater === 'function' ? updater(state.overage) : updater })),
+  reuseCuts: false,
+  setReuseCuts: (updater) => set((state: any) => ({ reuseCuts: typeof updater === 'function' ? updater(state.reuseCuts) : updater })),
   angleDisplayMode: 'all',
   setAngleDisplayMode: (updater) => set((state: any) => ({ angleDisplayMode: typeof updater === 'function' ? updater(state.angleDisplayMode) : updater })),
   showAccentDistances: false,
@@ -395,15 +458,27 @@ export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (se
       pricePerSqFt: 0,
       pricePerSheet: 0,
     };
-    return {
-      purchasingSettings: {
-        ...state.purchasingSettings,
-        [areaId]: {
-          ...prev,
-          ...settings,
-        }
-      }
+    const updated = { ...prev, ...settings };
+    const nextPurchasingSettings = {
+      ...state.purchasingSettings,
+      [areaId]: updated,
     };
+
+    if (state.subAreas) {
+      state.subAreas.forEach((sa: SubArea) => {
+        if (sa.linkedMaterialId === areaId) {
+          const childPrev = nextPurchasingSettings[sa.id] || {
+            purchaseType: 'carton',
+            sqFtPerCarton: '',
+            pricePerSqFt: 0,
+            pricePerSheet: 0,
+          };
+          nextPurchasingSettings[sa.id] = { ...childPrev, ...settings };
+        }
+      });
+    }
+
+    return { purchasingSettings: nextPurchasingSettings };
   }),
   customPatternsList: [],
   activeCustomPattern: null,

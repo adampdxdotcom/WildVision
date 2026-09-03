@@ -10,6 +10,7 @@ import { Viewport, mapToCanvas } from '../canvasUtils';
 import { defineCombinedWallPath } from '../wallPainter';
 import { useAppStore, getLoadedTextureImage, getLoadedSurfaceImage } from '../../../store/useAppStore';
 import { getPatternImage, ensureColorCard, getCardPatternImageAndBlob } from '../../../utils/svgPatternManager';
+import { getPrintForLocation } from '../../../utils/printSetManager';
 import { getPatternColor } from './colorUtils';
 import { isSubAreaInBenchMode, definePolygonVerticesPath } from './geometryHelpers';
 import { drawBorder } from './borderPainter';
@@ -40,7 +41,10 @@ export function drawSubAreas(
   materialImage?: HTMLImageElement | null,
   isDraftMode: boolean = false,
   showTextures: boolean = true,
-  subAreaTileMap?: Record<string, any[]>
+  subAreaTileMap?: Record<string, any[]>,
+  hoveredSubAreaEdge?: { id: string; handle: 'l' | 'r' | 't' | 'b' } | null,
+  draggingSubAreaHandle?: 'bl' | 'br' | 'tl' | 'tr' | 'l' | 'r' | 't' | 'b' | null,
+  draggingSubAreaId?: string | null
 ) {
   subAreas.forEach((sa) => {
     if (sa.visible === false) return;
@@ -505,24 +509,34 @@ export function drawSubAreas(
         patternImg = getPatternImage(uploadedSvgText, resolvedSaTileColor, patternAccentColor, onImageLoaded);
       }
 
+      let printImg: HTMLImageElement | null = null;
+      let printOpacity = 1.0;
+      if (baseSaCard.printConfig && baseSaCard.printConfig.setName) {
+        const printItem = getPrintForLocation(baseSaCard.printConfig.setName, tile.center.x, tile.center.y);
+        if (printItem && printItem.img) {
+          printImg = printItem.img;
+          printOpacity = baseSaCard.printConfig.opacity ?? 1.0;
+        }
+      }
+
       if (tile.shape === 'round') {
         const radius = (saActualTileW / 2) * viewport.scale;
-        drawRoundTile(ctx, pCenter, radius, resolvedSaTileColor, useSpecular, isBumpMapMode, resolvedSaMaterialImage, tile.center, patternImg, saAngleRad, viewport.scale);
+        drawRoundTile(ctx, pCenter, radius, resolvedSaTileColor, useSpecular, isBumpMapMode, resolvedSaMaterialImage, tile.center, patternImg, saAngleRad, viewport.scale, printImg, printOpacity);
       } else if (tile.shape === 'scallop') {
         const radius = (saActualTileW / 2) * viewport.scale;
-        drawScallopTile(ctx, pCenter, radius, resolvedSaTileColor, useSpecular, saAngleRad, isBumpMapMode, resolvedSaMaterialImage, tile.center, patternImg, saAngleRad, viewport.scale);
+        drawScallopTile(ctx, pCenter, radius, resolvedSaTileColor, useSpecular, saAngleRad, isBumpMapMode, resolvedSaMaterialImage, tile.center, patternImg, saAngleRad, viewport.scale, printImg, printOpacity);
       } else if (tile.shape === 'hexagon' && !sa.isPicket) {
         const drawRadius = (saActualTileW / Math.sqrt(3)) * viewport.scale;
-        drawHexagonTileDirect(ctx, pCenter, drawRadius, resolvedSaTileColor, useSpecular, isBumpMapMode, resolvedSaMaterialImage, tile.center, patternImg, saAngleRad, viewport.scale);
+        drawHexagonTileDirect(ctx, pCenter, drawRadius, resolvedSaTileColor, useSpecular, isBumpMapMode, resolvedSaMaterialImage, tile.center, patternImg, saAngleRad, viewport.scale, printImg, printOpacity);
       } else if (tile.shape === 'pebble') {
         const saColors = disableTileColorOnPdf 
           ? ['#ffffff'] 
           : (sa.tileColors || [sa.tileColor || '#f1f5f9']).map(c => typeof c === 'string' ? c : c.hex);
         const saPattern = disableTileColorOnPdf ? 'single' : (sa.colorPattern || 'single');
         const saVar = disableTileColorOnPdf ? 'V1' : (sa.colorVariation || 'V1');
-        drawPebbleTile(ctx, canvasVertices, pCenter, resolvedSaTileColor, useSpecular, saColors, saPattern, saVar, tile.center, isBumpMapMode, resolvedSaMaterialImage, patternImg, saAngleRad, viewport.scale);
+        drawPebbleTile(ctx, canvasVertices, pCenter, resolvedSaTileColor, useSpecular, saColors, saPattern, saVar, tile.center, isBumpMapMode, resolvedSaMaterialImage, patternImg, saAngleRad, viewport.scale, printImg, printOpacity);
       } else {
-        drawPolygonTile(ctx, canvasVertices, pCenter, resolvedSaTileColor, useSpecular, tile.shape, isBumpMapMode, resolvedSaMaterialImage, tile.center, patternImg, saAngleRad, viewport.scale);
+        drawPolygonTile(ctx, canvasVertices, pCenter, resolvedSaTileColor, useSpecular, tile.shape, isBumpMapMode, resolvedSaMaterialImage, tile.center, patternImg, saAngleRad, viewport.scale, printImg, printOpacity);
       }
       ctx.restore();
     } // closes tile loop
@@ -570,6 +584,36 @@ export function drawSubAreas(
           sa.groutColor || '#ffffff',
           sa.groutWidth || 0.125
        );
+    }
+
+    // 7. Draw hovered or active edge highlight line
+    let targetEdgeHandle: 'l' | 'r' | 't' | 'b' | null = null;
+    if (draggingSubAreaId === sa.id && draggingSubAreaHandle && ['l', 'r', 't', 'b'].includes(draggingSubAreaHandle)) {
+      targetEdgeHandle = draggingSubAreaHandle as 'l' | 'r' | 't' | 'b';
+    } else if (hoveredSubAreaEdge && hoveredSubAreaEdge.id === sa.id) {
+      targetEdgeHandle = hoveredSubAreaEdge.handle;
+    }
+
+    if (targetEdgeHandle) {
+      ctx.save();
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      if (targetEdgeHandle === 'l') {
+        ctx.moveTo(xLeft, yTop);
+        ctx.lineTo(xLeft, yBottom);
+      } else if (targetEdgeHandle === 'r') {
+        ctx.moveTo(xRight, yTop);
+        ctx.lineTo(xRight, yBottom);
+      } else if (targetEdgeHandle === 't') {
+        ctx.moveTo(xLeft, yTop);
+        ctx.lineTo(xRight, yTop);
+      } else if (targetEdgeHandle === 'b') {
+        ctx.moveTo(xLeft, yBottom);
+        ctx.lineTo(xRight, yBottom);
+      }
+      ctx.stroke();
+      ctx.restore();
     }
   });
 }

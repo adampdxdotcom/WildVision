@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { SubArea, WallExtension } from '../../../../types';
 import { getCombinedWallBounds } from '../../../../utils/geometry';
 import { useAppStore } from '../../../../store/useAppStore';
@@ -10,7 +10,7 @@ interface UseSubAreaDragArgs {
   wallExtensions: WallExtension[];
   wallVertices: { x: number; y: number }[] | undefined;
   subAreas: SubArea[];
-  setSubAreas: (val: SubArea[] | ((prev: SubArea[]) => SubArea[])) => void;
+  setSubAreas?: (val: SubArea[] | ((prev: SubArea[]) => SubArea[])) => void;
 }
 
 export const useSubAreaDrag = ({
@@ -20,7 +20,6 @@ export const useSubAreaDrag = ({
   wallExtensions,
   wallVertices,
   subAreas,
-  setSubAreas,
 }: UseSubAreaDragArgs) => {
   const [activeGuides, setActiveGuides] = useState<{axis: 'x' | 'y', value: number}[]>([]);
 
@@ -30,34 +29,52 @@ export const useSubAreaDrag = ({
 
   const handleSubAreaDrag = (
     draggingSubAreaId: string | null,
-    draggingSubAreaCorner: 'bl' | 'br' | 'tl' | 'tr' | null,
+    draggingSubAreaHandle: 'bl' | 'br' | 'tl' | 'tr' | 'l' | 'r' | 't' | 'b' | null,
     activeSubAreaId: string | null,
     deltaX: number,
     deltaY: number,
     subAreaStartPos: { x: number; y: number; width: number; height: number },
     isFreeform: boolean = false
   ) => {
-    if (draggingSubAreaCorner) {
+    const { moveSubArea, resizeSubArea } = useAppStore.getState();
+
+    if (draggingSubAreaHandle) {
       const sa = subAreas.find((s) => s.id === activeSubAreaId);
-      if (!sa) return;
+      if (!sa || !activeSubAreaId) return;
 
       const unit = useAppStore.getState().unit || 'in';
       const increment = unit === 'cm' ? 5 : 6;
       const minSize = increment;
 
-      // Target position of the dragged corner in wall space
+      // Target position of the dragged corner/handle in wall space
       let targetX = 0;
       let targetY = 0;
 
-      if (draggingSubAreaCorner === 'bl' || draggingSubAreaCorner === 'tl') {
+      if (
+        draggingSubAreaHandle === 'bl' ||
+        draggingSubAreaHandle === 'tl' ||
+        draggingSubAreaHandle === 'l'
+      ) {
         targetX = subAreaStartPos.x + deltaX;
-      } else {
+      } else if (
+        draggingSubAreaHandle === 'br' ||
+        draggingSubAreaHandle === 'tr' ||
+        draggingSubAreaHandle === 'r'
+      ) {
         targetX = subAreaStartPos.x + subAreaStartPos.width + deltaX;
       }
 
-      if (draggingSubAreaCorner === 'bl' || draggingSubAreaCorner === 'br') {
+      if (
+        draggingSubAreaHandle === 'bl' ||
+        draggingSubAreaHandle === 'br' ||
+        draggingSubAreaHandle === 'b'
+      ) {
         targetY = subAreaStartPos.y + deltaY;
-      } else {
+      } else if (
+        draggingSubAreaHandle === 'tl' ||
+        draggingSubAreaHandle === 'tr' ||
+        draggingSubAreaHandle === 't'
+      ) {
         targetY = subAreaStartPos.y + subAreaStartPos.height + deltaY;
       }
 
@@ -67,86 +84,7 @@ export const useSubAreaDrag = ({
         targetY = Math.round(targetY / increment) * increment;
       }
 
-      let newX = subAreaStartPos.x;
-      let newY = subAreaStartPos.y;
-      let newWidth = subAreaStartPos.width;
-      let newHeight = subAreaStartPos.height;
-
-      const rightX = subAreaStartPos.x + subAreaStartPos.width;
-      const topY = subAreaStartPos.y + subAreaStartPos.height;
-
-      if (draggingSubAreaCorner === 'bl') {
-        newX = targetX;
-        newY = targetY;
-        newWidth = rightX - targetX;
-        newHeight = topY - targetY;
-
-        if (newWidth < minSize) {
-          newWidth = minSize;
-          newX = rightX - minSize;
-        }
-        if (newHeight < minSize) {
-          newHeight = minSize;
-          newY = topY - minSize;
-        }
-      } else if (draggingSubAreaCorner === 'br') {
-        newY = targetY;
-        newWidth = targetX - subAreaStartPos.x;
-        newHeight = topY - targetY;
-
-        if (newWidth < minSize) {
-          newWidth = minSize;
-        }
-        if (newHeight < minSize) {
-          newHeight = minSize;
-          newY = topY - minSize;
-        }
-      } else if (draggingSubAreaCorner === 'tl') {
-        newX = targetX;
-        newWidth = rightX - targetX;
-        newHeight = targetY - subAreaStartPos.y;
-
-        if (newWidth < minSize) {
-          newWidth = minSize;
-          newX = rightX - minSize;
-        }
-        if (newHeight < minSize) {
-          newHeight = minSize;
-        }
-      } else if (draggingSubAreaCorner === 'tr') {
-        newWidth = targetX - subAreaStartPos.x;
-        newHeight = targetY - subAreaStartPos.y;
-
-        if (newWidth < minSize) {
-          newWidth = minSize;
-        }
-        if (newHeight < minSize) {
-          newHeight = minSize;
-        }
-      }
-
-      // Ensure exact precision for saving to state, UNLESS freeform
-      if (!isFreeform) {
-        newX = Math.round(newX / increment) * increment;
-        newY = Math.round(newY / increment) * increment;
-        newWidth = Math.round(newWidth / increment) * increment;
-        newHeight = Math.round(newHeight / increment) * increment;
-      }
-
-      setSubAreas((prev) =>
-        prev.map((item) => {
-          if (item.id === activeSubAreaId) {
-            return {
-              ...item,
-              x: newX,
-              y: newY,
-              width: newWidth,
-              height: newHeight,
-            };
-          }
-          return item;
-        })
-      );
+      resizeSubArea(activeSubAreaId, draggingSubAreaHandle, targetX, targetY, minSize);
     } else if (draggingSubAreaId) {
       const sa = subAreas.find((s) => s.id === draggingSubAreaId);
       if (!sa) return;
@@ -241,19 +179,11 @@ export const useSubAreaDrag = ({
         setActiveGuides(guides);
       }
 
-      // 4. Dispatch to State (DO NOT re-snap to grid here)
-      setSubAreas((prev) =>
-        prev.map((item) => {
-          if (item.id === draggingSubAreaId) {
-            return {
-              ...item,
-              x: newX,
-              y: newY,
-            };
-          }
-          return item;
-        })
-      );
+      // 4. Dispatch movement deltas to store
+      const finalDeltaX = newX - sa.x;
+      const finalDeltaY = newY - sa.y;
+
+      moveSubArea(draggingSubAreaId, finalDeltaX, finalDeltaY);
     }
   };
 

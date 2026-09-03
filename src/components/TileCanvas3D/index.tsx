@@ -16,6 +16,7 @@ import { CustomBoxObject } from './CustomBoxObject';
 import { ClayModelObject } from './ClayModelObject';
 import { ImportedLayoutObject } from './ImportedLayoutObject';
 import { CanvasHeader } from '../TileCanvas/CanvasHeader';
+import { ClientQuantitiesDrawer } from '../ClientQuantitiesDrawer';
 
 // Modularly imported extracted components
 import { CameraController } from './CameraController';
@@ -24,6 +25,7 @@ import { ElevationSnapshotHandler } from './ElevationSnapshotHandler';
 import { ViewfinderOverlay } from './ViewfinderOverlay';
 import { KeyboardCameraController } from './KeyboardCameraController';
 import { EnvironmentShell } from './EnvironmentShell';
+import { GlbExporterManager } from './GlbExporterManager';
 import { MainTileLayoutGroup } from './MainTileLayoutGroup';
 import { ViewportUIControls } from './ViewportUIControls';
 import { EnvironmentControls3D } from './EnvironmentControls3D';
@@ -166,7 +168,22 @@ export const TileCanvas3D: React.FC = () => {
     offsetY,
     unit,
     lightingExposure,
+    isPublicViewer,
   } = useAppStore();
+
+  const [showRotationHint, setShowRotationHint] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!isPublicViewer || viewMode !== '3d') {
+      setShowRotationHint(false);
+      return;
+    }
+    setShowRotationHint(true);
+    const timer = setTimeout(() => {
+      setShowRotationHint(false);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [isPublicViewer, viewMode]);
 
   const mainTileLayout = sceneObjects['main-tile-layout'] || {
     id: 'main-tile-layout',
@@ -202,6 +219,7 @@ export const TileCanvas3D: React.FC = () => {
   const anyPlaneVisible = Object.values(planesConfig).some((p) => p?.show);
 
   const modelRef = React.useRef<THREE.Group>(null);
+  const dioramaRef = React.useRef<THREE.Group>(null);
   const controlsRef = React.useRef<any>(null);
 
   // Compute exact dimensions of wall to size the 3D plane
@@ -388,8 +406,8 @@ export const TileCanvas3D: React.FC = () => {
       });
 
       if (isRecessed && attachedPlane === planeKey && holeW > 0 && holeH > 0) {
-        const px = to3D(layoutTransform.position[0]);
-        const py = to3D(layoutTransform.position[1]);
+        const px = to3D(-(roomDimensions.width / 2) + layoutTransform.position[0]);
+        const py = to3D(-(roomDimensions.height / 2) + layoutTransform.position[1]);
         const pz = to3D(layoutTransform.position[2]);
 
         let hX = 0, hY = 0;
@@ -427,8 +445,8 @@ export const TileCanvas3D: React.FC = () => {
         }
 
         if (rootCol && rootCol.mainRow && !rootCol.mainRow.isGhost) {
-          const px = to3D(layoutTransform.position[0]);
-          const py = to3D(layoutTransform.position[1]);
+          const px = to3D(-(roomDimensions.width / 2) + layoutTransform.position[0]);
+          const py = to3D(-(roomDimensions.height / 2) + layoutTransform.position[1]);
           const pz = to3D(layoutTransform.position[2]);
 
           let hX = 0, hY = 0;
@@ -507,6 +525,7 @@ export const TileCanvas3D: React.FC = () => {
   }, [roomDimensions, d3Columns, layoutTransform, to3D, subAreas, sceneObjects]);
 
   const isPresentation = viewMode === 'presentation';
+  const isClientQuantitiesOpen = useAppStore(state => state.isClientQuantitiesOpen);
 
   const initialCameraTarget = React.useMemo<[number, number, number]>(() => {
     const target = useAppStore.getState().liveCameraTarget;
@@ -529,8 +548,19 @@ export const TileCanvas3D: React.FC = () => {
       <div className={isPresentation ? "w-full h-full relative overflow-hidden" : "flex-1 w-full relative bg-slate-950 overflow-hidden"}>
          <div 
            onContextMenu={(e) => e.preventDefault()}
+           onPointerDown={() => setShowRotationHint(false)}
            className="w-full h-full relative"
          >
+           {/* 3D Interaction Hint Badge for Public Viewer */}
+           {showRotationHint && isPublicViewer && (
+             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none transition-all duration-300 animate-in fade-in zoom-in-95">
+               <div className="px-4 py-2 rounded-full bg-slate-900/85 backdrop-blur-md text-white text-xs font-semibold border border-slate-700/60 shadow-2xl flex items-center gap-2.5 select-none">
+                 <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+                 <span>Click and drag to rotate</span>
+               </div>
+             </div>
+           )}
+
            {/* Viewfinder safe area visual overlay */}
            {!isPresentation && <ViewfinderOverlay />}
 
@@ -588,6 +618,8 @@ export const TileCanvas3D: React.FC = () => {
           {/* Pure white ambient light scaled by exposure multiplier for uniform, shadow-free, and color-accurate rendering */}
           <ambientLight color="#ffffff" intensity={3.0 * lightingExposure} />
 
+          <GlbExporterManager dioramaRef={dioramaRef} />
+
           {/* Conditional loader while textures finish drawing */}
           {!texture || !backingTexture || d3Columns.length === 0 ? (
             <Html center>
@@ -604,7 +636,7 @@ export const TileCanvas3D: React.FC = () => {
               </div>
             </Html>
           ) : (
-            <>
+            <group ref={dioramaRef} name="master-diorama">
               <MainTileLayoutGroup
                 layoutTransform={layoutTransform}
                 d3Columns={d3Columns}
@@ -661,20 +693,20 @@ export const TileCanvas3D: React.FC = () => {
                     roomDimensions={roomDimensions}
                   />
                 ))}
-            </>
-          )}
 
-          {/* Static Environment Room Shell Geometries */}
-          <EnvironmentShell
-            roomShapes={roomShapes}
-            roomColors={roomColors}
-            rWidth={to3D(roomDimensions.width)}
-            rDepth={to3D(roomDimensions.depth)}
-            rHeight={to3D(roomDimensions.height)}
-            layoutTransform={layoutTransform}
-            handlePlanePointerMove={handlePlanePointerMove}
-            setIsSelected={setIsSelected}
-          />
+              {/* Static Environment Room Shell Geometries */}
+              <EnvironmentShell
+                roomShapes={roomShapes}
+                roomColors={roomColors}
+                rWidth={to3D(roomDimensions.width)}
+                rDepth={to3D(roomDimensions.depth)}
+                rHeight={to3D(roomDimensions.height)}
+                layoutTransform={layoutTransform}
+                handlePlanePointerMove={handlePlanePointerMove}
+                setIsSelected={setIsSelected}
+              />
+            </group>
+          )}
 
 
 
@@ -712,28 +744,35 @@ export const TileCanvas3D: React.FC = () => {
         </Canvas>
 
         {/* Top-Right Horizontal Utility Bar */}
-        <div className="absolute top-3 right-3 z-20 flex items-start gap-2 pointer-events-none">
-          <ZoomControls3D />
-          <ViewportUIControls
-            handleResetCamera={handleResetCamera}
-            isCameraHeightLocked={isCameraHeightLocked}
-            setIsCameraHeightLocked={setIsCameraHeightLocked}
-            isCameraDistanceLocked={isCameraDistanceLocked}
-            setIsCameraDistanceLocked={setIsCameraDistanceLocked}
-            savedCameraFov={savedCameraFov}
-            setSavedCameraFov={setSavedCameraFov}
-            orthoLock={orthoLock}
-            setOrthoLock={setOrthoLock}
-          />
-        </div>
+        {!isClientQuantitiesOpen && (
+          <div className="absolute top-3 right-3 z-20 flex items-start gap-2 pointer-events-none">
+            <ZoomControls3D />
+            <ViewportUIControls
+              handleResetCamera={handleResetCamera}
+              isCameraHeightLocked={isCameraHeightLocked}
+              setIsCameraHeightLocked={setIsCameraHeightLocked}
+              isCameraDistanceLocked={isCameraDistanceLocked}
+              setIsCameraDistanceLocked={setIsCameraDistanceLocked}
+              savedCameraFov={savedCameraFov}
+              setSavedCameraFov={setSavedCameraFov}
+              orthoLock={orthoLock}
+              setOrthoLock={setOrthoLock}
+            />
+          </div>
+        )}
 
         {/* Bottom-Left Environment & Rendering Controls */}
-        <EnvironmentControls3D
-          isLightMode={isLightMode}
-          setIsLightMode={setIsLightMode}
-          enableRealisticDepth={enableRealisticDepth}
-          setEnableRealisticDepth={setEnableRealisticDepth}
-        />
+        {!isClientQuantitiesOpen && (
+          <EnvironmentControls3D
+            isLightMode={isLightMode}
+            setIsLightMode={setIsLightMode}
+            enableRealisticDepth={enableRealisticDepth}
+            setEnableRealisticDepth={setEnableRealisticDepth}
+          />
+        )}
+
+        {/* Client Quantities & Cost Estimator Overlay */}
+        <ClientQuantitiesDrawer />
       </div>
     </div>
   </div>

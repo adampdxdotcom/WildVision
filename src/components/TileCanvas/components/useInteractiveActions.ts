@@ -3,6 +3,26 @@ import { useAppStore } from '../../../store/useAppStore';
 import { SubArea } from '../../../types';
 import { getInternalAngle, getSignedArea, getTessellatedPath, isPolygonSelfIntersecting, formatVisualAngle } from '../../../utils/geometry';
 
+function getAngleBetweenSegments(
+  p1: { x: number; y: number },
+  p2: { x: number; y: number },
+  p3: { x: number; y: number },
+  p4: { x: number; y: number }
+): number {
+  const dx1 = p2.x - p1.x;
+  const dy1 = p2.y - p1.y;
+  const dx2 = p4.x - p3.x;
+  const dy2 = p4.y - p3.y;
+
+  const angle1 = Math.atan2(dy1, dx1);
+  const angle2 = Math.atan2(dy2, dx2);
+
+  let diff = (Math.abs(angle2 - angle1) * 180) / Math.PI;
+  diff = diff % 360;
+  if (diff < 0) diff += 360;
+  return diff;
+}
+
 export function useInteractiveActions(
   editingLengthIndex: number | null,
   setEditingLengthIndex: (index: number | null) => void,
@@ -364,8 +384,8 @@ export function useInteractiveActions(
       const activeSa = subAreas.find((s) => s.id === editingLengthSubAreaId);
       if (activeSa && !activeSa.locked) {
         const saVertices = getSubAreaVertices(activeSa);
-        const L = parseFloat(targetValue);
-        if (!isNaN(L) && L > 0) {
+        const newLength = parseFloat(targetValue);
+        if (!isNaN(newLength) && newLength > 0) {
           const n = saVertices.length;
           const indexA = targetIndex;
           const indexB = (indexA + 1) % n;
@@ -374,26 +394,75 @@ export function useInteractiveActions(
           const B = saVertices[indexB] as any;
 
           if (!A.isCurveNode && !B.isCurveNode) {
-            let dx = B.x - A.x;
-            let dy = B.y - A.y;
-            const currentLen = Math.sqrt(dx * dx + dy * dy);
+            const dx = B.x - A.x;
+            const dy = B.y - A.y;
+            const currentLength = Math.sqrt(dx * dx + dy * dy);
 
-            if (currentLen > 0) {
-              const deltaL = L - currentLen;
-              const dirX = dx / currentLen;
-              const dirY = dy / currentLen;
+            if (currentLength > 0) {
+              const lengthDiff = newLength - currentLength;
+              const unitX = dx / currentLength;
+              const unitY = dy / currentLength;
 
-              const moveDx = dirX * deltaL;
-              const moveDy = dirY * deltaL;
+              const deltaX = unitX * lengthDiff;
+              const deltaY = unitY * lengthDiff;
 
               const updatedVertices = [...saVertices];
 
               const isBFixed = B.isAngleLocked || B.isLengthLocked;
               const isAFixed = A.isAngleLocked || (saVertices[(indexA - 1 + n) % n] as any).isLengthLocked;
+
+              let movingNodeIndex: number;
+              let fixedAnchorIndex: number;
+              let shiftX: number;
+              let shiftY: number;
+              let step: number;
+
               if (isBFixed && !isAFixed) {
-                updatedVertices[indexA] = { ...A, x: A.x - moveDx, y: A.y - moveDy };
+                movingNodeIndex = indexA;
+                fixedAnchorIndex = indexB;
+                shiftX = -deltaX;
+                shiftY = -deltaY;
+                step = -1;
               } else {
-                updatedVertices[indexB] = { ...B, x: B.x + moveDx, y: B.y + moveDy };
+                movingNodeIndex = indexB;
+                fixedAnchorIndex = indexA;
+                shiftX = deltaX;
+                shiftY = deltaY;
+                step = 1;
+              }
+
+              // Apply delta to primary moving node
+              const primaryMovingNode = saVertices[movingNodeIndex] as any;
+              updatedVertices[movingNodeIndex] = {
+                ...primaryMovingNode,
+                x: primaryMovingNode.x + shiftX,
+                y: primaryMovingNode.y + shiftY,
+              };
+
+              // Orthogonal Propagator (Rigid-Body Push)
+              let currNodeIndex = movingNodeIndex;
+              while (true) {
+                const nextNodeIndex = (currNodeIndex + step + n) % n;
+                if (nextNodeIndex === fixedAnchorIndex) break;
+
+                const pStart = saVertices[fixedAnchorIndex];
+                const pEnd = saVertices[movingNodeIndex];
+                const segNextStart = saVertices[currNodeIndex];
+                const segNextEnd = saVertices[nextNodeIndex];
+
+                const angleDiff = getAngleBetweenSegments(pStart, pEnd, segNextStart, segNextEnd);
+
+                const isOrthogonal = Math.abs(angleDiff - 90) < 1 || Math.abs(angleDiff - 270) < 1;
+                if (!isOrthogonal) break;
+
+                const nextNode = saVertices[nextNodeIndex] as any;
+                updatedVertices[nextNodeIndex] = {
+                  ...nextNode,
+                  x: nextNode.x + shiftX,
+                  y: nextNode.y + shiftY,
+                };
+
+                currNodeIndex = nextNodeIndex;
               }
 
               for (let i = 0; i < n; i++) {

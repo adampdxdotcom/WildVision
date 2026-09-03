@@ -15,7 +15,7 @@ export const useDragStateMachine = ({
 }: DragStateMachineProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [draggingSubAreaId, setDraggingSubAreaId] = useState<string | null>(null);
-  const [draggingSubAreaCorner, setDraggingSubAreaCorner] = useState<'bl' | 'br' | 'tl' | 'tr' | null>(null);
+  const [draggingSubAreaCorner, setDraggingSubAreaCorner] = useState<'bl' | 'br' | 'tl' | 'tr' | 'l' | 'r' | 't' | 'b' | null>(null);
   const [draggingExtensionId, setDraggingExtensionId] = useState<string | null>(null);
   const [draggingSceneObjectId, setDraggingSceneObjectId] = useState<string | null>(null);
   const [subAreaStartPos, setSubAreaStartPos] = useState({ x: 0, y: 0, width: 0, height: 0 });
@@ -37,7 +37,7 @@ export const useDragStateMachine = ({
     }
   }, [draggingVertexIndex, wallVertices]);
 
-  const handleSetDraggingSubAreaCorner = (corner: 'bl' | 'br' | 'tl' | 'tr' | null) => {
+  const handleSetDraggingSubAreaCorner = (corner: 'bl' | 'br' | 'tl' | 'tr' | 'l' | 'r' | 't' | 'b' | null) => {
     if (corner !== null && activeSubAreaId) {
       const elementId = `subarea_${activeSubAreaId}`;
       const success = lockElement(elementId);

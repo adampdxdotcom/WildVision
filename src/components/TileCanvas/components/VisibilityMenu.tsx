@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Layers, Eye, EyeOff } from 'lucide-react';
 import { useAppStore } from '../../../store/useAppStore';
+import { switchMeasurementUnit } from '../../../utils/unitUtils';
 
 type CanvasVisibilityKey = 'showNodes' | 'showDimensions' | 'showAngles' | 'showLabels' | 'showFoldLines' | 'showTextures';
 type LayerKey = CanvasVisibilityKey | 'disableTileColor';
@@ -14,6 +15,9 @@ interface LayerConfig {
 export const VisibilityMenu: React.FC = React.memo(() => {
   const viewSettings = useAppStore(state => state.viewSettings);
   const updateViewSetting = useAppStore(state => state.updateViewSetting);
+  const isPublicViewer = useAppStore(state => state.isPublicViewer);
+  const unit = useAppStore(state => state.unit);
+  const setUnit = useAppStore(state => state.setUnit);
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -68,6 +72,11 @@ export const VisibilityMenu: React.FC = React.memo(() => {
     },
   ];
 
+  const hiddenInPublic: LayerKey[] = ['showNodes', 'showAngles', 'showFoldLines', 'disableTileColor'];
+  const activeLayersConfig = isPublicViewer
+    ? layersConfig.filter((layer) => !hiddenInPublic.includes(layer.key))
+    : layersConfig;
+
   const canvasVisibility = viewSettings.canvas;
 
   const handleToggle = (key: LayerKey) => {
@@ -82,9 +91,23 @@ export const VisibilityMenu: React.FC = React.memo(() => {
     <div 
       id="cad-visibility-menu" 
       ref={containerRef} 
-      className="absolute bottom-4 left-4 z-50 flex flex-col items-start gap-1"
+      className="absolute bottom-4 left-4 z-50 flex flex-col items-start gap-1 pointer-events-auto"
+      onPointerDown={(e) => {
+        // Stop drag selection or canvas interactions
+        e.stopPropagation();
+      }}
       onMouseDown={(e) => {
         // Stop drag selection or canvas interactions
+        e.stopPropagation();
+      }}
+      onTouchStart={(e) => {
+        // Stop touch drag selection or canvas interactions
+        e.stopPropagation();
+      }}
+      onPointerUp={(e) => {
+        e.stopPropagation();
+      }}
+      onTouchEnd={(e) => {
         e.stopPropagation();
       }}
     >
@@ -99,7 +122,7 @@ export const VisibilityMenu: React.FC = React.memo(() => {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            {layersConfig.map(({ key, label, description }) => {
+            {activeLayersConfig.map(({ key, label, description }) => {
               const active = key === 'disableTileColor' ? viewSettings.pdf.disableTileColor : canvasVisibility[key as CanvasVisibilityKey];
               return (
                 <div
@@ -141,6 +164,44 @@ export const VisibilityMenu: React.FC = React.memo(() => {
                 </div>
               );
             })}
+          </div>
+
+          {/* Global Unit Toggle */}
+          <div id="visibility-menu-unit-toggle" className="pt-2 border-t border-slate-100 flex items-center justify-between mt-1">
+            <div className="flex flex-col">
+              <span className="text-xs font-semibold text-slate-700">
+                Measurement Units
+              </span>
+              <span className="text-[10px] text-slate-400 font-normal">
+                System scale
+              </span>
+            </div>
+            <div className="inline-flex rounded-lg p-0.5 bg-slate-100 border border-slate-200">
+              <button
+                type="button"
+                id="unit-toggle-inches"
+                onClick={() => switchMeasurementUnit('in')}
+                className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
+                  unit === 'in'
+                    ? 'bg-white text-indigo-600 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Inches
+              </button>
+              <button
+                type="button"
+                id="unit-toggle-cm"
+                onClick={() => switchMeasurementUnit('cm')}
+                className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
+                  unit === 'cm'
+                    ? 'bg-white text-indigo-600 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                cm
+              </button>
+            </div>
           </div>
         </div>
       )}

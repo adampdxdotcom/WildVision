@@ -272,13 +272,15 @@ export function drawWallMeasurements(
   isPdf?: boolean,
   angleDisplayMode: AngleDisplayMode = 'all'
 ) {
-  const visibility = useAppStore.getState?.().viewSettings?.canvas || {
+  const isPublicViewer = useAppStore.getState?.().isPublicViewer;
+  const rawVisibility = useAppStore.getState?.().viewSettings?.canvas || {
     showNodes: true,
     showDimensions: true,
     showAngles: true,
     showLabels: true,
     showFoldLines: true,
   };
+  const visibility = isPublicViewer ? { ...rawVisibility, showAngles: false } : rawVisibility;
 
   // Calculate True Bounds of the current wallVertices dynamically
   const minX = wallVertices && wallVertices.length >= 3 ? Math.min(...wallVertices.map(v => v.x)) : 0;
@@ -504,13 +506,15 @@ export function drawSubAreaDimensions(
   isPdf?: boolean,
   angleDisplayMode: AngleDisplayMode = 'all'
 ) {
-  const visibility = useAppStore.getState?.().viewSettings?.canvas || {
+  const isPublicViewer = useAppStore.getState?.().isPublicViewer;
+  const rawVisibility = useAppStore.getState?.().viewSettings?.canvas || {
     showNodes: true,
     showDimensions: true,
     showAngles: true,
     showLabels: true,
     showFoldLines: true,
   };
+  const visibility = isPublicViewer ? { ...rawVisibility, showAngles: false } : rawVisibility;
   if (!visibility.showDimensions) return;
 
   const subAreas = (rawSubAreas || []).filter((sa) => sa.visible !== false);

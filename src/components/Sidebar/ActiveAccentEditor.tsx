@@ -33,6 +33,7 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
 
   const [fineTuneIncrement, setFineTuneIncrement] = useState<number>(0.125);
   const setIsCanvasDirty = useAppStore(state => state.setIsCanvasDirty);
+  const subAreas = useAppStore(state => state.subAreas);
   const tileColorOverrides = useAppStore(state => state.tileColorOverrides) || {};
   const activeBrushColorIndex = useAppStore(state => state.activeBrushColorIndex) ?? 1;
   const setTileColorOverride = useAppStore(state => state.setTileColorOverride);
@@ -40,6 +41,8 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
   const hasPaintOverrides = Object.keys(tileColorOverrides).some(k => k.startsWith(activeSa.id));
 
   const setPurchasingSettings = useAppStore(state => state.setPurchasingSettings);
+  const purchasingSettings = useAppStore(state => state.purchasingSettings);
+  const updatePurchasingSetting = useAppStore(state => state.updatePurchasingSetting);
   const integrationData = useAppStore(state => state.integrationData);
 
   const handleProductSync = (metadata: { name: string; pricingMode: 'carton' | 'sheet' | 'piece'; price: number; cartonSize: number | null }) => {
@@ -138,6 +141,10 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
     setIsCanvasDirty(true);
   };
 
+  const savedProfiles = subAreas.filter(
+    sa => sa.isMaterialParent && sa.id !== activeSa.id
+  );
+
   return (
     <div className="space-y-4 animate-slide-up">
       {onBack && (
@@ -219,19 +226,186 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
 
       {/* Accent Tile Name */}
       {!integrationData?.variant_id && (
-        <div>
-          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455 mb-1">
-            Accent Tile Name / Label
-          </label>
-          <input
-            type="text"
-            placeholder="e.g. Glass Teal Mosaic, Charcoal Hex"
-            value={activeSa.tileName || ''}
-            onChange={(e) => updateActiveSubArea({ tileName: e.target.value })}
-            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-semibold text-slate-800 focus:ring-1 focus:ring-amber-500 focus:outline-hidden"
-          />
+        <div className="space-y-2">
+          {savedProfiles.length > 0 && (
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455 mb-1">
+                Apply Saved Tile Profile
+              </label>
+              <select
+                value={activeSa.linkedMaterialId || ''}
+                onChange={(e) =>
+                  updateActiveSubArea({
+                    linkedMaterialId: e.target.value === '' ? undefined : e.target.value,
+                  })
+                }
+                className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-semibold text-slate-800 focus:ring-1 focus:ring-amber-500 focus:outline-hidden"
+              >
+                <option value="">-- Custom / Independent --</option>
+                {savedProfiles.map((sa) => (
+                  <option key={sa.id} value={sa.id}>
+                    {sa.tileName || 'Unnamed Tile'}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {!activeSa.linkedMaterialId && (
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455 mb-1">
+                Accent Tile Name / Label
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Glass Teal Mosaic, Charcoal Hex"
+                value={activeSa.tileName || ''}
+                onChange={(e) => updateActiveSubArea({ tileName: e.target.value })}
+                className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-semibold text-slate-800 focus:ring-1 focus:ring-amber-500 focus:outline-hidden"
+              />
+
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer select-none mt-2">
+                <input
+                  type="checkbox"
+                  disabled={!!integrationData?.variant_id}
+                  checked={!!activeSa.isMaterialParent}
+                  onChange={(e) => updateActiveSubArea({ isMaterialParent: e.target.checked })}
+                  className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 h-4 w-4 accent-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                <span>Save as Reusable Tile Profile</span>
+              </label>
+            </div>
+          )}
         </div>
       )}
+
+      {/* Pricing Mode & Mounted on Mesh Controls */}
+      <div className="pt-3 border-t border-slate-100 space-y-3 animate-fade-in">
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+            Pricing Mode
+          </label>
+          <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-50 border border-slate-155 rounded">
+            <button
+              type="button"
+              onClick={() => updatePurchasingSetting(activeSa.id, { purchaseType: 'carton' })}
+              className={`py-1 text-center text-[10px] font-bold rounded transition-all cursor-pointer ${
+                (purchasingSettings[activeSa.id]?.purchaseType || 'carton') === 'carton'
+                  ? 'bg-white text-indigo-750 shadow-xs border border-indigo-100'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Carton
+            </button>
+            <button
+              type="button"
+              onClick={() => updatePurchasingSetting(activeSa.id, { purchaseType: 'sheet' })}
+              className={`py-1 text-center text-[10px] font-bold rounded transition-all cursor-pointer ${
+                (purchasingSettings[activeSa.id]?.purchaseType || 'carton') === 'sheet'
+                  ? 'bg-white text-indigo-750 shadow-xs border border-indigo-100'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Sheet
+            </button>
+            <button
+              type="button"
+              onClick={() => updatePurchasingSetting(activeSa.id, { purchaseType: 'piece' })}
+              className={`py-1 text-center text-[10px] font-bold rounded transition-all cursor-pointer ${
+                (purchasingSettings[activeSa.id]?.purchaseType || 'carton') === 'piece'
+                  ? 'bg-white text-indigo-750 shadow-xs border border-indigo-100'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Piece
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 pt-1">
+          <input
+            type="checkbox"
+            id={`sold-as-mosaic-${activeSa.id}`}
+            checked={!!activeSa.soldAsMosaic}
+            onChange={(e) => updateActiveSubArea({ soldAsMosaic: e.target.checked })}
+            className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
+          />
+          <label htmlFor={`sold-as-mosaic-${activeSa.id}`} className="text-xs font-bold text-slate-700 select-none cursor-pointer">
+            Mounted on Mesh Sheets (Mosaic)
+          </label>
+        </div>
+
+        {activeSa.soldAsMosaic && (
+          <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded space-y-3 animate-fade-in">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[9px] font-bold uppercase tracking-wider text-indigo-800/80 mb-1">
+                  Sheet Width ({unit})
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  step="0.1"
+                  disabled={hasPaintOverrides}
+                  value={activeSa.mosaicWidth === 0 ? '' : (activeSa.mosaicWidth ?? 12)}
+                  onChange={(e) => {
+                    const valStr = e.target.value;
+                    if (valStr === '') {
+                      updateActiveSubArea({ mosaicWidth: 0 });
+                    } else {
+                      const val = parseFloat(valStr);
+                      if (!isNaN(val)) {
+                        updateActiveSubArea({ mosaicWidth: val });
+                      }
+                    }
+                  }}
+                  onBlur={() => {
+                    const clamped = Math.max(1, Math.min(100, activeSa.mosaicWidth || 12));
+                    updateActiveSubArea({ mosaicWidth: clamped });
+                  }}
+                  className="w-full px-2.5 py-1.5 bg-white border border-indigo-200/50 rounded text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label className="block text-[9px] font-bold uppercase tracking-wider text-indigo-800/80 mb-1">
+                  Sheet Height ({unit})
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  step="0.1"
+                  disabled={hasPaintOverrides}
+                  value={activeSa.mosaicHeight === 0 ? '' : (activeSa.mosaicHeight ?? 12)}
+                  onChange={(e) => {
+                    const valStr = e.target.value;
+                    if (valStr === '') {
+                      updateActiveSubArea({ mosaicHeight: 0 });
+                    } else {
+                      const val = parseFloat(valStr);
+                      if (!isNaN(val)) {
+                        updateActiveSubArea({ mosaicHeight: val });
+                      }
+                    }
+                  }}
+                  onBlur={() => {
+                    const clamped = Math.max(1, Math.min(100, activeSa.mosaicHeight || 12));
+                    updateActiveSubArea({ mosaicHeight: clamped });
+                  }}
+                  className="w-full px-2.5 py-1.5 bg-white border border-indigo-200/50 rounded text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed font-mono"
+                />
+              </div>
+            </div>
+            <div className="text-[10px] font-mono text-indigo-700 font-semibold flex justify-between items-center pt-1.5 border-t border-indigo-100/60">
+              <span>Sheet Sq Footage:</span>
+              <span>
+                {(((activeSa.mosaicWidth || 12) * (activeSa.mosaicHeight || 12)) / (unit === 'in' ? 144 : 929.0304)).toFixed(3)} sq ft / sheet
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Primary Feature Type Selector */}
       <div>
@@ -264,7 +438,7 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
       </div>
 
       {/* 0. Slab / Solid Surface Panel */}
-      {resolvedType === 'slab' && (
+      {resolvedType === 'slab' && !activeSa.linkedMaterialId && (
         <div className="p-3 bg-white border border-slate-200 rounded">
           <SurfaceSelector
             label="Slab Material"
@@ -275,7 +449,7 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
       )}
 
       {/* 1. Tile Specifications Sub Panel (Universal) */}
-      {resolvedType !== 'slab' && resolvedType !== 'cutout' && (
+      {resolvedType !== 'slab' && resolvedType !== 'cutout' && !activeSa.linkedMaterialId && (
         <div className="bg-white rounded border border-slate-200 p-4 shadow-xs space-y-4">
           <UniversalTileSpecs
             shape={activeSa.shape || 'rectangle'}
@@ -396,7 +570,7 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
       )}
 
       {/* 2. Color & Shading Sub Panel (Universal) */}
-      {resolvedType !== 'cutout' && resolvedType !== 'slab' && (
+      {resolvedType !== 'cutout' && resolvedType !== 'slab' && !activeSa.linkedMaterialId && (
         <div className="space-y-4">
           <UniversalColorPalette
             unit={unit}
@@ -451,6 +625,13 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
         </div>
       )}
 
+      {/* Linked Material Banner */}
+      {!!activeSa.linkedMaterialId && (
+        <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600">
+          Material settings are linked to the parent tile profile.
+        </div>
+      )}
+
       {/* 3. Options & Add-ons Sub Panel */}
       {(resolvedType !== 'slab' || true) && (
         <AccentFurnitureSubPanel
@@ -462,7 +643,7 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
       )}
 
       {/* 4. Border config panel */}
-      {resolvedType !== 'cutout' && resolvedType !== 'slab' && (
+      {resolvedType !== 'cutout' && resolvedType !== 'slab' && !activeSa.linkedMaterialId && (
         <BorderConfigPanel 
           border={activeSa.border} 
           onChange={(border) => updateActiveSubArea({ border })}

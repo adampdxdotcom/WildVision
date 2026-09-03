@@ -114,6 +114,34 @@ function applyMaterialPattern(
   }
 }
 
+/**
+ * Renders a print set image centered on target coordinates, preserving original aspect ratio.
+ */
+function drawPrintImagePreservingAspect(
+  ctx: CanvasRenderingContext2D,
+  printImg: HTMLImageElement,
+  printOpacity: number,
+  centerX: number,
+  centerY: number,
+  targetW: number,
+  targetH: number
+) {
+  const nw = printImg.naturalWidth;
+  const nh = printImg.naturalHeight;
+  if (!nw || !nh) return;
+
+  const scale = Math.max(targetW / nw, targetH / nh);
+  const drawWidth = nw * scale;
+  const drawHeight = nh * scale;
+
+  ctx.save();
+  ctx.globalAlpha = printOpacity;
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.translate(centerX, centerY);
+  ctx.drawImage(printImg, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+  ctx.restore();
+}
+
 export function drawRoundTile(
   ctx: CanvasRenderingContext2D,
   pCenter: { x: number; y: number },
@@ -125,7 +153,9 @@ export function drawRoundTile(
   physicalCenter?: { x: number; y: number },
   patternImg?: HTMLImageElement | null,
   patternAngleRad: number = 0,
-  viewportScale: number = 1.0
+  viewportScale: number = 1.0,
+  printImg?: HTMLImageElement | null,
+  printOpacity: number = 1.0
 ) {
   ctx.beginPath();
   ctx.arc(pCenter.x, pCenter.y, radius, 0, Math.PI * 2);
@@ -135,6 +165,11 @@ export function drawRoundTile(
   ctx.clip();
   ctx.fillStyle = isBumpMapMode ? '#ffffff' : tileColor;
   ctx.fill();
+
+  if (printImg && printImg.complete && printImg.naturalWidth > 0) {
+    const size = radius * 2;
+    drawPrintImagePreservingAspect(ctx, printImg, printOpacity, pCenter.x, pCenter.y, size, size);
+  }
 
   if (patternImg && patternImg.complete && patternImg.naturalWidth > 0) {
     ctx.save();
@@ -201,7 +236,9 @@ export function drawScallopTile(
   physicalCenter?: { x: number; y: number },
   patternImg?: HTMLImageElement | null,
   patternAngleRad: number = 0,
-  viewportScale: number = 1.0
+  viewportScale: number = 1.0,
+  printImg?: HTMLImageElement | null,
+  printOpacity: number = 1.0
 ) {
   ctx.save();
   ctx.translate(pCenter.x, pCenter.y);
@@ -219,6 +256,11 @@ export function drawScallopTile(
   ctx.clip();
   ctx.fillStyle = isBumpMapMode ? '#ffffff' : tileColor;
   ctx.fill();
+
+  if (printImg && printImg.complete && printImg.naturalWidth > 0) {
+    const size = radius * 2;
+    drawPrintImagePreservingAspect(ctx, printImg, printOpacity, 0, 0, size, size);
+  }
 
   if (patternImg && patternImg.complete && patternImg.naturalWidth > 0) {
     ctx.save();
@@ -287,7 +329,9 @@ export function drawHexagonTileDirect(
   physicalCenter?: { x: number; y: number },
   patternImg?: HTMLImageElement | null,
   patternAngleRad: number = 0,
-  viewportScale: number = 1.0
+  viewportScale: number = 1.0,
+  printImg?: HTMLImageElement | null,
+  printOpacity: number = 1.0
 ) {
   const hVertices = [];
   for (let i = 0; i < 6; i++) {
@@ -308,6 +352,11 @@ export function drawHexagonTileDirect(
 
   ctx.fillStyle = isBumpMapMode ? '#ffffff' : tileColor;
   ctx.fill();
+
+  if (printImg && printImg.complete && printImg.naturalWidth > 0) {
+    const size = drawRadius * 2;
+    drawPrintImagePreservingAspect(ctx, printImg, printOpacity, pCenter.x, pCenter.y, size, size);
+  }
 
   if (patternImg && patternImg.complete && patternImg.naturalWidth > 0) {
     ctx.save();
@@ -402,7 +451,9 @@ export function drawPolygonTile(
   physicalCenter?: { x: number; y: number },
   patternImg?: HTMLImageElement | null,
   patternAngleRad: number = 0,
-  viewportScale: number = 1.0
+  viewportScale: number = 1.0,
+  printImg?: HTMLImageElement | null,
+  printOpacity: number = 1.0
 ) {
   if (canvasVertices.length === 0) return;
   ctx.beginPath();
@@ -416,6 +467,23 @@ export function drawPolygonTile(
   ctx.clip();
   ctx.fillStyle = isBumpMapMode ? '#ffffff' : tileColor;
   ctx.fill();
+
+  if (printImg && printImg.complete && printImg.naturalWidth > 0) {
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const v of canvasVertices) {
+      minX = Math.min(minX, v.x);
+      maxX = Math.max(maxX, v.x);
+      minY = Math.min(minY, v.y);
+      maxY = Math.max(maxY, v.y);
+    }
+    const w = maxX - minX;
+    const h = maxY - minY;
+
+    drawPrintImagePreservingAspect(ctx, printImg, printOpacity, pCenter.x, pCenter.y, w, h);
+  }
 
   if (patternImg && patternImg.complete && patternImg.naturalWidth > 0) {
     let minX = Infinity;
@@ -708,7 +776,9 @@ export function drawPebbleTile(
   materialImage?: HTMLImageElement | null,
   patternImg?: HTMLImageElement | null,
   patternAngleRad: number = 0,
-  viewportScale: number = 1.0
+  viewportScale: number = 1.0,
+  printImg?: HTMLImageElement | null,
+  printOpacity: number = 1.0
 ) {
   const xs = canvasVertices.map((v) => v.x);
   const ys = canvasVertices.map((v) => v.y);
@@ -794,6 +864,10 @@ export function drawPebbleTile(
       ctx.fillStyle = finalColor;
     }
     ctx.fill();
+
+    if (printImg && printImg.complete && printImg.naturalWidth > 0) {
+      drawPrintImagePreservingAspect(ctx, printImg, printOpacity, cx + jX, cy + jY, rx * 2, ry * 2);
+    }
 
     if (patternImg && patternImg.complete && patternImg.naturalWidth > 0) {
       ctx.save();

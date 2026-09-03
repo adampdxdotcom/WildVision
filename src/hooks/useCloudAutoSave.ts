@@ -19,6 +19,7 @@ export const useCloudAutoSave = () => {
     isLockedByAnotherTab,
     onlineUsers,
     currentProjectPermission,
+    export3DSceneToGlbFn,
     
     // Design/Canvas states to watch
     projectName,
@@ -86,6 +87,9 @@ export const useCloudAutoSave = () => {
     purchasingSettings,
     linkedSubfloorProjectId,
     integrationData,
+    layoutFoldType,
+    publicShowQuantities,
+    publicShowPricing,
   } = useAppStore();
 
   const tileDotColor = compositeColors?.secondary || '#334155';
@@ -162,12 +166,16 @@ export const useCloudAutoSave = () => {
       ceilingY,
       linkedSubfloorProjectId,
       integrationData,
+      publicShowQuantities: publicShowQuantities ?? false,
+      publicShowPricing: publicShowPricing ?? false,
     };
   };
 
   // Stringify the payload to detect actual structural changes
   const serializedState = JSON.stringify({
     projectName,
+    publicShowQuantities,
+    publicShowPricing,
     wallWidth,
     wallHeight,
     wallVertices,
@@ -232,6 +240,7 @@ export const useCloudAutoSave = () => {
     ceilingY,
     linkedSubfloorProjectId,
     integrationData,
+    layoutFoldType,
   });
 
   // Track initial render to prevent instant autosave on load
@@ -282,7 +291,7 @@ export const useCloudAutoSave = () => {
 
     timerRef.current = setTimeout(async () => {
       try {
-        const payload = getSnapshot();
+        const payload = getSnapshot() as any;
         const fallbackProjectName = payload.projectName || 'Untitled Project';
 
         // UPDATE existing record
@@ -305,6 +314,11 @@ export const useCloudAutoSave = () => {
           useAppStore.getState().setIsCanvasDirty(false);
           logger.info('Project saved to cloud', { projectId: currentProjectId });
           setCloudSyncError(false);
+          
+          // Dispatch wildvision:exportGlb event immediately after successful database save
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('wildvision:exportGlb', { detail: { projectId: currentProjectId } }));
+          }
         }
       } catch (err: any) {
         console.error('Unexpected auto-save error:', err);
@@ -319,7 +333,7 @@ export const useCloudAutoSave = () => {
         clearTimeout(timerRef.current);
       }
     };
-  }, [serializedState, user, currentProjectId, isAutoSaveEnabled, isLockedByAnotherTab, onlineUsers, currentProjectPermission]);
+  }, [serializedState, user, currentProjectId, isAutoSaveEnabled, isLockedByAnotherTab, onlineUsers, currentProjectPermission, export3DSceneToGlbFn]);
 
   return { saveStatus };
 };

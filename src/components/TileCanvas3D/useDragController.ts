@@ -33,6 +33,10 @@ export function useDragController({
     const isWildVisionOpen = useAppStore.getState().isWildVisionOpen;
     if (isWildVisionOpen) return;
 
+    const isPublicViewer = useAppStore.getState().isPublicViewer;
+    const isReadOnly = useAppStore.getState().isReadOnly;
+    if (isPublicViewer || isReadOnly) return;
+
     e.stopPropagation();
     setIsSelected(true);
     setIsDragging(true);
@@ -104,6 +108,8 @@ export function useDragController({
 
     const activeObj = useAppStore.getState().sceneObjects[activeId];
     if (!activeObj) return;
+
+    if (activeObj.isLocked) return;
 
     const isShift = e.shiftKey || (e.nativeEvent && e.nativeEvent.shiftKey);
     const isRMB = dragButtonRef.current === 2;
@@ -454,10 +460,30 @@ export function useDragController({
       joint_X[rootIdx + 1] = rootColWidth / 2;
       joint_Z[rootIdx + 1] = 0;
 
+      const getVerticalFoldAngle = (x: number): number => {
+        if (foldLines && wallVertices) {
+          for (const fold of foldLines) {
+            const vStart = wallVertices[fold.startNodeIndex];
+            const vEnd = wallVertices[fold.endNodeIndex];
+            if (vStart && vEnd) {
+              const isVert = Math.abs(vStart.x - vEnd.x) < Math.abs(vStart.y - vEnd.y);
+              if (isVert) {
+                const fx = (vStart.x + vEnd.x) / 2;
+                if (Math.abs(fx - x) < 1.0) {
+                  return fold.foldAngle !== undefined && fold.foldAngle !== null ? fold.foldAngle : 90;
+                }
+              }
+            }
+          }
+        }
+        return 90;
+      };
+
       // Trace rightwards from rootIdx + 1
       let currentAngleRight = 0;
       for (let i = rootIdx + 1; i < columnsList.length; i++) {
-        currentAngleRight -= Math.PI / 2;
+        const foldAngle = getVerticalFoldAngle(columnsList[i].startX);
+        currentAngleRight -= (foldAngle * Math.PI) / 180;
         const prevX = joint_X[i];
         const prevZ = joint_Z[i];
         const w = columnsList[i].width;
@@ -468,7 +494,8 @@ export function useDragController({
       // Trace leftwards from rootIdx - 1
       let currentAngleLeft = 0;
       for (let i = rootIdx - 1; i >= 0; i--) {
-        currentAngleLeft += Math.PI / 2;
+        const foldAngle = getVerticalFoldAngle(columnsList[i].endX);
+        currentAngleLeft += (foldAngle * Math.PI) / 180;
         const nextX = joint_X[i + 1];
         const nextZ = joint_Z[i + 1];
         const w = columnsList[i].width;
@@ -785,13 +812,17 @@ export function useDragController({
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      const isPublicViewer = useAppStore.getState().isPublicViewer;
+      const isReadOnly = useAppStore.getState().isReadOnly;
+      if (isPublicViewer || isReadOnly) return;
+
       if (e.key === 'Tab') {
         e.preventDefault();
         const activeId = useAppStore.getState().activeObjectId;
         if (!activeId) return;
 
         const activeObj = useAppStore.getState().sceneObjects[activeId];
-        if (!activeObj) return;
+        if (!activeObj || activeObj.isLocked) return;
 
         if (activeId === 'main-tile-layout' || activeObj.type === 'imported_layout') {
           const currentAnchor = activeObj.metadata?.mountAnchor || 'back';

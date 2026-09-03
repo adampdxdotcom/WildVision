@@ -814,3 +814,44 @@ export function checkSubAreaFoldIntersection(
 
 
 
+
+export function clipPolygon(subjectPolygon: {x: number, y: number}[], clipPolygon: {x: number, y: number}[]): {x: number, y: number}[] {
+  let outputList = subjectPolygon;
+  for (let i = 0; i < clipPolygon.length; i++) {
+    const clipEdgeStart = clipPolygon[i];
+    const clipEdgeEnd = clipPolygon[(i + 1) % clipPolygon.length];
+    
+    const inputList = outputList;
+    outputList = [];
+    
+    if (inputList.length === 0) break;
+    
+    let S = inputList[inputList.length - 1];
+    
+    for (let j = 0; j < inputList.length; j++) {
+      const E = inputList[j];
+      const isEInside = (clipEdgeEnd.x - clipEdgeStart.x) * (E.y - clipEdgeStart.y) - (clipEdgeEnd.y - clipEdgeStart.y) * (E.x - clipEdgeStart.x) <= 0;
+      const isSInside = (clipEdgeEnd.x - clipEdgeStart.x) * (S.y - clipEdgeStart.y) - (clipEdgeEnd.y - clipEdgeStart.y) * (S.x - clipEdgeStart.x) <= 0;
+      
+      if (isEInside) {
+        if (!isSInside) {
+          outputList.push(getIntersection(S, E, clipEdgeStart, clipEdgeEnd));
+        }
+        outputList.push(E);
+      } else if (isSInside) {
+        outputList.push(getIntersection(S, E, clipEdgeStart, clipEdgeEnd));
+      }
+      S = E;
+    }
+  }
+  return outputList;
+}
+
+function getIntersection(p1: {x: number, y: number}, p2: {x: number, y: number}, p3: {x: number, y: number}, p4: {x: number, y: number}) {
+  const d = (p1.x - p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x - p4.x);
+  if (d === 0) return p1; // parallel
+  
+  const nx = ((p1.x * p2.y - p1.y * p2.x) * (p3.x - p4.x) - (p1.x - p2.x) * (p3.x * p4.y - p3.y * p4.x)) / d;
+  const ny = ((p1.x * p2.y - p1.y * p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x * p4.y - p3.y * p4.x)) / d;
+  return {x: nx, y: ny};
+}

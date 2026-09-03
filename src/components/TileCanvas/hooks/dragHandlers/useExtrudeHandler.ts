@@ -192,6 +192,39 @@ export const useExtrudeHandler = ({
         return false;
       };
 
+      const aabbOverlap = (
+        minX1: number, maxX1: number, minY1: number, maxY1: number,
+        minX2: number, maxX2: number, minY2: number, maxY2: number
+      ) => {
+        return maxX1 >= minX2 && maxX2 >= minX1 && maxY1 >= minY2 && maxY2 >= minY1;
+      };
+
+      // Precompute static segment AABB bounding boxes once per mouse event
+      const staticSegments: {
+        p1: { x: number; y: number };
+        p2: { x: number; y: number };
+        minX: number;
+        maxX: number;
+        minY: number;
+        maxY: number;
+      }[] = [];
+
+      for (let i = 0; i < n; i++) {
+        if (i === idxParentA || i === draggingSegment.indexA || i === draggingSegment.indexB) {
+          continue;
+        }
+        const st1 = wallVertices[i];
+        const st2 = wallVertices[(i + 1) % n];
+        staticSegments.push({
+          p1: st1,
+          p2: st2,
+          minX: Math.min(st1.x, st2.x),
+          maxX: Math.max(st1.x, st2.x),
+          minY: Math.min(st1.y, st2.y),
+          maxY: Math.max(st1.y, st2.y)
+        });
+      }
+
       const isPositionValid = (t: number) => {
         const tempA = {
           x: origA.x + t * (proposedAX - origA.x),
@@ -202,25 +235,40 @@ export const useExtrudeHandler = ({
           y: origB.y + t * (proposedBY - origB.y)
         };
 
-        const seg1 = { p1: parentA, p2: tempA };
-        const seg2 = { p1: tempA, p2: tempB };
-        const seg3 = { p1: tempB, p2: parentB };
+        // Bounding boxes for proposed movement segments
+        const minX1 = Math.min(parentA.x, tempA.x), maxX1 = Math.max(parentA.x, tempA.x);
+        const minY1 = Math.min(parentA.y, tempA.y), maxY1 = Math.max(parentA.y, tempA.y);
 
-        for (let i = 0; i < n; i++) {
-          if (i === idxParentA || i === draggingSegment.indexA || i === draggingSegment.indexB) {
-            continue;
-          }
-          const st1 = wallVertices[i];
-          const st2 = wallVertices[(i + 1) % n];
+        const minX2 = Math.min(tempA.x, tempB.x), maxX2 = Math.max(tempA.x, tempB.x);
+        const minY2 = Math.min(tempA.y, tempB.y), maxY2 = Math.max(tempA.y, tempB.y);
 
-          if (!sharesEndpoint(seg1.p1, seg1.p2, st1, st2)) {
-            if (doLineSegmentsIntersect(seg1.p1, seg1.p2, st1, st2)) return false;
+        const minX3 = Math.min(tempB.x, parentB.x), maxX3 = Math.max(tempB.x, parentB.x);
+        const minY3 = Math.min(tempB.y, parentB.y), maxY3 = Math.max(tempB.y, parentB.y);
+
+        for (let j = 0; j < staticSegments.length; j++) {
+          const seg = staticSegments[j];
+          const st1 = seg.p1;
+          const st2 = seg.p2;
+
+          // seg1 (parentA -> tempA)
+          if (aabbOverlap(minX1, maxX1, minY1, maxY1, seg.minX, seg.maxX, seg.minY, seg.maxY)) {
+            if (!sharesEndpoint(parentA, tempA, st1, st2)) {
+              if (doLineSegmentsIntersect(parentA, tempA, st1, st2)) return false;
+            }
           }
-          if (!sharesEndpoint(seg2.p1, seg2.p2, st1, st2)) {
-            if (doLineSegmentsIntersect(seg2.p1, seg2.p2, st1, st2)) return false;
+
+          // seg2 (tempA -> tempB)
+          if (aabbOverlap(minX2, maxX2, minY2, maxY2, seg.minX, seg.maxX, seg.minY, seg.maxY)) {
+            if (!sharesEndpoint(tempA, tempB, st1, st2)) {
+              if (doLineSegmentsIntersect(tempA, tempB, st1, st2)) return false;
+            }
           }
-          if (!sharesEndpoint(seg3.p1, seg3.p2, st1, st2)) {
-            if (doLineSegmentsIntersect(seg3.p1, seg3.p2, st1, st2)) return false;
+
+          // seg3 (tempB -> parentB)
+          if (aabbOverlap(minX3, maxX3, minY3, maxY3, seg.minX, seg.maxX, seg.minY, seg.maxY)) {
+            if (!sharesEndpoint(tempB, parentB, st1, st2)) {
+              if (doLineSegmentsIntersect(tempB, parentB, st1, st2)) return false;
+            }
           }
         }
         return true;

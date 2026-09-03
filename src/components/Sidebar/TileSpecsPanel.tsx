@@ -259,9 +259,15 @@ export const TileSpecsPanel: React.FC<TileSpecsPanelProps> = ({ onNudge, onReset
                     const clamped = Math.max(1, Math.min(100, mosaicHeight || 12));
                     setMosaicHeight(clamped);
                   }}
-                  className="w-full px-2.5 py-1.5 bg-white border border-indigo-200/50 rounded text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
+                  className="w-full px-2.5 py-1.5 bg-white border border-indigo-200/50 rounded text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 font-mono"
                 />
               </div>
+            </div>
+            <div className="text-[10px] font-mono text-indigo-700 font-semibold flex justify-between items-center pt-1.5 border-t border-indigo-100/60">
+              <span>Sheet Sq Footage:</span>
+              <span>
+                {(((mosaicWidth || 12) * (mosaicHeight || 12)) / (unit === 'in' ? 144 : 929.0304)).toFixed(3)} sq ft / sheet
+              </span>
             </div>
           </div>
         )}

@@ -3,6 +3,7 @@ import { Palette, Plus, Trash2, Upload, Grid, Paintbrush, Info } from 'lucide-re
 import { ColorVariation, ColorPattern, ColorCard, MeasurementUnit } from '../../../types';
 import { availableMaterialTextures, useAppStore } from '../../../store/useAppStore';
 import { getSwappedSvgText, getPatternBlobUrl, ensureColorCard, getCardPatternImageAndBlob } from '../../../utils/svgPatternManager';
+import { getAvailableSetNames } from '../../../utils/printSetManager';
 import { UniversalGroutControls } from './UniversalGroutControls';
 
 export interface UniversalColorPaletteProps {
@@ -110,6 +111,7 @@ export const UniversalColorPalette: React.FC<UniversalColorPaletteProps> = ({
 
   const [expandedCardIndex, setExpandedCardIndex] = React.useState<number | null>(null);
   const [uploadingCardIndex, setUploadingCardIndex] = React.useState<number | null>(null);
+  const [patternTabMap, setPatternTabMap] = React.useState<Record<number, 'svg' | 'printSet'>>({});
   const cardFileInputRef = React.useRef<HTMLInputElement | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -142,14 +144,47 @@ export const UniversalColorPalette: React.FC<UniversalColorPaletteProps> = ({
     reader.readAsText(file);
   };
 
+  const handleUpdatePrintConfig = (index: number, setName: string, opacity: number) => {
+    const updated = tileColors.map((color, i) => {
+      if (i === index) {
+        const card = ensureColorCard(color, index);
+        return {
+          ...card,
+          printConfig: {
+            setName,
+            opacity,
+          },
+        };
+      }
+      return color;
+    });
+    onChangeColors(updated);
+  };
+
+  const handleClearPattern = (index: number) => {
+    const updated = tileColors.map((color, i) => {
+      if (i === index) {
+        const card = ensureColorCard(color, index);
+        return {
+          ...card,
+          pattern: null,
+          printConfig: undefined,
+        };
+      }
+      return color;
+    });
+    onChangeColors(updated);
+  };
+
   const togglePatternForCard = (index: number) => {
     const updated = tileColors.map((color, i) => {
       if (i === index) {
         const card = ensureColorCard(color, index);
-        if (card.pattern) {
+        if (card.pattern || card.printConfig) {
           return {
             ...card,
             pattern: null,
+            printConfig: undefined,
           };
         } else {
           return {
@@ -166,7 +201,7 @@ export const UniversalColorPalette: React.FC<UniversalColorPaletteProps> = ({
     onChangeColors(updated);
 
     const target = updated[index];
-    if (target && typeof target !== 'string' && target.pattern) {
+    if (target && typeof target !== 'string' && (target.pattern || target.printConfig)) {
       setExpandedCardIndex(index);
     } else {
       setExpandedCardIndex(null);
@@ -451,7 +486,7 @@ export const UniversalColorPalette: React.FC<UniversalColorPaletteProps> = ({
         <div className="space-y-2">
           {tileColors.map((rawColor, idx) => {
             const card = ensureColorCard(rawColor, idx);
-            const isPatternActive = !!card.pattern;
+            const isPatternActive = !!card.pattern || !!card.printConfig;
             const { blobUrl } = getCardPatternImageAndBlob(card);
 
             return (
@@ -526,132 +561,205 @@ export const UniversalColorPalette: React.FC<UniversalColorPaletteProps> = ({
                   </div>
                 </div>
 
-                {/* Nested Pocket - Slides open when pattern is active */}
-                {isPatternActive && (
-                  <div className="ml-2 pl-3 border-l-2 border-indigo-200 py-1.5 space-y-2">
-                    <div className="bg-white rounded border border-slate-200/80 p-3 shadow-xs space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                          Pattern (Color {idx + 1})
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = tileColors.map((color, i) => {
-                              if (i === idx) {
-                                const currentCard = ensureColorCard(color, idx);
-                                return {
-                                  ...currentCard,
-                                  pattern: null,
-                                };
-                              }
-                              return color;
-                            });
-                            onChangeColors(updated);
-                            
-                          }}
-                          className="text-[9px] text-red-500 hover:text-red-700 font-bold uppercase flex items-center gap-0.5 cursor-pointer"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          Clear
-                        </button>
-                      </div>
+                {/* Nested Pocket - Slides open when pattern or print set is active */}
+                {isPatternActive && (() => {
+                  const activeTab = patternTabMap[idx] || (card.printConfig ? 'printSet' : 'svg');
+                  const availableSetNames = getAvailableSetNames();
+                  const currentSetName = card.printConfig?.setName || availableSetNames[0] || '';
+                  const currentOpacity = card.printConfig?.opacity ?? 1.0;
 
-                      {/* Dropzone or Preview */}
-                      {!card.pattern?.svgText ? (
-                        <div
-                          onDragOver={(e) => e.preventDefault()}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                              handleCardSvgUpload(e.dataTransfer.files[0], idx);
-                            }
-                          }}
-                          onClick={() => {
-                            setUploadingCardIndex(idx);
-                            setTimeout(() => {
-                              cardFileInputRef.current?.click();
-                            }, 50);
-                          }}
-                          className="border border-dashed border-slate-200 hover:border-indigo-400 hover:bg-slate-50/50 rounded p-3 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1"
-                        >
-                          <Upload className="w-4 h-4 text-slate-400" />
-                          <span className="text-[10px] font-bold text-slate-600">Upload SVG Pattern</span>
-                          <span className="text-[8px] text-slate-400">Click or Drag SVG</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-3 bg-slate-50 p-2 rounded border border-slate-200/50">
-                           {/* 1:1 Preview Thumbnail */}
-                          <div
-                            className="w-12 h-12 rounded border border-slate-200/60 shadow-xs flex items-center justify-center bg-white flex-shrink-0 relative overflow-hidden"
-                            style={{ backgroundColor: card.hex }}
+                  return (
+                    <div className="ml-2 pl-3 border-l-2 border-indigo-200 py-1.5 space-y-2">
+                      <div className="bg-white rounded border border-slate-200/80 p-3 shadow-xs space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                            Pattern (Color {idx + 1})
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleClearPattern(idx)}
+                            className="text-[9px] text-red-500 hover:text-red-700 font-bold uppercase flex items-center gap-0.5 cursor-pointer"
                           >
-                            {blobUrl ? (
-                              <img
-                                src={blobUrl}
-                                alt="Pattern"
-                                className="w-full h-full object-contain"
-                              />
-                            ) : null}
-                          </div>
+                            <Trash2 className="w-3 h-3" />
+                            Clear
+                          </button>
+                        </div>
 
-                          <div className="flex-1 min-w-0 space-y-1.5">
-                            <span className="block text-[8px] text-slate-400 font-bold uppercase tracking-wider">
-                              Pattern Accent Color
-                            </span>
-                            <div className="flex items-center gap-1.5">
-                              <input
-                                type="color"
-                                value={card.pattern.accentColor || '#000000'}
-                                onChange={(e) => {
-                                  const updated = tileColors.map((color, i) => {
-                                    if (i === idx) {
-                                      const currentCard = ensureColorCard(color, idx);
-                                      return {
-                                        ...currentCard,
-                                        pattern: currentCard.pattern ? {
-                                          ...currentCard.pattern,
-                                          accentColor: e.target.value,
-                                        } : null,
-                                      };
-                                    }
-                                    return color;
-                                  });
-                                  onChangeColors(updated);
-                                  
+                        {/* Segmented Toggle System */}
+                        <div className="flex bg-slate-100 p-0.5 rounded border border-slate-200 text-[10px] font-semibold">
+                          <button
+                            type="button"
+                            onClick={() => setPatternTabMap((prev) => ({ ...prev, [idx]: 'svg' }))}
+                            className={`flex-1 py-1 text-center rounded transition-all cursor-pointer ${
+                              activeTab === 'svg'
+                                ? 'bg-white text-indigo-700 font-bold shadow-2xs'
+                                : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                          >
+                            Vector SVG
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPatternTabMap((prev) => ({ ...prev, [idx]: 'printSet' }));
+                              if (!card.printConfig && availableSetNames.length > 0) {
+                                handleUpdatePrintConfig(idx, availableSetNames[0], 1.0);
+                              }
+                            }}
+                            className={`flex-1 py-1 text-center rounded transition-all cursor-pointer ${
+                              activeTab === 'printSet'
+                                ? 'bg-white text-indigo-700 font-bold shadow-2xs'
+                                : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                          >
+                            Print Set
+                          </button>
+                        </div>
+
+                        {/* Tab 1: Vector SVG */}
+                        {activeTab === 'svg' && (
+                          <>
+                            {!card.pattern?.svgText ? (
+                              <div
+                                onDragOver={(e) => e.preventDefault()}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                                    handleCardSvgUpload(e.dataTransfer.files[0], idx);
+                                  }
                                 }}
-                                className="w-6 h-6 rounded border border-slate-200 cursor-pointer p-0 bg-transparent"
-                              />
-                              <input
-                                type="text"
-                                value={(card.pattern.accentColor || '#000000').toUpperCase()}
-                                onChange={(e) => {
-                                  const updated = tileColors.map((color, i) => {
-                                    if (i === idx) {
-                                      const currentCard = ensureColorCard(color, idx);
-                                      return {
-                                        ...currentCard,
-                                        pattern: currentCard.pattern ? {
-                                          ...currentCard.pattern,
-                                          accentColor: e.target.value,
-                                        } : null,
-                                      };
-                                    }
-                                    return color;
-                                  });
-                                  onChangeColors(updated);
-                                  
+                                onClick={() => {
+                                  setUploadingCardIndex(idx);
+                                  setTimeout(() => {
+                                    cardFileInputRef.current?.click();
+                                  }, 50);
                                 }}
-                                maxLength={7}
-                                className="w-14 bg-white border border-slate-200 text-[9px] font-mono text-slate-500 p-0.5 text-center rounded focus:outline-hidden font-semibold"
+                                className="border border-dashed border-slate-200 hover:border-indigo-400 hover:bg-slate-50/50 rounded p-3 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1"
+                              >
+                                <Upload className="w-4 h-4 text-slate-400" />
+                                <span className="text-[10px] font-bold text-slate-600">Upload SVG Pattern</span>
+                                <span className="text-[8px] text-slate-400">Click or Drag SVG</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-3 bg-slate-50 p-2 rounded border border-slate-200/50">
+                                {/* 1:1 Preview Thumbnail */}
+                                <div
+                                  className="w-12 h-12 rounded border border-slate-200/60 shadow-xs flex items-center justify-center bg-white flex-shrink-0 relative overflow-hidden"
+                                  style={{ backgroundColor: card.hex }}
+                                >
+                                  {blobUrl ? (
+                                    <img
+                                      src={blobUrl}
+                                      alt="Pattern"
+                                      className="w-full h-full object-contain"
+                                    />
+                                  ) : null}
+                                </div>
+
+                                <div className="flex-1 min-w-0 space-y-1.5">
+                                  <span className="block text-[8px] text-slate-400 font-bold uppercase tracking-wider">
+                                    Pattern Accent Color
+                                  </span>
+                                  <div className="flex items-center gap-1.5">
+                                    <input
+                                      type="color"
+                                      value={card.pattern.accentColor || '#000000'}
+                                      onChange={(e) => {
+                                        const updated = tileColors.map((color, i) => {
+                                          if (i === idx) {
+                                            const currentCard = ensureColorCard(color, idx);
+                                            return {
+                                              ...currentCard,
+                                              pattern: currentCard.pattern ? {
+                                                ...currentCard.pattern,
+                                                accentColor: e.target.value,
+                                              } : null,
+                                            };
+                                          }
+                                          return color;
+                                        });
+                                        onChangeColors(updated);
+                                      }}
+                                      className="w-6 h-6 rounded border border-slate-200 cursor-pointer p-0 bg-transparent"
+                                    />
+                                    <input
+                                      type="text"
+                                      value={(card.pattern.accentColor || '#000000').toUpperCase()}
+                                      onChange={(e) => {
+                                        const updated = tileColors.map((color, i) => {
+                                          if (i === idx) {
+                                            const currentCard = ensureColorCard(color, idx);
+                                            return {
+                                              ...currentCard,
+                                              pattern: currentCard.pattern ? {
+                                                ...currentCard.pattern,
+                                                accentColor: e.target.value,
+                                              } : null,
+                                            };
+                                          }
+                                          return color;
+                                        });
+                                        onChangeColors(updated);
+                                      }}
+                                      maxLength={7}
+                                      className="w-14 bg-white border border-slate-200 text-[9px] font-mono text-slate-500 p-0.5 text-center rounded focus:outline-hidden font-semibold"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {/* Tab 2: Print Set */}
+                        {activeTab === 'printSet' && (
+                          <div className="space-y-2.5 bg-slate-50 p-2.5 rounded border border-slate-200/50">
+                            <div>
+                              <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                                Select Print Set
+                              </label>
+                              <select
+                                value={currentSetName}
+                                onChange={(e) => handleUpdatePrintConfig(idx, e.target.value, currentOpacity)}
+                                className="w-full bg-white border border-slate-200 text-slate-800 text-xs rounded p-1.5 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 cursor-pointer font-semibold"
+                              >
+                                {availableSetNames.length === 0 ? (
+                                  <option value="">No Print Sets Found</option>
+                                ) : (
+                                  availableSetNames.map((setName) => (
+                                    <option key={setName} value={setName}>
+                                      {setName}
+                                    </option>
+                                  ))
+                                )}
+                              </select>
+                            </div>
+
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                                  Print Opacity
+                                </label>
+                                <span className="text-[10px] font-mono font-bold text-indigo-600">
+                                  {Math.round(currentOpacity * 100)}%
+                                </span>
+                              </div>
+                              <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.05"
+                                value={currentOpacity}
+                                onChange={(e) => handleUpdatePrintConfig(idx, currentSetName, parseFloat(e.target.value))}
+                                className="w-full accent-indigo-600 cursor-pointer h-1.5 bg-slate-200 rounded-lg"
                               />
                             </div>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             );
           })}

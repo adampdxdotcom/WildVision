@@ -65,29 +65,61 @@ export const MainTileLayoutGroup: React.FC<MainTileLayoutGroupProps> = ({
     }
   };
 
-  const totalDepth3D = (() => {
-    let maxD = 0;
+  const { outwardReturnDepth, inwardDepth } = React.useMemo(() => {
+    let maxOutward = 0;
+    let maxInward = 0;
+
     if (rootCol) {
       if (rootCol.topFlaps && rootCol.topFlaps.length > 0) {
-        maxD = Math.max(maxD, rootCol.topFlaps[0].d3Height);
+        const fa = rootCol.topFlaps[0].foldAngle ?? 90;
+        if (fa < 0) maxOutward = Math.max(maxOutward, rootCol.topFlaps[0].d3Height);
+        else maxInward = Math.max(maxInward, rootCol.topFlaps[0].d3Height);
       }
       if (rootCol.bottomFlaps && rootCol.bottomFlaps.length > 0) {
-        maxD = Math.max(maxD, rootCol.bottomFlaps[0].d3Height);
+        const fa = rootCol.bottomFlaps[0].foldAngle ?? 90;
+        if (fa < 0) maxOutward = Math.max(maxOutward, rootCol.bottomFlaps[0].d3Height);
+        else maxInward = Math.max(maxInward, rootCol.bottomFlaps[0].d3Height);
       }
     }
+
     const leftCol = d3Columns[rootIdx - 1];
     if (leftCol) {
-      maxD = Math.max(maxD, leftCol.d3Width);
+      const fa = leftCol.rightFoldAngle ?? leftCol.foldAngle ?? 90;
+      if (fa < 0) maxOutward = Math.max(maxOutward, leftCol.d3Width);
+      else maxInward = Math.max(maxInward, leftCol.d3Width);
     }
+
     const rightCol = d3Columns[rootIdx + 1];
     if (rightCol) {
-      maxD = Math.max(maxD, rightCol.d3Width);
+      const fa = rightCol.foldAngle ?? 90;
+      if (fa < 0) maxOutward = Math.max(maxOutward, rightCol.d3Width);
+      else maxInward = Math.max(maxInward, rightCol.d3Width);
     }
-    return maxD;
-  })();
+
+    return { outwardReturnDepth: maxOutward, inwardDepth: maxInward };
+  }, [d3Columns, rootCol, rootIdx]);
 
   const anchor = layoutTransform.mountAnchor || 'back';
-  const localZOffset = anchor === 'back' ? -totalDepth3D / 2 : 0;
+  let localZOffset = 0;
+
+  if (outwardReturnDepth > 0) {
+    // Fireplace / Bump-Out mode: side returns fold backward (-Z).
+    // Shift main front wall panel forward along Z-axis by +outwardReturnDepth so side returns rest flush against Z = 0 wall plane.
+    if (anchor === 'back') {
+      localZOffset = outwardReturnDepth;
+    } else if (anchor === 'center') {
+      localZOffset = outwardReturnDepth / 2;
+    } else {
+      localZOffset = 0;
+    }
+  } else if (inwardDepth > 0) {
+    // Shower / Alcove mode: side returns fold forward (+Z).
+    if (anchor === 'back') {
+      localZOffset = -inwardDepth / 2;
+    } else {
+      localZOffset = 0;
+    }
+  }
 
   const renderX = -(roomDimensions.width / 2) + layoutTransform.position[0];
   const renderY = -(roomDimensions.height / 2) + layoutTransform.position[1];

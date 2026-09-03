@@ -9,6 +9,8 @@ export interface ProjectSlice {
   setProjectName: (val: string | ((prev: string) => string)) => void;
   currentProjectId: string | null;
   currentProjectName: string;
+  before_splat_url: string | null;
+  after_splat_url: string | null;
   isAutoSaveEnabled: boolean;
   setIsAutoSaveEnabled: (enabled: boolean) => void;
   setProjectMetadata: (id: string | null, name: string) => void;
@@ -37,8 +39,10 @@ export interface ProjectSlice {
   featuredRenderId: string | null;
   presentationError: boolean;
   setPresentationError: (val: boolean) => void;
-  generateShareLink: (activeRenderId: string) => Promise<string | null>;
-  loadSharedProject: (token: string) => Promise<boolean>;
+  isPublicViewer: boolean;
+  setIsPublicViewer: (value: boolean) => void;
+  generateShareLink: (activeRenderId?: string) => Promise<string | null>;
+  loadSharedProject: (token: string, options?: { isCadView?: boolean }) => Promise<boolean>;
   handleUndo: () => void;
   handleRedo: () => void;
   isLockedByAnotherTab: boolean;
@@ -49,6 +53,14 @@ export interface ProjectSlice {
   setIsReadOnly: (readOnly: boolean) => void;
   pdfElevationUrl: string | null;
   setPdfElevationUrl: (url: string | null) => void;
+  publicShowQuantities?: boolean;
+  setPublicShowQuantities: (val: boolean) => void;
+  publicShowPricing?: boolean;
+  setPublicShowPricing: (val: boolean) => void;
+  isClientQuantitiesOpen: boolean;
+  setIsClientQuantitiesOpen: (open: boolean) => void;
+  export3DSceneToGlbFn: (() => Promise<Blob | null>) | null;
+  setExport3DSceneToGlbFn: (fn: (() => Promise<Blob | null>) | null) => void;
 }
 
 export const getSnapshot = (state: any) => {
@@ -81,6 +93,7 @@ export const getSnapshot = (state: any) => {
     mosaicWidth: state.mosaicWidth,
     mosaicHeight: state.mosaicHeight,
     overage: state.overage,
+    reuseCuts: state.reuseCuts,
     hasNotes: state.hasNotes,
     notes: state.notes,
     backgroundImage: state.backgroundImage,
@@ -96,15 +109,20 @@ export const getSnapshot = (state: any) => {
     wallAngle: state.wallAngle,
     wallBorder: state.wallBorder ? JSON.parse(JSON.stringify(state.wallBorder)) : null,
     mainShapeSettings: state.mainShapeSettings ? JSON.parse(JSON.stringify(state.mainShapeSettings)) : null,
-    foldLines: state.foldLines ? JSON.parse(JSON.stringify(state.foldLines)) : [],
+    layoutFoldType: state.layoutFoldType || 'inward',
+    foldLines: state.foldLines ? (JSON.parse(JSON.stringify(state.foldLines)) as any[]).map((f: any) => ({ ...f, foldAngle: f.foldAngle !== undefined && f.foldAngle !== null ? f.foldAngle : (state.layoutFoldType === 'outward' ? -90 : 90) })) : [],
     sceneObjects: state.sceneObjects ? JSON.parse(JSON.stringify(state.sceneObjects)) : [],
     roomDimensions: state.roomDimensions ? JSON.parse(JSON.stringify(state.roomDimensions)) : null,
     roomColors: state.roomColors ? JSON.parse(JSON.stringify(state.roomColors)) : null,
     uploadedSvgText: state.uploadedSvgText,
     patternAccentColor: state.patternAccentColor,
+    publicShowQuantities: state.publicShowQuantities ?? false,
+    publicShowPricing: state.publicShowPricing ?? false,
     tileColorOverrides: state.tileColorOverrides ? JSON.parse(JSON.stringify(state.tileColorOverrides)) : {},
     activeBrushColorIndex: state.activeBrushColorIndex !== undefined ? state.activeBrushColorIndex : 1,
     linkedSubfloorProjectId: state.linkedSubfloorProjectId,
+    before_splat_url: state.before_splat_url,
+    after_splat_url: state.after_splat_url,
     integrationData: state.integrationData ? JSON.parse(JSON.stringify(state.integrationData)) : null,
   };
 };
@@ -114,6 +132,8 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
   setProjectName: (updater) => set((state: any) => ({ projectName: typeof updater === 'function' ? updater(state.projectName) : updater })),
   currentProjectId: null,
   currentProjectName: 'Untitled Project',
+  before_splat_url: null,
+  after_splat_url: null,
   isAutoSaveEnabled: true,
   setIsAutoSaveEnabled: (enabled) => set({ isAutoSaveEnabled: enabled }),
   isSaveFileLoaded: false,
@@ -146,20 +166,31 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
   }),
   isReadOnly: false,
   setIsReadOnly: (readOnly) => set({ isReadOnly: readOnly }),
+  isPublicViewer: false,
+  setIsPublicViewer: (val) => set({ isPublicViewer: val }),
+  publicShowQuantities: false,
+  setPublicShowQuantities: (val) => set({ publicShowQuantities: val }),
+  publicShowPricing: false,
+  setPublicShowPricing: (val) => set({ publicShowPricing: val }),
+  isClientQuantitiesOpen: false,
+  setIsClientQuantitiesOpen: (open) => set({ isClientQuantitiesOpen: open }),
   pdfElevationUrl: null,
   setPdfElevationUrl: (url) => set({ pdfElevationUrl: url }),
-  generateShareLink: async (activeRenderId: string) => {
+  export3DSceneToGlbFn: null,
+  setExport3DSceneToGlbFn: (fn) => set({ export3DSceneToGlbFn: fn }),
+  generateShareLink: async (activeRenderId?: string) => {
     const s = get();
     if (!s.currentProjectId) {
       return null;
     }
     try {
+      const updateData: any = { is_shared: true };
+      if (activeRenderId) {
+        updateData.featured_render_id = activeRenderId;
+      }
       const { data, error } = await supabase
         .from('projects')
-        .update({
-          is_shared: true,
-          featured_render_id: activeRenderId
-        })
+        .update(updateData)
         .eq('id', s.currentProjectId)
         .select('share_token')
         .single();
@@ -172,7 +203,7 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
         set({
           isShared: true,
           shareToken: data.share_token,
-          featuredRenderId: activeRenderId
+          ...(activeRenderId ? { featuredRenderId: activeRenderId } : {})
         });
         return `${window.location.origin}/?share=${data.share_token}`;
       }
@@ -183,7 +214,7 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
       return null;
     }
   },
-  loadSharedProject: async (token: string) => {
+  loadSharedProject: async (token: string, options?: { isCadView?: boolean }) => {
     set({ presentationError: false });
     try {
       const { data, error: projectError } = await supabase
@@ -211,15 +242,19 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
         s.setIntegrationData?.(payload.integrationData);
       }
 
-      set({
+      const isCad = options?.isCadView ?? false;
+
+      set((state: any) => ({
         isShared: true,
         shareToken: token,
         featuredRenderId: project.featured_render_id,
         currentProjectId: project.id,
         currentProjectName: project.name,
         projectName: project.name,
-        isSaveFileLoaded: true
-      });
+        isSaveFileLoaded: true,
+        isPublicViewer: isCad,
+        fitWorkspaceTrigger: state.fitWorkspaceTrigger + 1
+      }));
 
       if (project.featured_render_id) {
         const { data: render, error: renderError } = await supabase
@@ -255,7 +290,11 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
         }
       }
 
-      s.setViewMode('presentation');
+      if (isCad) {
+        s.setViewMode('2d');
+      } else {
+        s.setViewMode('presentation');
+      }
       return true;
     } catch (err: any) {
       console.error('Failed to load shared project:', err);
@@ -318,11 +357,11 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
       'colorVariation', 'groutColor', 'viewSettings', 'offsetX', 'offsetY',
       'subAreas', 'activeSubAreaId', 'wallExtensions', 'activeWallExtensionId',
       'isPainted', 'isBlankCanvasMode', 'activePresetId', 'soldAsMosaic',
-      'mosaicWidth', 'mosaicHeight', 'overage', 'hasNotes', 'notes',
+      'mosaicWidth', 'mosaicHeight', 'overage', 'reuseCuts', 'hasNotes', 'notes',
       'angleDisplayMode', 'backgroundImage', 'isBgUnlocked', 'bgScale',
       'bgOffsetX', 'bgOffsetY', 'tileOpacity', 'bgOpacity', 'exportPhotoBg',
       'showAccentDistances', 'wallBoundaryShape', 'wallArchHeight', 'wallActiveArches',
-      'wallArchDepth', 'wallAngle', 'wallBorder', 'mainShapeSettings', 'foldLines',
+      'wallArchDepth', 'wallAngle', 'wallBorder', 'mainShapeSettings', 'layoutFoldType', 'foldLines',
       'roomDimensions', 'roomColors', 'layoutTransform', 'sceneObjects',
       'activeObjectId', 'floorY', 'backWallZ', 'leftWallX', 'rightWallX',
       'ceilingY', 'activeCustomPattern', 'uploadedSvgText', 'patternAccentColor',
@@ -403,6 +442,7 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
       mosaicWidth: s.mosaicWidth,
       mosaicHeight: s.mosaicHeight,
       overage: s.overage,
+      reuseCuts: s.reuseCuts,
       hasNotes: s.hasNotes,
       notes: s.notes,
       angleDisplayMode: s.angleDisplayMode,
@@ -422,6 +462,7 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
       wallAngle: s.wallAngle,
       wallBorder: s.wallBorder,
       mainShapeSettings: s.mainShapeSettings,
+      layoutFoldType: s.layoutFoldType || 'inward',
       foldLines: s.foldLines,
       roomDimensions: s.roomDimensions,
       roomColors: s.roomColors,
@@ -438,6 +479,8 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
       activeBrushColorIndex: s.activeBrushColorIndex,
       linkedSubfloorProjectId: s.linkedSubfloorProjectId,
       integrationData: s.integrationData,
+      publicShowQuantities: s.publicShowQuantities ?? false,
+      publicShowPricing: s.publicShowPricing ?? false,
     };
 
     try {
@@ -463,7 +506,13 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
           isSaveFileLoaded: true,
           isCanvasDirty: false,
         });
+
         logger.info('Project saved as new copy', { projectId: data.id, projectName: data.name });
+        
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('wildvision:exportGlb', { detail: { projectId: data.id } }));
+        }
+
         return true;
       }
       return false;
@@ -504,6 +553,7 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
       isSaveFileLoaded: true,
       currentProjectPermission: permission,
       isReadOnly: permission === 'read',
+      isPublicViewer: false,
       liveCameraPosition: null,
       liveCameraTarget: null,
       pastStateStack: [],
@@ -550,6 +600,7 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
     if (data.mosaicWidth !== undefined) updates.mosaicWidth = data.mosaicWidth;
     if (data.mosaicHeight !== undefined) updates.mosaicHeight = data.mosaicHeight;
     if (data.overage !== undefined) updates.overage = data.overage;
+    if (data.reuseCuts !== undefined) updates.reuseCuts = data.reuseCuts;
     if (data.hasNotes !== undefined) updates.hasNotes = data.hasNotes;
     if (data.notes !== undefined) updates.notes = data.notes;
     if (data.angleDisplayMode !== undefined) updates.angleDisplayMode = data.angleDisplayMode;
@@ -569,7 +620,9 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
     if (data.wallAngle !== undefined) updates.wallAngle = data.wallAngle;
     if (data.wallBorder !== undefined) updates.wallBorder = data.wallBorder;
     if (data.mainShapeSettings !== undefined) updates.mainShapeSettings = data.mainShapeSettings;
-    if (data.foldLines !== undefined) updates.foldLines = data.foldLines;
+    if (data.layoutFoldType !== undefined) updates.layoutFoldType = data.layoutFoldType;
+    const defaultFoldAngle = (data.layoutFoldType || state.layoutFoldType) === 'outward' ? -90 : 90;
+    if (data.foldLines !== undefined) updates.foldLines = Array.isArray(data.foldLines) ? data.foldLines.map((f: any) => ({ ...f, foldAngle: f.foldAngle !== undefined && f.foldAngle !== null ? f.foldAngle : defaultFoldAngle })) : [];
     if (data.roomDimensions !== undefined) updates.roomDimensions = data.roomDimensions;
     if (data.roomColors !== undefined) updates.roomColors = data.roomColors;
     if (data.layoutTransform !== undefined) updates.layoutTransform = data.layoutTransform;
@@ -616,6 +669,27 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
     
     if (data.linkedSubfloorProjectId !== undefined) updates.linkedSubfloorProjectId = data.linkedSubfloorProjectId;
     if (data.integrationData !== undefined) updates.integrationData = data.integrationData;
+    if (data.before_splat_url !== undefined) updates.before_splat_url = data.before_splat_url;
+    if (data.after_splat_url !== undefined) updates.after_splat_url = data.after_splat_url;
+    if (data.publicShowQuantities !== undefined) {
+      updates.publicShowQuantities = data.publicShowQuantities;
+    } else {
+      updates.publicShowQuantities = false;
+    }
+    if (data.publicShowPricing !== undefined) {
+      updates.publicShowPricing = data.publicShowPricing;
+    } else {
+      updates.publicShowPricing = false;
+    }
+
+    const mergedState = { ...state, ...updates };
+    const snapshot = getSnapshot(mergedState);
+    updates.lastSavedState = snapshot;
+    updates.initialPristineState = snapshot;
+    updates.pastStateStack = [];
+    updates.futureStateStack = [];
+    updates.isRestoringHistory = false;
+    updates.isCanvasDirty = false;
 
     setTimeout(() => {
       if (typeof window !== 'undefined') {
@@ -625,292 +699,307 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
 
     return updates;
   }),
-  resetToBlankWorkspace: () => set((state: any) => ({
-    projectName: 'Kitchen Accent Backsplash',
-    currentProjectId: null,
-    currentProjectName: 'Untitled Project',
-    isSaveFileLoaded: false,
-    pastStateStack: [],
-    futureStateStack: [],
-    isRestoringHistory: false,
-    fitWorkspaceTrigger: state.fitWorkspaceTrigger + 1,
-    currentProjectPermission: 'owner',
-    isReadOnly: false,
-    wallWidth: 96,
-    wallHeight: 24,
-    wallVertices: [
-      { x: 0, y: 0 },
-      { x: 96, y: 0 },
-      { x: 96, y: 24 },
-      { x: 0, y: 24 }
-    ],
-    selectedVertexIndices: [],
-    unit: 'in',
-    shape: 'rectangle',
-    tileWidth: 6,
-    tileHeight: 3,
-    pattern: 'running_50',
-    basketWeaveMultiplier: 1,
-    groutWidth: 0.125,
-    angle: 0,
-    tileName: 'White Gloss Ceramic Subway',
-    hasNotes: false,
-    notes: '',
-    tileColors: ['#f1f5f9'],
-    colorPattern: 'single',
-    tilesPerStripe: 1,
-    tileDotColor: '#64748b',
-    compositeColors: { secondary: '#64748b' },
-    colorVariation: 'V1',
-    tileFinish: 'glossy',
-    groutColor: '#64748b',
-    viewSettings: {
-      canvas: {
-        showNodes: true,
-        showDimensions: true,
-        showAngles: true,
-        showLabels: true,
-        showFoldLines: true,
-        showTextures: false,
-      },
-      pdf: {
-        disableTileColor: false,
-        showQuantities: true,
-        showAngles: true,
-        showPricesOnPdf: true,
-        pdfLayoutMode: 'auto',
-      },
-      render: {
-        enableReflection: false,
-      }
-    },
-    offsetX: 45,
-    offsetY: 10.5,
-    subAreas: [],
-    purchasingSettings: {},
-    activeSubAreaId: null,
-    wallExtensions: [],
-    activeWallExtensionId: null,
-    foldLines: [],
-    isPainted: true,
-    isBlankCanvasMode: false,
-    tileColorOverrides: {},
-    activeBrushColorIndex: 1,
-    activePresetId: 'subway-backsplash',
-    zoom: 1.0,
-    panX: 0,
-    panY: 0,
-    zoom3D: 1.0,
-    showSavePrompt: false,
-    isAutoSaveEnabled: false,
-    soldAsMosaic: false,
-    mosaicWidth: 12,
-    mosaicHeight: 12,
-    overage: 10,
-    angleDisplayMode: 'non-standard',
-    backgroundImage: null,
-    isBgUnlocked: false,
-    bgScale: 1,
-    bgOffsetX: 0,
-    bgOffsetY: 0,
-    tileOpacity: 1,
-    bgOpacity: 1,
-    exportPhotoBg: true,
-    showAccentDistances: false,
-    wallBoundaryShape: 'rectangle',
-    wallArchHeight: 0,
-    wallActiveArches: { top: false, bottom: false, left: false, right: false },
-    wallArchDepth: 0,
-    wallAngle: 0,
-    wallBorder: {
-      enabled: false,
-      tileName: 'Border Tile',
-      tileWidth: 4,
-      tileHeight: 2,
-      cornerJoint: 'straight',
-      color: '#1e293b'
-    },
-    activeSidebarTab: 1,
-    isCanvasDirty: false,
-    canvasLabels: [],
-    editingLabelId: null,
-    viewMode: '2d',
-    stitches: [],
-    draftStitchNodeIndex: null,
-    anchoredRegionCenter: null,
-    enableRealisticDepth: false,
-    materialTexture: 'none',
-    isWildVisionOpen: false,
-    generatedRenders: [],
-    linkedSubfloorProjectId: null,
-    subfloorProducts: [],
-    integrationData: null,
-    activeView: 'canvas',
-    liveCameraPosition: null,
-    liveCameraTarget: null,
-    isCameraHeightLocked: false,
-    isCameraDistanceLocked: false,
-    styleReferenceImage: null,
-    roomDimensions: { width: 120, height: 96, depth: 120 },
-    roomColors: { base: '#f8fafc', overrides: { floor: '#94a3b8' } },
-    layoutTransform: { position: [60, 48, -60], attachedPlane: 'back', mountAnchor: 'back' },
-    sceneObjects: {
-      'main-tile-layout': {
-        id: 'main-tile-layout',
-        type: 'tile_layout',
-        position: [60, 48, -60],
-        rotation: [0, 0, 0],
-        attachedPlane: 'back',
-        metadata: {
-          mountAnchor: 'back'
+  resetToBlankWorkspace: () => set((state: any) => {
+    const nextState = {
+      ...state,
+      projectName: 'Kitchen Accent Backsplash',
+      currentProjectId: null,
+      currentProjectName: 'Untitled Project',
+      before_splat_url: null,
+      after_splat_url: null,
+      isSaveFileLoaded: false,
+      isPublicViewer: false,
+      publicShowQuantities: false,
+      publicShowPricing: false,
+      pastStateStack: [],
+      futureStateStack: [],
+      isRestoringHistory: false,
+      fitWorkspaceTrigger: state.fitWorkspaceTrigger + 1,
+      currentProjectPermission: 'owner',
+      isReadOnly: false,
+      wallWidth: 96,
+      wallHeight: 24,
+      wallVertices: [
+        { x: 0, y: 0 },
+        { x: 96, y: 0 },
+        { x: 96, y: 24 },
+        { x: 0, y: 24 }
+      ],
+      selectedVertexIndices: [],
+      unit: 'in',
+      shape: 'rectangle',
+      tileWidth: 6,
+      tileHeight: 3,
+      pattern: 'running_50',
+      basketWeaveMultiplier: 1,
+      groutWidth: 0.125,
+      angle: 0,
+      tileName: 'White Gloss Ceramic Subway',
+      hasNotes: false,
+      notes: '',
+      tileColors: ['#f1f5f9'],
+      colorPattern: 'single',
+      tilesPerStripe: 1,
+      tileDotColor: '#64748b',
+      compositeColors: { secondary: '#64748b' },
+      colorVariation: 'V1',
+      tileFinish: 'glossy',
+      groutColor: '#64748b',
+      viewSettings: {
+        canvas: {
+          showNodes: true,
+          showDimensions: true,
+          showAngles: true,
+          showLabels: true,
+          showFoldLines: true,
+          showTextures: false,
+        },
+        pdf: {
+          disableTileColor: false,
+          showQuantities: true,
+          showAngles: true,
+          showPricesOnPdf: true,
+          pdfLayoutMode: 'auto',
+        },
+        render: {
+          enableReflection: false,
         }
-      }
-    },
-    activeObjectId: null,
-    floorY: 0,
-    backWallZ: 0,
-    leftWallX: 0,
-    rightWallX: 0,
-    ceilingY: 0,
-    activeCustomPattern: null,
-    pdfElevationUrl: null,
+      },
+      offsetX: 45,
+      offsetY: 10.5,
+      subAreas: [],
+      purchasingSettings: {},
+      activeSubAreaId: null,
+      wallExtensions: [],
+      activeWallExtensionId: null,
+      layoutFoldType: 'inward',
+      foldLines: [],
+      isPainted: true,
+      isBlankCanvasMode: false,
+      tileColorOverrides: {},
+      activeBrushColorIndex: 1,
+      activePresetId: 'subway-backsplash',
+      zoom: 1.0,
+      panX: 0,
+      panY: 0,
+      zoom3D: 1.0,
+      showSavePrompt: false,
+      isAutoSaveEnabled: false,
+      soldAsMosaic: false,
+      mosaicWidth: 12,
+      mosaicHeight: 12,
+      overage: 10,
+      reuseCuts: false,
+      angleDisplayMode: 'non-standard',
+      backgroundImage: null,
+      isBgUnlocked: false,
+      bgScale: 1,
+      bgOffsetX: 0,
+      bgOffsetY: 0,
+      tileOpacity: 1,
+      bgOpacity: 1,
+      exportPhotoBg: true,
+      showAccentDistances: false,
+      wallBoundaryShape: 'rectangle',
+      wallArchHeight: 0,
+      wallActiveArches: { top: false, bottom: false, left: false, right: false },
+      wallArchDepth: 0,
+      wallAngle: 0,
+      wallBorder: {
+        enabled: false,
+        tileName: 'Border Tile',
+        tileWidth: 4,
+        tileHeight: 2,
+        cornerJoint: 'straight',
+        color: '#1e293b'
+      },
+      activeSidebarTab: 1,
+      isCanvasDirty: false,
+      canvasLabels: [],
+      editingLabelId: null,
+      viewMode: '2d',
+      stitches: [],
+      draftStitchNodeIndex: null,
+      anchoredRegionCenter: null,
+      enableRealisticDepth: false,
+      materialTexture: 'none',
+      isWildVisionOpen: false,
+      generatedRenders: [],
+      linkedSubfloorProjectId: null,
+      subfloorProducts: [],
+      integrationData: null,
+      activeView: 'canvas',
+      liveCameraPosition: null,
+      liveCameraTarget: null,
+      isCameraHeightLocked: false,
+      isCameraDistanceLocked: false,
+      styleReferenceImage: null,
+      roomDimensions: { width: 120, height: 96, depth: 120 },
+      roomColors: { base: '#f8fafc', overrides: { floor: '#94a3b8' } },
+      layoutTransform: { position: [60, 48, -60], attachedPlane: 'back', mountAnchor: 'back' },
+      sceneObjects: {
+        'main-tile-layout': {
+          id: 'main-tile-layout',
+          type: 'tile_layout',
+          position: [60, 48, -60],
+          rotation: [0, 0, 0],
+          attachedPlane: 'back',
+          metadata: {
+            mountAnchor: 'back'
+          }
+        }
+      },
+      activeObjectId: null,
+      floorY: 0,
+      backWallZ: 0,
+      leftWallX: 0,
+      rightWallX: 0,
+      ceilingY: 0,
+      activeCustomPattern: null,
+      pdfElevationUrl: null,
 
-    // Reset Pattern Studio (Pattern Builder) State Fields
-    patternName: 'Classic Star & Cross',
-    blockWidth: 50,
-    blockHeight: 50,
-    builderTiles: [
-      {
-        id: 'star-1',
-        name: '8-Point Star',
-        w: 25,
-        h: 25,
-        dx: 25,
-        dy: 25,
-        role: 'primary',
-        color: '#3b82f6',
-        vertices: [
-          { x: 0.5, y: 0 },
-          { x: 0.203, y: 0.084 },
-          { x: 0.354, y: 0.354 },
-          { x: 0.084, y: 0.203 },
-          { x: 0, y: 0.5 },
-          { x: -0.084, y: 0.203 },
-          { x: -0.354, y: 0.354 },
-          { x: -0.203, y: 0.084 },
-          { x: -0.5, y: 0 },
-          { x: -0.203, y: -0.084 },
-          { x: -0.354, y: -0.354 },
-          { x: -0.084, y: -0.203 },
-          { x: 0, y: -0.5 },
-          { x: 0.084, y: -0.203 },
-          { x: 0.354, y: -0.354 },
-          { x: 0.203, y: -0.084 }
-        ]
-      },
-      {
-        id: 'cross-1',
-        name: 'Interlocking Cross',
-        w: 25,
-        h: 25,
-        dx: 0,
-        dy: 0,
-        role: 'secondary',
-        color: '#10b981',
-        vertices: [
-          { x: -0.15, y: -0.5 },
-          { x: 0.15, y: -0.5 },
-          { x: 0.15, y: -0.15 },
-          { x: 0.5, y: -0.15 },
-          { x: 0.5, y: 0.15 },
-          { x: 0.15, y: 0.15 },
-          { x: 0.15, y: 0.5 },
-          { x: -0.15, y: 0.5 },
-          { x: -0.15, y: 0.15 },
-          { x: -0.5, y: 0.15 },
-          { x: -0.5, y: -0.15 },
-          { x: -0.15, y: -0.15 }
-        ]
-      },
-      {
-        id: 'cross-2',
-        name: 'Corner Cross Overlay',
-        w: 25,
-        h: 25,
-        dx: 50,
-        dy: 0,
-        role: 'secondary',
-        color: '#10b981',
-        vertices: [
-          { x: -0.15, y: -0.5 },
-          { x: 0.15, y: -0.5 },
-          { x: 0.15, y: -0.15 },
-          { x: 0.5, y: -0.15 },
-          { x: 0.5, y: 0.15 },
-          { x: 0.15, y: 0.15 },
-          { x: 0.15, y: 0.5 },
-          { x: -0.15, y: 0.5 },
-          { x: -0.15, y: 0.15 },
-          { x: -0.5, y: 0.15 },
-          { x: -0.5, y: -0.15 },
-          { x: -0.15, y: -0.15 }
-        ]
-      },
-      {
-        id: 'cross-3',
-        name: 'Base Cross Overlay',
-        w: 25,
-        h: 25,
-        dx: 0,
-        dy: 50,
-        role: 'secondary',
-        color: '#10b981',
-        vertices: [
-          { x: -0.15, y: -0.5 },
-          { x: 0.15, y: -0.5 },
-          { x: 0.15, y: -0.15 },
-          { x: 0.5, y: -0.15 },
-          { x: 0.5, y: 0.15 },
-          { x: 0.15, y: 0.15 },
-          { x: 0.15, y: 0.5 },
-          { x: -0.15, y: 0.5 },
-          { x: -0.15, y: 0.15 },
-          { x: -0.5, y: 0.15 },
-          { x: -0.5, y: -0.15 },
-          { x: -0.15, y: -0.15 }
-        ]
-      },
-      {
-        id: 'cross-4',
-        name: 'Top Cross Overlay',
-        w: 25,
-        h: 25,
-        dx: 50,
-        dy: 50,
-        role: 'secondary',
-        color: '#10b981',
-        vertices: [
-          { x: -0.15, y: -0.5 },
-          { x: 0.15, y: -0.5 },
-          { x: 0.15, y: -0.15 },
-          { x: 0.5, y: -0.15 },
-          { x: 0.5, y: 0.15 },
-          { x: 0.15, y: 0.15 },
-          { x: 0.15, y: 0.5 },
-          { x: -0.15, y: 0.5 },
-          { x: -0.15, y: 0.15 },
-          { x: -0.5, y: 0.15 },
-          { x: -0.5, y: -0.15 },
-          { x: -0.15, y: -0.15 }
-        ]
-      }
-    ],
-    activeTileIndex: 0,
-    selectedVertexIndex: null,
-    snapToGrid: true,
-    snapResolution: 0.05,
-    gridSize: 20,
-    isSavingPattern: false,
-    patternSaveError: null
-  })),
+      // Reset Pattern Studio (Pattern Builder) State Fields
+      patternName: 'Classic Star & Cross',
+      blockWidth: 50,
+      blockHeight: 50,
+      builderTiles: [
+        {
+          id: 'star-1',
+          name: '8-Point Star',
+          w: 25,
+          h: 25,
+          dx: 25,
+          dy: 25,
+          role: 'primary',
+          color: '#3b82f6',
+          vertices: [
+            { x: 0.5, y: 0 },
+            { x: 0.203, y: 0.084 },
+            { x: 0.354, y: 0.354 },
+            { x: 0.084, y: 0.203 },
+            { x: 0, y: 0.5 },
+            { x: -0.084, y: 0.203 },
+            { x: -0.354, y: 0.354 },
+            { x: -0.203, y: 0.084 },
+            { x: -0.5, y: 0 },
+            { x: -0.203, y: -0.084 },
+            { x: -0.354, y: -0.354 },
+            { x: -0.084, y: -0.203 },
+            { x: 0, y: -0.5 },
+            { x: 0.084, y: -0.203 },
+            { x: 0.354, y: -0.354 },
+            { x: 0.203, y: -0.084 }
+          ]
+        },
+        {
+          id: 'cross-1',
+          name: 'Interlocking Cross',
+          w: 25,
+          h: 25,
+          dx: 0,
+          dy: 0,
+          role: 'secondary',
+          color: '#10b981',
+          vertices: [
+            { x: -0.15, y: -0.5 },
+            { x: 0.15, y: -0.5 },
+            { x: 0.15, y: -0.15 },
+            { x: 0.5, y: -0.15 },
+            { x: 0.5, y: 0.15 },
+            { x: 0.15, y: 0.15 },
+            { x: 0.15, y: 0.5 },
+            { x: -0.15, y: 0.5 },
+            { x: -0.15, y: 0.15 },
+            { x: -0.5, y: 0.15 },
+            { x: -0.5, y: -0.15 },
+            { x: -0.15, y: -0.15 }
+          ]
+        },
+        {
+          id: 'cross-2',
+          name: 'Corner Cross Overlay',
+          w: 25,
+          h: 25,
+          dx: 50,
+          dy: 0,
+          role: 'secondary',
+          color: '#10b981',
+          vertices: [
+            { x: -0.15, y: -0.5 },
+            { x: 0.15, y: -0.5 },
+            { x: 0.15, y: -0.15 },
+            { x: 0.5, y: -0.15 },
+            { x: 0.5, y: 0.15 },
+            { x: 0.15, y: 0.15 },
+            { x: 0.15, y: 0.5 },
+            { x: -0.15, y: 0.5 },
+            { x: -0.15, y: 0.15 },
+            { x: -0.5, y: 0.15 },
+            { x: -0.5, y: -0.15 },
+            { x: -0.15, y: -0.15 }
+          ]
+        },
+        {
+          id: 'cross-3',
+          name: 'Base Cross Overlay',
+          w: 25,
+          h: 25,
+          dx: 0,
+          dy: 50,
+          role: 'secondary',
+          color: '#10b981',
+          vertices: [
+            { x: -0.15, y: -0.5 },
+            { x: 0.15, y: -0.5 },
+            { x: 0.15, y: -0.15 },
+            { x: 0.5, y: -0.15 },
+            { x: 0.5, y: 0.15 },
+            { x: 0.15, y: 0.15 },
+            { x: 0.15, y: 0.5 },
+            { x: -0.15, y: 0.5 },
+            { x: -0.15, y: 0.15 },
+            { x: -0.5, y: 0.15 },
+            { x: -0.5, y: -0.15 },
+            { x: -0.15, y: -0.15 }
+          ]
+        },
+        {
+          id: 'cross-4',
+          name: 'Top Cross Overlay',
+          w: 25,
+          h: 25,
+          dx: 50,
+          dy: 50,
+          role: 'secondary',
+          color: '#10b981',
+          vertices: [
+            { x: -0.15, y: -0.5 },
+            { x: 0.15, y: -0.5 },
+            { x: 0.15, y: -0.15 },
+            { x: 0.5, y: -0.15 },
+            { x: 0.5, y: 0.15 },
+            { x: 0.15, y: 0.15 },
+            { x: 0.15, y: 0.5 },
+            { x: -0.15, y: 0.5 },
+            { x: -0.15, y: 0.15 },
+            { x: -0.5, y: 0.15 },
+            { x: -0.5, y: -0.15 },
+            { x: -0.15, y: -0.15 }
+          ]
+        }
+      ],
+      activeTileIndex: 0,
+      selectedVertexIndex: null,
+      snapToGrid: true,
+      snapResolution: 0.05,
+      gridSize: 20,
+      isSavingPattern: false,
+      patternSaveError: null,
+      isClientQuantitiesOpen: false
+    };
+    const snapshot = getSnapshot(nextState);
+    nextState.lastSavedState = snapshot;
+    nextState.initialPristineState = snapshot;
+    return nextState;
+  }),
 });

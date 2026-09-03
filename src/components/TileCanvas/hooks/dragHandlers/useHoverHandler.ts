@@ -1,30 +1,80 @@
 import React from 'react';
 import { getDistanceToSegment } from '../../utils/interactionHelpers';
+import { SubArea } from '../../../../types';
 
 interface UseHoverHandlerProps {
   wallVertices: any[] | null;
   foldLines: any[] | null;
+  subAreas?: SubArea[];
+  activeSubAreaId?: string | null;
   wallToScreen: (wx: number, wy: number) => { px: number; py: number };
   containerRef: React.RefObject<HTMLDivElement>;
   setHoveredSegment: (segment: any | null) => void;
   setActiveCursor: (cursor: string) => void;
+  setHoveredSubAreaEdge?: (edge: { id: string; handle: 'l' | 'r' | 't' | 'b' } | null) => void;
 }
 
 export const useHoverHandler = ({
   wallVertices,
   foldLines,
+  subAreas,
+  activeSubAreaId,
   wallToScreen,
   containerRef,
   setHoveredSegment,
-  setActiveCursor
+  setActiveCursor,
+  setHoveredSubAreaEdge
 }: UseHoverHandlerProps) => {
 
   const handleHoverCheck = (clientX: number, clientY: number, activeTool: string): boolean => {
-    if (!wallVertices || wallVertices.length < 3) return false;
-
     const rect = containerRef.current?.getBoundingClientRect();
     const clickX = rect ? (clientX - rect.left) : 0;
     const clickY = rect ? (clientY - rect.top) : 0;
+
+    // SubArea edge hover detection
+    if (subAreas && subAreas.length > 0) {
+      let bestEdgeHit: { id: string; handle: 'l' | 'r' | 't' | 'b' } | null = null;
+      let minEdgeDist = Infinity;
+
+      for (const sa of subAreas) {
+        if (sa.visible === false || sa.locked) continue;
+
+        const ptBL = wallToScreen(sa.x, sa.y);
+        const ptBR = wallToScreen(sa.x + sa.width, sa.y);
+        const ptTL = wallToScreen(sa.x, sa.y + sa.height);
+        const ptTR = wallToScreen(sa.x + sa.width, sa.y + sa.height);
+
+        const edges: Array<{ handle: 'l' | 'r' | 't' | 'b'; p1: { px: number; py: number }; p2: { px: number; py: number } }> = [
+          { handle: 'l', p1: ptBL, p2: ptTL },
+          { handle: 'r', p1: ptBR, p2: ptTR },
+          { handle: 'b', p1: ptBL, p2: ptBR },
+          { handle: 't', p1: ptTL, p2: ptTR },
+        ];
+
+        for (const edge of edges) {
+          const dist = getDistanceToSegment(clickX, clickY, edge.p1.px, edge.p1.py, edge.p2.px, edge.p2.py);
+          if (dist <= 10 && dist < minEdgeDist) {
+            minEdgeDist = dist;
+            bestEdgeHit = { id: sa.id, handle: edge.handle };
+          }
+        }
+      }
+
+      if (setHoveredSubAreaEdge) {
+        setHoveredSubAreaEdge(bestEdgeHit);
+      }
+
+      if (bestEdgeHit) {
+        setActiveCursor(bestEdgeHit.handle === 'l' || bestEdgeHit.handle === 'r' ? 'ew-resize' : 'ns-resize');
+        return true;
+      }
+    } else {
+      if (setHoveredSubAreaEdge) {
+        setHoveredSubAreaEdge(null);
+      }
+    }
+
+    if (activeSubAreaId || !wallVertices || wallVertices.length < 3) return false;
 
     // Perform perpendicular Segment Hover Detection first
     let minDistance = Infinity;

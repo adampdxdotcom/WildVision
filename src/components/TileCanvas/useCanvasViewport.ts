@@ -51,6 +51,7 @@ export function useCanvasViewport({
   const unit = useAppStore(state => state.unit);
   const roomDimensions = useAppStore(state => state.roomDimensions);
   const layoutTransform = useAppStore(state => state.layoutTransform);
+  const isPublicViewer = useAppStore(state => state.isPublicViewer);
 
   const attachedPlane = layoutTransform?.attachedPlane || 'back';
   const drywallWidth = (attachedPlane === 'left' || attachedPlane === 'right') ? roomDimensions.depth : roomDimensions.width;
@@ -95,6 +96,16 @@ export function useCanvasViewport({
     if (!container) return;
 
     const handleWheel = (e: WheelEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        target.closest(
+          '.overflow-y-auto, .overflow-x-auto, .overflow-auto, .overflow-scroll, [data-prevent-canvas-scroll="true"]'
+        )
+      ) {
+        return;
+      }
+
       e.preventDefault();
 
       const ZOOM_LEVELS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0];
@@ -343,54 +354,59 @@ export function useCanvasViewport({
   ]);
 
   const fitWorkspaceTrigger = useAppStore((state) => state.fitWorkspaceTrigger);
+  const lastFitTriggerRef = useRef<number>(-1);
+  const lastFittedProjectIdRef = useRef<string>('');
+  const lastPublicCadFittedKeyRef = useRef<string>('');
 
-  // Isolate the Auto-Fit Trigger (The Ref Lock)
-  const lastLoadedProjectRef = useRef<string | null>('__INIT__');
-  const lastFitTriggerRef = useRef(fitWorkspaceTrigger);
-  const hasAutoFittedRef = useRef(false);
+  const isPublicCadView = isPublicViewer || (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('view') === 'cad');
 
-  useEffect(() => {
-    // We listen to changes in the active project ID or hydration state
-    const currentId = currentProjectId || (projectName + activePresetId);
-    let shouldRefit = false;
-    
-    if (currentId !== lastLoadedProjectRef.current) {
-      lastLoadedProjectRef.current = currentId;
-      shouldRefit = true;
-    }
-    
-    if (fitWorkspaceTrigger !== lastFitTriggerRef.current) {
-      lastFitTriggerRef.current = fitWorkspaceTrigger;
-      shouldRefit = true;
-    }
-
-    if (shouldRefit) {
-      hasAutoFittedRef.current = false;
-    }
-  }, [currentProjectId, projectName, activePresetId, fitWorkspaceTrigger]);
-
+  // Trigger performAutoFit when project state hydration completes & container bounds stabilize
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || container.clientWidth <= 0 || container.clientHeight <= 0) return;
-    if (hasAutoFittedRef.current) return;
+    if (!container || container.clientWidth < 100 || container.clientHeight < 100) return;
 
-    hasAutoFittedRef.current = true;
-    
-    // Dimension Safety Guard using a micro-deferral
+    const projectKey = (currentProjectId || (projectName + '_' + activePresetId));
+    const isExplicitTrigger = fitWorkspaceTrigger !== lastFitTriggerRef.current;
+    const isNewProjectHydrated = projectKey !== lastFittedProjectIdRef.current && Boolean(wallVertices && wallVertices.length > 0);
+    const pubKey = `${projectKey}_${isPublicCadView}`;
+    const isPublicModePendingFit = isPublicCadView && pubKey !== lastPublicCadFittedKeyRef.current && Boolean(wallVertices && wallVertices.length > 0);
+
+    if (!isExplicitTrigger && !isNewProjectHydrated && !isPublicModePendingFit) return;
+
+    lastFitTriggerRef.current = fitWorkspaceTrigger;
+    lastFittedProjectIdRef.current = projectKey;
+    if (isPublicCadView) {
+      lastPublicCadFittedKeyRef.current = pubKey;
+    }
+
+    // Double requestAnimationFrame guarantees CSS flexbox layout & DOM paint stabilization
+    let rAF1: number;
     let rAF2: number;
-    const rAF1 = requestAnimationFrame(() => {
+
+    rAF1 = requestAnimationFrame(() => {
       rAF2 = requestAnimationFrame(() => {
-        if (containerRef.current && containerRef.current.clientWidth > 0) {
+        if (containerRef.current && containerRef.current.clientWidth >= 100 && containerRef.current.clientHeight >= 100) {
           performAutoFit();
         }
       });
     });
-    
+
     return () => {
-      cancelAnimationFrame(rAF1);
+      if (rAF1) cancelAnimationFrame(rAF1);
       if (rAF2) cancelAnimationFrame(rAF2);
     };
-  }, [dimensions.width, dimensions.height, performAutoFit, containerRef, currentProjectId, projectName, activePresetId, fitWorkspaceTrigger]);
+  }, [
+    fitWorkspaceTrigger,
+    isPublicCadView,
+    currentProjectId,
+    projectName,
+    activePresetId,
+    wallVertices,
+    dimensions.width,
+    dimensions.height,
+    performAutoFit,
+    containerRef,
+  ]);
 
   // Convert screen coordinates to Wall space
   const screenToWall = (screenX: number, screenY: number) => {

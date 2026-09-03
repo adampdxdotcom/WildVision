@@ -57,7 +57,7 @@ const fetchSubfloorSettings = async (): Promise<{ subfloor_url: string | null; s
       .eq('id', 1)
       .maybeSingle();
     if (error) {
-      console.error('Error fetching subfloor settings:', error);
+      console.warn('Warning fetching subfloor settings:', error);
       return { subfloor_url: null, subfloor_api_key: null };
     }
     return {
@@ -65,7 +65,7 @@ const fetchSubfloorSettings = async (): Promise<{ subfloor_url: string | null; s
       subfloor_api_key: data?.subfloor_api_key ?? null,
     };
   } catch (err) {
-    console.error('Exception fetching subfloor settings:', err);
+    console.warn('Warning fetching subfloor settings:', err);
     return { subfloor_url: null, subfloor_api_key: null };
   }
 };

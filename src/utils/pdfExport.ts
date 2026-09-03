@@ -6,15 +6,6 @@ import { getTrueArea, getCombinedWallBounds, getPolygonArea } from './geometry';
 import { logger } from './logger';
 import { useAppStore } from '../store/useAppStore';
 
-import { Viewport, mapToCanvas } from '../components/TileCanvas/canvasUtils';
-import { drawCanvasBacking, drawWallBackingFrame, defineCombinedWallPath, drawFoldLines } from '../components/TileCanvas/wallPainter';
-import {
-  drawMainTiles,
-  drawSubAreas,
-  drawBorder,
-} from '../components/TileCanvas/painters';
-import { drawWallMeasurements, drawSubAreaDimensions } from '../components/TileCanvas/dimensionPainter';
-
 export interface PDFExportParams {
   projectName: string;
   wallWidth: number;
@@ -83,6 +74,7 @@ export interface PDFExportParams {
   activeCustomPattern?: any;
   flatsketVerticalRows?: number;
   flatsketHorizontalRows?: number;
+  reuseCuts?: boolean;
   outputMode?: 'download' | 'base64';
   elevationMetadata?: { wallWidth: number, wallHeight: number };
 }
@@ -95,6 +87,72 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.onerror = (err) => reject(err);
     img.src = src; // <-- Set the source last to kick off the load safely
   });
+}
+
+function drawPdfHeaderAndFooter(
+  pdf: jsPDF,
+  pageNum: number,
+  projectName: string,
+  wallWidth: number,
+  wallHeight: number,
+  unit: string,
+  isMultiPage: boolean,
+  totalPages: number
+) {
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(22);
+  pdf.setTextColor(15, 23, 42);
+  pdf.text(projectName || 'Untitled Tile Layout Project', 15, 20);
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(11);
+  pdf.setTextColor(79, 70, 229);
+  const sizeText = `Wall Size: ${wallWidth} x ${wallHeight} ${unit}`;
+  const sizeWidth = pdf.getTextWidth(sizeText);
+  pdf.text(sizeText, 195 - sizeWidth, 20);
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(10);
+  pdf.setTextColor(100, 116, 139);
+  const dateStr = new Date().toLocaleDateString();
+  pdf.text(`Tile Layout Report - Generated ${dateStr}`, 15, 27);
+
+  pdf.setDrawColor(226, 232, 240);
+  pdf.setLineWidth(0.5);
+  pdf.line(15, 31, 195, 31);
+
+  pdf.setFont('helvetica', 'italic');
+  pdf.setFontSize(8);
+  pdf.setTextColor(148, 163, 184);
+  pdf.text('Generated using WildVision Tile Layout Engine', 15, 285);
+
+  if (isMultiPage) {
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(148, 163, 184);
+    pdf.text(`Page ${pageNum} of ${totalPages}`, 105, 285, { align: 'center' });
+  }
+
+  pdf.setFont('helvetica', 'italic');
+  pdf.setTextColor(148, 163, 184);
+  pdf.text('Layout and quantities are only estimates.', 195, 285, { align: 'right' });
+}
+
+async function generateHighResDiagram(
+  params: PDFExportParams,
+  canvas: HTMLCanvasElement,
+  subAreas: SubArea[],
+  bounds: { width: number; height: number; minX: number; minY: number }
+): Promise<{ dataUrl: string; width: number; height: number } | null> {
+  try {
+    return {
+      dataUrl: canvas.toDataURL('image/png'),
+      width: canvas.width,
+      height: canvas.height,
+    };
+  } catch (err) {
+    logger.error('Failed to capture canvas diagram:', err);
+    return null;
+  }
 }
 
 export function handleExportPDF(params: PDFExportParams): Promise<string | void> {
@@ -355,430 +413,90 @@ export async function runExport(params: PDFExportParams, originalZoom: number): 
       pdf.text('Layout and quantities are only estimates.', 195, 285, { align: 'right' });
     }
 
-    try {
-      const {
-        isBlankCanvasMode = false,
-        overage = 10,
-        mosaicWidth = 12,
-        mosaicHeight = 12
-      } = params;
-
-      let parentArea = wallWidth * wallHeight;
-      if (wallVertices && wallVertices.length >= 3) {
-        parentArea = getPolygonArea(wallVertices);
-      } else if (params.wallBoundaryShape && params.wallBoundaryShape !== 'rectangle') {
-        parentArea = getTrueArea({
-          width: wallWidth,
-          height: wallHeight,
-          boundaryShape: params.wallBoundaryShape as any,
-          archHeight: params.wallArchHeight,
-          activeArches: params.wallActiveArches,
-          archDepth: params.wallArchDepth
-        });
-      }
-      if (!wallVertices && wallExtensions && wallExtensions.length > 0) {
-        parentArea += wallExtensions.reduce((sum, ext) => sum + getTrueArea(ext), 0);
-      }
-      const childrenArea = subAreas.reduce((sum, sa) => sum + getTrueArea(sa), 0);
-      const netArea = Math.max(0, parentArea - childrenArea);
-
-      let totalEstimatedCost = 0;
-      let hasPrices = false;
-      if (purchasingSettings && Object.keys(purchasingSettings).length > 0) {
-        hasPrices = true;
-        const isImperial = unit === 'in';
-        const conversionFactor = isImperial ? 144 : 929.0304;
-
-        // Main Wall Area estimate
-        if (!isBlankCanvasMode) {
-          const settings = purchasingSettings['main'];
-          if (settings) {
-            const baseSqFt = isImperial ? (netArea / 144) : (netArea / 929.0304);
-            const totalRequiredSqFt = baseSqFt * (1 + (overage / 100));
-
-            if (settings.purchaseType === 'carton') {
-              const sqFtPerCarton = Number(settings.sqFtPerCarton) || 0;
-              const pricePerSqFt = settings.pricePerSqFt || 0;
-              const cartonsNeeded = (sqFtPerCarton > 0) ? Math.ceil(totalRequiredSqFt / sqFtPerCarton) : 0;
-              totalEstimatedCost += cartonsNeeded * sqFtPerCarton * pricePerSqFt;
-            } else if (settings.purchaseType === 'piece') {
-              const pricePerSheet = settings.pricePerSheet || 0;
-              const tW = params.tileWidth || 6;
-              const tH = params.tileHeight || 6;
-              const sheetAreaSqFt = (tW * tH) / conversionFactor;
-              const piecesNeeded = (sheetAreaSqFt > 0) ? Math.ceil(totalRequiredSqFt / sheetAreaSqFt) : 0;
-              totalEstimatedCost += piecesNeeded * pricePerSheet;
-            } else {
-              const pricePerSheet = settings.pricePerSheet || 0;
-              const mW = mosaicWidth;
-              const mH = mosaicHeight;
-              const sheetAreaSqFt = (mW * mH) / conversionFactor;
-              const sheetsNeeded = (sheetAreaSqFt > 0) ? Math.ceil(totalRequiredSqFt / sheetAreaSqFt) : 0;
-              totalEstimatedCost += sheetsNeeded * pricePerSheet;
-            }
-          }
-        }
-
-        // Sub-areas estimates
-        subAreas.forEach((sa) => {
-          const settings = purchasingSettings[sa.id];
-          if (settings) {
-            const rawArea = getTrueArea(sa);
-            const baseSqFt = isImperial ? (rawArea / 144) : (rawArea / 929.0304);
-            const totalRequiredSqFt = baseSqFt * (1 + (overage / 100));
-
-            if (settings.purchaseType === 'carton') {
-              const sqFtPerCarton = Number(settings.sqFtPerCarton) || 0;
-              const pricePerSqFt = settings.pricePerSqFt || 0;
-              const cartonsNeeded = (sqFtPerCarton > 0) ? Math.ceil(totalRequiredSqFt / sqFtPerCarton) : 0;
-              totalEstimatedCost += cartonsNeeded * sqFtPerCarton * pricePerSqFt;
-            } else if (settings.purchaseType === 'piece') {
-              const pricePerSheet = settings.pricePerSheet || 0;
-              const tW = sa.tileWidth || params.tileWidth || 6;
-              const tH = sa.tileHeight || params.tileHeight || 6;
-              const sheetAreaSqFt = (tW * tH) / conversionFactor;
-              const piecesNeeded = (sheetAreaSqFt > 0) ? Math.ceil(totalRequiredSqFt / sheetAreaSqFt) : 0;
-              totalEstimatedCost += piecesNeeded * pricePerSheet;
-            } else {
-              const pricePerSheet = settings.pricePerSheet || 0;
-              const mW = sa.mosaicWidth || mosaicWidth;
-              const mH = sa.mosaicHeight || mosaicHeight;
-              const sheetAreaSqFt = (mW * mH) / conversionFactor;
-              const sheetsNeeded = (sheetAreaSqFt > 0) ? Math.ceil(totalRequiredSqFt / sheetAreaSqFt) : 0;
-              totalEstimatedCost += sheetsNeeded * pricePerSheet;
-            }
-          }
-        });
-      }
-      
-      logger.info('PDF Specifications generated', {
-        netArea,
-        totalEstimatedCost: hasPrices ? totalEstimatedCost : undefined,
-        projectName
-      });
-    } catch (logErr) {
-      console.warn('Could not log PDF specs info:', logErr);
-      logger.info('PDF Specifications generated');
-    }
-
     if (params.outputMode === 'base64') {
       return pdf.output('datauristring');
+    } else {
+      pdf.save(`${projectName.toLowerCase().replace(/\s+/g, '_')}_specification_sheet.pdf`);
     }
-
-    pdf.save(`${projectName.toLowerCase().replace(/[^a-z0-9]+/g, '_') || 'tile_layout'}.pdf`);
-  } catch (err) {
-    console.error('Failed to export PDF:', err);
-    alert('An error occurred while generating the PDF export.');
-    throw err;
   } finally {
     if (originalZoom > 1.0) {
-      params.setZoom(originalZoom);
+      setZoom(originalZoom);
     }
   }
 }
 
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-async function generateHighResDiagram(params: PDFExportParams, canvas: HTMLCanvasElement, subAreas: SubArea[], bounds: any) {
+function drawSpecificationsCard(
+  pdf: jsPDF,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  isMultiPage: boolean,
+  displayWallWidth: number,
+  displayWallHeight: number,
+  subAreas: SubArea[],
+  params: PDFExportParams
+) {
   const {
-    wallWidth, wallHeight, wallVertices, unit, wallExtensions, shape, tileWidth, tileHeight, pattern, groutWidth, offsetX, offsetY, angle, activeSubAreaId,
-    isBlankCanvasMode, soldAsMosaic, mosaicWidth, mosaicHeight, overage, disableTileColorOnPdf, exportPhotoBg, backgroundImage, bgScale, bgOffsetX, bgOffsetY,
-    tileOpacity, bgOpacity, showAccentDistances, wallBoundaryShape, wallArchHeight, wallActiveArches, wallArchDepth, wallAngle, colorVariation, tileDotColor,
-    isPicket, picketLength, canvasLabels, foldLines, tileColors, tileColor, groutColor, tileSpecular, isPainted, colorPattern, tilesPerStripe, angleDisplayMode,
-    activeCustomPattern, flatsketVerticalRows, flatsketHorizontalRows
+    unit,
+    isBlankCanvasMode,
+    tileName,
+    shape,
+    tileWidth,
+    tileHeight,
+    pattern,
+    printQuantities,
+    soldAsMosaic,
+    mosaicWidth,
+    mosaicHeight,
+    overage = 10,
   } = params;
 
-  const dpr = window.devicePixelRatio || 1;
-  const dimensionsWidth = canvas.width / dpr;
-  const dimensionsHeight = canvas.height / dpr;
-
-  const combinedWidth = bounds.width;
-  const combinedHeight = bounds.height;
-  const minX = bounds.minX;
-  const minY = bounds.minY;
-
-  let rotatedBoundsWidth = combinedWidth;
-  let rotatedBoundsHeight = combinedHeight;
-  if (wallAngle && wallAngle !== 0) {
-    const rad = (wallAngle * Math.PI) / 180;
-    rotatedBoundsWidth = combinedWidth * Math.abs(Math.cos(rad)) + combinedHeight * Math.abs(Math.sin(rad));
-    rotatedBoundsHeight = combinedWidth * Math.abs(Math.sin(rad)) + combinedHeight * Math.abs(Math.cos(rad));
-  }
-
-  const padding = 80;
-  const baseScale = Math.min(
-    (dimensionsWidth - padding * 2) / (rotatedBoundsWidth || 1),
-    (dimensionsHeight - padding * 2) / (rotatedBoundsHeight || 1)
-  );
-  const scale = baseScale * 1.0; 
-
-  const renderW = combinedWidth * scale;
-  const renderH = combinedHeight * scale;
-  const cornerX = (dimensionsWidth - renderW) / 2;
-  const cornerY = (dimensionsHeight - renderH) / 2;
-
-  const viewport: Viewport = { cornerX, cornerY, renderW, renderH, scale, minX, minY };
-  const pad = 42; 
-  const rW = rotatedBoundsWidth * scale;
-  const rH = rotatedBoundsHeight * scale;
-  const cropX = Math.max(0, (dimensionsWidth - rW) / 2 - pad);
-  const cropY = Math.max(0, (dimensionsHeight - rH) / 2 - pad);
-  const cropW = Math.min(dimensionsWidth - cropX, rW + pad * 2);
-  const cropH = Math.min(dimensionsHeight - cropY, rH + pad * 2);
-
-  const scaleFactor = 4; 
-
-  let loadedImg: HTMLImageElement | null = null;
-  if (exportPhotoBg && backgroundImage) {
-    try {
-      loadedImg = await loadImage(backgroundImage);
-    } catch (err) {
-      console.error('Error loading background image for PDF export:', err);
-    }
-  }
-
-  const superCanvas = document.createElement('canvas');
-  superCanvas.width = dimensionsWidth * scaleFactor;
-  superCanvas.height = dimensionsHeight * scaleFactor;
-  const superCtx = superCanvas.getContext('2d');
-  if (!superCtx) return null;
-
-  superCtx.scale(scaleFactor, scaleFactor);
-  superCtx.clearRect(0, 0, dimensionsWidth, dimensionsHeight);
-
-  if (loadedImg) {
-    superCtx.save();
-    superCtx.globalAlpha = bgOpacity || 1;
-    const cx = dimensionsWidth / 2;
-    const cy = dimensionsHeight / 2;
-    superCtx.translate(cx + (bgOffsetX || 0), cy + (bgOffsetY || 0));
-    superCtx.scale(bgScale || 1, bgScale || 1);
-    superCtx.drawImage(loadedImg, -loadedImg.width / 2, -loadedImg.height / 2);
-    superCtx.restore();
-  }
-
-  drawCanvasBacking(superCtx, dimensionsWidth, dimensionsHeight, !!loadedImg, true, viewport, unit);
-
-  superCtx.save(); 
-  if (wallAngle && wallAngle !== 0) {
-    const cx = viewport.cornerX + viewport.renderW / 2;
-    const cy = viewport.cornerY + viewport.renderH / 2;
-    superCtx.translate(cx, cy);
-    superCtx.rotate((wallAngle * Math.PI) / 180);
-    superCtx.translate(-cx, -cy);
-  }
-
-  superCtx.save();
-  superCtx.fillStyle = '#1e293b';
-  superCtx.strokeStyle = '#1e293b';
-  superCtx.lineJoin = 'round';
-  superCtx.lineWidth = 7;
-  defineCombinedWallPath(superCtx, viewport, wallWidth, wallHeight, wallExtensions, wallBoundaryShape, wallArchHeight, wallActiveArches, wallArchDepth, 0, wallVertices);
-  superCtx.fill();
-  superCtx.stroke();
-  
-  superCtx.globalAlpha = tileOpacity || 1;
-  superCtx.fillStyle = isPainted ? groutColor : 'rgba(226, 232, 240, 0.8)';
-  defineCombinedWallPath(superCtx, viewport, wallWidth, wallHeight, wallExtensions, wallBoundaryShape, wallArchHeight, wallActiveArches, wallArchDepth, 0, wallVertices);
-  superCtx.fill();
-
-  if (!isPainted) {
-    superCtx.fillStyle = '#64748b';
-    superCtx.font = '13px system-ui, sans-serif';
-    superCtx.textAlign = 'center';
-    superCtx.fillText("Click 'Paint Canvas' to layout tiles", viewport.cornerX + viewport.renderW / 2, viewport.cornerY + viewport.renderH / 2);
-  }
-  superCtx.restore();
-
-  if (isPainted) {
-    superCtx.save();
-    defineCombinedWallPath(superCtx, viewport, wallWidth, wallHeight, wallExtensions, wallBoundaryShape, wallArchHeight, wallActiveArches, wallArchDepth, 0, wallVertices);
-    superCtx.clip();
-
-    if (!isBlankCanvasMode) {
-      const mainTiles = generateTiles({ wallWidth, wallHeight, shape, tileWidth, tileHeight, pattern, groutWidth, offsetX, offsetY, angle, extensions: wallExtensions, isPicket, picketLength, wallVertices, activeCustomPattern, flatsketVerticalRows, flatsketHorizontalRows, layoutId: 'main' });
-      superCtx.save();
-      superCtx.globalAlpha = tileOpacity || 1;
-      const resolvedTileColors = tileColors || (tileColor ? [tileColor] : ['#f1f5f9']);
-      drawMainTiles(superCtx, mainTiles, viewport, resolvedTileColors, colorPattern || 'single', tileSpecular, subAreas, wallWidth, wallHeight, tileWidth, tileHeight, shape, wallExtensions, disableTileColorOnPdf, colorVariation, tileDotColor, groutWidth, tilesPerStripe, wallVertices);
-      superCtx.restore();
-    } else {
-      superCtx.save();
-      superCtx.fillStyle = 'rgba(255, 255, 255, 0.16)'; 
-      superCtx.font = 'bold 15px "Space Grotesk", "Inter", system-ui, sans-serif';
-      superCtx.textAlign = 'center';
-      superCtx.textBaseline = 'middle';
-      const diag = Math.sqrt(dimensionsWidth * dimensionsWidth + dimensionsHeight * dimensionsHeight);
-      const stepX = 145; 
-      const stepY = 64;  
-      superCtx.translate(dimensionsWidth / 2, dimensionsHeight / 2);
-      superCtx.rotate(-25 * Math.PI / 180);
-      let rowCount = 0;
-      for (let y = -diag; y < diag; y += stepY) {
-        const xOffset = (rowCount % 2) * (stepX / 2);
-        for (let x = -diag + xOffset; x < diag; x += stepX) superCtx.fillText('Blank Canvas', x, y);
-        rowCount++;
-      }
-      superCtx.restore();
-    }
-    superCtx.restore();
-
-    const wallBorder = (params as any).wallBorder; 
-    if (wallBorder?.enabled) {
-      const defaultBColor = tileColors && tileColors.length > 0 ? tileColors[0] : '#f1f5f9';
-      const selectedBColor = wallBorder.color || defaultBColor;
-      const finalBColor = disableTileColorOnPdf ? '#ffffff' : selectedBColor;
-      drawBorder(superCtx, { x: 0, y: 0, w: wallWidth, h: wallHeight }, wallBorder, false, viewport, 0, finalBColor, groutColor, groutWidth);
-    }
-
-    drawSubAreas(superCtx, subAreas, activeSubAreaId, viewport, tileSpecular, unit, wallWidth, wallHeight, wallExtensions, false, tileOpacity, disableTileColorOnPdf, wallBoundaryShape, wallArchHeight, wallActiveArches, wallArchDepth, wallVertices, false, null);
-    drawSubAreaDimensions(superCtx, viewport, subAreas, showAccentDistances || false, unit, !!loadedImg, true, angleDisplayMode);
-  }
-
-  drawWallMeasurements(superCtx, viewport, combinedWidth, combinedHeight, unit, wallWidth, wallHeight, wallExtensions, !!loadedImg, [], false, wallVertices, true, angleDisplayMode);
-
-  if (foldLines && foldLines.length > 0 && wallVertices) {
-    const wallToScreen = (wx: number, wy: number) => {
-      const pt = mapToCanvas(wx, wy, viewport);
-      return { px: pt.x, py: pt.y };
-    };
-    drawFoldLines(superCtx, foldLines, wallVertices, wallToScreen);
-  }
-
-  if (canvasLabels && canvasLabels.length > 0) {
-    superCtx.save();
-    superCtx.font = 'bold 11.5px "Space Grotesk", "Inter", "Helvetica Neue", sans-serif';
-    superCtx.textAlign = 'center';
-    superCtx.textBaseline = 'middle';
-    canvasLabels.forEach((label) => {
-      const pt = mapToCanvas(label.x, label.y, viewport);
-      superCtx.fillStyle = '#ffffff';
-      const offsets = [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, -1.2], [0, 1.2], [-1.2, 0], [1.2, 0]];
-      offsets.forEach(([ox, oy]) => superCtx.fillText(label.text, pt.x + ox * 0.8, pt.y + oy * 0.8));
-      superCtx.fillStyle = '#0f172a';
-      superCtx.fillText(label.text, pt.x, pt.y);
-    });
-    superCtx.restore();
-  }
-  superCtx.restore();
-
-  const sx = cropX * scaleFactor;
-  const sy = cropY * scaleFactor;
-  const sw = cropW * scaleFactor;
-  const sh = cropH * scaleFactor;
-
-  const tempCanvas = document.createElement('canvas');
-  tempCanvas.width = sw;
-  tempCanvas.height = sh;
-  const tempCtx = tempCanvas.getContext('2d');
-  if (!tempCtx) {
-    superCanvas.width = 0;
-    superCanvas.height = 0;
-    return null;
-  }
-
-  tempCtx.drawImage(superCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
-  const dataUrl = tempCanvas.toDataURL('image/png');
-
-  // CRITICAL MEMORY CLEANUP: Collapse the canvas dimensions to 0.
-  // This forces the browser to immediately destroy the GPU backing stores and reclaim memory.
-  superCanvas.width = 0;
-  superCanvas.height = 0;
-  tempCanvas.width = 0;
-  tempCanvas.height = 0;
-
-  return {
-    dataUrl,
-    width: sw,
-    height: sh
-  };
-}
-
-function drawPdfHeaderAndFooter(pdf: jsPDF, pageIndex: number, projectName: string, displayWallWidth: number, displayWallHeight: number, unit: string, isTwoPage: boolean, totalPages: number) {
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(22);
-  pdf.setTextColor(15, 23, 42); 
-  pdf.text(projectName || 'Untitled Tile Layout Project', 15, 20);
-
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(11);
-  pdf.setTextColor(79, 70, 229); 
-  const topRightDimText = `Wall Size: ${displayWallWidth} x ${displayWallHeight} ${unit}`;
-  const topWidth = pdf.getTextWidth(topRightDimText);
-  pdf.text(topRightDimText, 195 - topWidth, 20);
-
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(10);
-  pdf.setTextColor(100, 116, 139); 
-  const today = new Date().toLocaleDateString();
-  pdf.text(`Tile Layout Report - Generated ${today}`, 15, 27);
-
-  pdf.setDrawColor(226, 232, 240); 
-  pdf.setLineWidth(0.5);
-  pdf.line(15, 31, 195, 31);
-
-  pdf.setFont('helvetica', 'italic');
-  pdf.setFontSize(8);
-  pdf.setTextColor(148, 163, 184); 
-  pdf.text('Generated using WildVision Tile Layout Engine', 15, 285);
-  
-  if (isTwoPage) {
-    pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(148, 163, 184); 
-    pdf.text(`Page ${pageIndex} of ${totalPages}`, 105, 285, { align: 'center' });
-  }
-  
-  pdf.setFont('helvetica', 'italic');
-  pdf.setTextColor(148, 163, 184); 
-  pdf.text('Layout and quantities are only estimates.', 195, 285, { align: 'right' });
-}
-
-function drawSpecificationsCard(pdf: jsPDF, cardX: number, cardY: number, cardWidth: number, cardHeight: number, isTwoPage: boolean, displayWallWidth: number, displayWallHeight: number, subAreas: SubArea[], params: PDFExportParams) {
-  const { unit, wallWidth, wallHeight, wallVertices, wallBoundaryShape, wallArchHeight, wallActiveArches, wallArchDepth, wallExtensions, isBlankCanvasMode, tileName, shape, tileWidth, tileHeight, pattern, printQuantities, soldAsMosaic, mosaicWidth, mosaicHeight, overage = 10 } = params;
-
-  pdf.setFillColor(248, 250, 252); 
-  pdf.setDrawColor(203, 213, 225); 
+  pdf.setFillColor(248, 250, 252);
+  pdf.setDrawColor(203, 213, 225);
   pdf.setLineWidth(0.35);
-  pdf.rect(cardX, cardY, cardWidth, cardHeight, 'F');
-  pdf.rect(cardX, cardY, cardWidth, cardHeight, 'D');
+  pdf.rect(x, y, width, height, 'F');
+  pdf.rect(x, y, width, height, 'D');
 
-  pdf.setFillColor(79, 70, 229); 
-  pdf.rect(cardX, cardY, cardWidth, 8, 'F');
-  
+  pdf.setFillColor(79, 70, 229);
+  pdf.rect(x, y, width, 8, 'F');
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(8.5);
   pdf.setTextColor(255, 255, 255);
-  pdf.text('SPECIFICATIONS & TILES', cardX + 6, cardY + 5.5);
+  pdf.text('SPECIFICATIONS & TILES', x + 6, y + 5.5);
 
-  pdf.setDrawColor(226, 232, 240); 
+  pdf.setDrawColor(226, 232, 240);
   pdf.setLineWidth(0.2);
-  pdf.line(cardX + 58, cardY + 12, cardX + 58, cardY + cardHeight - 6);
-  pdf.line(cardX + 118, cardY + 12, cardX + 118, cardY + cardHeight - 6);
+  pdf.line(x + 58, y + 12, x + 58, y + height - 6);
+  pdf.line(x + 118, y + 12, x + 118, y + height - 6);
 
-  const col1X = cardX + 6;
-  let col1Y = cardY + 14;
+  // Column 1: Wall Configuration
+  const col1X = x + 6;
+  let col1Y = y + 14;
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(9);
-  pdf.setTextColor(71, 85, 105); 
+  pdf.setTextColor(71, 85, 105);
   pdf.text('Wall Configuration', col1X, col1Y);
   col1Y += 5;
 
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(8);
-  pdf.setTextColor(51, 65, 85); 
+  pdf.setTextColor(51, 65, 85);
   pdf.text(`Overall Size: ${displayWallWidth} x ${displayWallHeight} ${unit}`, col1X + 2, col1Y);
   col1Y += 4.5;
-  
-  const statsReport = computeComprehensiveStatistics(params);
-  const totalWallAreaInUnits = statsReport.mainReport.netArea || 0;
-  
-  pdf.text(`Total Area: ${unit === 'in' ? (totalWallAreaInUnits / 144).toFixed(2) + ' sq ft' : totalWallAreaInUnits.toFixed(1) + ' sq ' + unit}`, col1X + 2, col1Y);
-  col1Y += 4.5;
 
-  const col2X = cardX + 62;
-  let col2Y = cardY + 14;
+  const stats = computeComprehensiveStatistics({
+    ...params,
+    reuseCuts: params.reuseCuts ?? useAppStore.getState().reuseCuts,
+  });
+
+  const netArea = stats.mainReport.netArea || 0;
+  const areaStr = unit === 'in' ? `${(netArea / 144).toFixed(2)} sq ft` : `${netArea.toFixed(1)} sq ${unit}`;
+  pdf.text(`Total Area: ${areaStr}`, col1X + 2, col1Y);
+
+  // Column 2: Main Wall Tile
+  const col2X = x + 62;
+  let col2Y = y + 14;
   if (isBlankCanvasMode) {
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(9);
@@ -787,7 +505,7 @@ function drawSpecificationsCard(pdf: jsPDF, cardX: number, cardY: number, cardWi
     col2Y += 5;
     pdf.setFont('helvetica', 'italic');
     pdf.setFontSize(8);
-    pdf.setTextColor(148, 163, 184); 
+    pdf.setTextColor(148, 163, 184);
     pdf.text('Blank Canvas Mode Active', col2X + 2, col2Y);
     col2Y += 4.5;
     pdf.text('(Main tile layer is disabled)', col2X + 2, col2Y);
@@ -800,135 +518,139 @@ function drawSpecificationsCard(pdf: jsPDF, cardX: number, cardY: number, cardWi
 
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(8.5);
-    pdf.setTextColor(15, 23, 42); 
-    const mainName = tileName || 'Main Wall Tile';
-    const wrappedMainName = pdf.splitTextToSize(mainName, 52);
-    pdf.text(wrappedMainName, col2X + 2, col2Y);
-    col2Y += wrappedMainName.length * 4;
+    pdf.setTextColor(15, 23, 42);
+    const nameStr = tileName || 'Main Wall Tile';
+    const splitName = pdf.splitTextToSize(nameStr, 52);
+    pdf.text(splitName, col2X + 2, col2Y);
+    col2Y += splitName.length * 4;
 
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(8);
     pdf.setTextColor(51, 65, 85);
-    const mainDimText = (shape === 'rectangle' || shape === 'diamond') ? `${tileWidth} x ${tileHeight} ${unit}` : `${tileWidth} x ${tileWidth} ${unit} (${shape})`;
-    pdf.text(`Dimensions: ${mainDimText}`, col2X + 2, col2Y);
-    col2Y += 4.5;
 
-    let patternLabel = pattern.toUpperCase();
-    if (pattern === 'running_50') patternLabel = '1/2 Running Bond';
-    else if (pattern === 'third_33') patternLabel = '1/3 Running Bond';
-    else if (pattern === 'stack') patternLabel = 'Stacked Grid';
-    else if (pattern === 'herringbone') patternLabel = 'Herringbone (45°)';
-    else if (pattern === 'basket_weave') patternLabel = 'Basket Weave';
-    else if (pattern === 'plank') patternLabel = 'Plank (Vertical Columns)';
-
-    pdf.text(`Layout: ${patternLabel}`, col2X + 2, col2Y);
-    col2Y += 4.5;
+    if (soldAsMosaic) {
+      pdf.text(`Mosaic Sheet: ${mosaicWidth || 12}" x ${mosaicHeight || 12}"`, col2X + 2, col2Y);
+      col2Y += 4.5;
+    } else {
+      pdf.text(`Tile Size: ${tileWidth || 6}" x ${tileHeight || 6}" (${shape || 'rectangle'})`, col2X + 2, col2Y);
+      col2Y += 4.5;
+      pdf.text(`Pattern: ${pattern || 'grid'}`, col2X + 2, col2Y);
+      col2Y += 4.5;
+    }
 
     if (printQuantities !== false) {
-      const stats = computeComprehensiveStatistics(params);
-      let parentArea = wallWidth * wallHeight;
-      if (wallVertices && wallVertices.length >= 3) {
-        parentArea = getPolygonArea(wallVertices);
-      } else if (wallBoundaryShape && wallBoundaryShape !== 'rectangle') {
-        parentArea = getTrueArea({ width: wallWidth, height: wallHeight, boundaryShape: wallBoundaryShape as any, archHeight: wallArchHeight, activeArches: wallActiveArches, archDepth: wallArchDepth });
-      }
-      if (!wallVertices && wallExtensions && wallExtensions.length > 0) {
-        parentArea += wallExtensions.reduce((sum, ext) => sum + getTrueArea(ext), 0);
-      }
-      const childrenArea = subAreas.reduce((sum, sa) => sum + getTrueArea(sa), 0);
-      const netArea = Math.max(0, parentArea - childrenArea);
-      
-      let estTiles = 0;
-      let estPrimary = 0;
-      let estSecondary = 0;
-      
+      let mainQtyWithOverage = 0;
       if (soldAsMosaic) {
-         const mArea = ((mosaicWidth||12) * (mosaicHeight||12)) / 144;
-         estTiles = Math.ceil((netArea * (1 + overage / 100)) / mArea);
+        const conversionFactor = unit === 'in' ? 144 : 929.0304;
+        const sheetSqFt = ((mosaicWidth || 12) * (mosaicHeight || 12)) / conversionFactor;
+        const netAreaSqFt = (stats.mainReport.netArea || 0) / conversionFactor;
+        mainQtyWithOverage = Math.ceil((netAreaSqFt * (1 + overage / 100)) / (sheetSqFt || 1));
       } else {
-         estTiles = Math.ceil(stats.mainReport.totalTilesUsed * (1 + overage / 100));
-         if (stats.mainReport.primaryPieceCount) estPrimary = Math.ceil(stats.mainReport.primaryPieceCount * (1 + overage / 100));
-         if (stats.mainReport.secondaryPieceCount) estSecondary = Math.ceil(stats.mainReport.secondaryPieceCount * (1 + overage / 100));
+        const mainTotalTiles = stats.mainReport.totalTilesUsed || 0;
+        mainQtyWithOverage = Math.ceil(mainTotalTiles * (1 + overage / 100));
       }
-      
-      pdf.text(`Net Area: ${unit === 'in' ? (netArea / 144).toFixed(2) + ' sq ft' : netArea.toFixed(1) + ' sq ' + unit}`, col2X + 2, col2Y);
-      col2Y += 4.5;
-      
-      if (!soldAsMosaic && estSecondary > 0) {
-        pdf.text(`Est. Primary: ${estPrimary} tiles`, col2X + 2, col2Y);
-        col2Y += 4.5;
-        pdf.text(`Est. Accent/Dot: ${estSecondary} tiles`, col2X + 2, col2Y);
-        col2Y += 4.5;
-      } else {
-        pdf.text(`Est. Material: ${estTiles} ${soldAsMosaic ? 'sheets' : 'tiles'}`, col2X + 2, col2Y);
-        col2Y += 4.5;
-      }
-      
-      pdf.setFont('helvetica', 'italic');
-      pdf.setFontSize(7.5);
-      pdf.setTextColor(148, 163, 184);
-      pdf.text(`(inc ${overage}% overage)`, col2X + 2, col2Y);
+      pdf.text(`Est. Material: ${mainQtyWithOverage} ${soldAsMosaic ? 'sheets' : 'tiles'}`, col2X + 2, col2Y);
     }
   }
 
-  const col3X = cardX + 122;
-  let col3Y = cardY + 14;
+  // Column 3: Accents & Niches
+  const col3X = x + 118;
+  let col3Y = y + 14;
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(9);
   pdf.setTextColor(71, 85, 105);
   pdf.text('Accents & Niches', col3X, col3Y);
   col3Y += 5;
 
-  if (subAreas.length === 0) {
+  if (!subAreas || subAreas.length === 0) {
     pdf.setFont('helvetica', 'italic');
     pdf.setFontSize(8);
     pdf.setTextColor(148, 163, 184);
     pdf.text('No accents or niches in this layout.', col3X + 2, col3Y);
   } else {
-    subAreas.forEach((sa, i) => {
+    const parentSubAreas = subAreas.filter((s) => !s.linkedMaterialId);
+    parentSubAreas.forEach((sa, idx) => {
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(8.5);
       pdf.setTextColor(15, 23, 42);
-      const name = sa.name || `Sub-Area ${i + 1}`;
-      const wrappedName = pdf.splitTextToSize(name, 52);
-      pdf.text(wrappedName, col3X + 2, col3Y);
-      col3Y += wrappedName.length * 4;
+      const childCount = subAreas.filter((s) => s.linkedMaterialId === sa.id).length;
+      let saName = sa.name || `Sub-Area ${idx + 1}`;
+      if (childCount > 0) {
+        saName += ` (+${childCount})`;
+      }
+      const splitSaName = pdf.splitTextToSize(saName, 52);
+      pdf.text(splitSaName, col3X + 2, col3Y);
+      col3Y += splitSaName.length * 4;
 
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(8);
       pdf.setTextColor(51, 65, 85);
-      const saArea = getTrueArea(sa);
-      pdf.text(`Area: ${unit === 'in' ? (saArea / 144).toFixed(2) + ' sq ft' : saArea.toFixed(1) + ' sq ' + unit}`, col3X + 2, col3Y);
+
+      const children = subAreas.filter((s) => s.linkedMaterialId === sa.id);
+      const parentNetArea = sa.width * sa.height;
+      const childrenNetArea = children.reduce((sum, c) => sum + c.width * c.height, 0);
+      const saNetArea = parentNetArea + childrenNetArea;
+
+      const saAreaStr = unit === 'in' ? `${(saNetArea / 144).toFixed(2)} sq ft` : `${saNetArea.toFixed(1)} sq ${unit}`;
+      pdf.text(`Area: ${saAreaStr}`, col3X + 2, col3Y);
       col3Y += 4.5;
 
       if (printQuantities !== false) {
-         let estSaTiles = 0;
-         const saSoldAsMosaic = sa.soldAsMosaic !== undefined ? sa.soldAsMosaic : soldAsMosaic;
-         if (saSoldAsMosaic) {
-            const mArea = ((sa.mosaicWidth||mosaicWidth||12) * (sa.mosaicHeight||mosaicHeight||12)) / 144;
-            estSaTiles = Math.ceil((saArea * (1 + overage / 100)) / mArea);
-         } else {
-            const tArea = ((sa.tileWidth||tileWidth) * (sa.tileHeight||tileHeight)) / 144;
-            estSaTiles = Math.ceil((saArea * (1 + overage / 100)) / tArea);
-         }
-         pdf.text(`Est. Material: ${estSaTiles} ${saSoldAsMosaic ? 'sheets' : 'tiles'}`, col3X + 2, col3Y);
-         col3Y += 4.5;
+        const saReport = stats.subAreaReports.find((r) => r.subAreaId === sa.id);
+        const isSaMosaic = sa.soldAsMosaic !== undefined ? sa.soldAsMosaic : soldAsMosaic;
+        let saQtyWithOverage = 0;
+        if (isSaMosaic) {
+          const conversionFactor = unit === 'in' ? 144 : 929.0304;
+          const samW = sa.mosaicWidth || mosaicWidth || 12;
+          const samH = sa.mosaicHeight || mosaicHeight || 12;
+          const saSheetSqFt = (samW * samH) / conversionFactor;
+          const saNetSqFt = saNetArea / conversionFactor;
+          saQtyWithOverage = Math.ceil((saNetSqFt * (1 + overage / 100)) / (saSheetSqFt || 1));
+        } else {
+          let saTotalTiles = saReport?.report.totalTilesUsed || 0;
+          children.forEach((c) => {
+            const cRep = stats.subAreaReports.find((r) => r.subAreaId === c.id);
+            saTotalTiles += cRep?.report.totalTilesUsed || 0;
+          });
+          saQtyWithOverage = Math.ceil(saTotalTiles * (1 + overage / 100));
+        }
+        pdf.text(`Est. Material: ${saQtyWithOverage} ${isSaMosaic ? 'sheets' : 'tiles'}`, col3X + 2, col3Y);
+        col3Y += 4.5;
       }
       col3Y += 2;
     });
   }
 }
 
-function drawPricingCard(pdf: jsPDF, estCardX: number, estCardY: number, estCardWidth: number, estCardHeight: number, subAreas: SubArea[], params: PDFExportParams) {
-  const { isBlankCanvasMode, tileName, soldAsMosaic, mosaicWidth, mosaicHeight, tileWidth, tileHeight, wallWidth, wallHeight, wallVertices, wallBoundaryShape, wallArchHeight, wallActiveArches, wallArchDepth, wallExtensions, overage = 10, purchasingSettings = {}, unit } = params;
-  
-  pdf.setFillColor(255, 255, 255); 
-  pdf.setDrawColor(203, 213, 225); 
+function drawPricingCard(
+  pdf: jsPDF,
+  estCardX: number,
+  estCardY: number,
+  estCardWidth: number,
+  estCardHeight: number,
+  subAreas: SubArea[],
+  params: PDFExportParams
+) {
+  const {
+    isBlankCanvasMode = false,
+    tileName,
+    soldAsMosaic,
+    mosaicWidth = 12,
+    mosaicHeight = 12,
+    tileWidth = 6,
+    tileHeight = 6,
+    overage = 10,
+    purchasingSettings = {},
+    unit,
+  } = params;
+
+  pdf.setFillColor(255, 255, 255);
+  pdf.setDrawColor(203, 213, 225);
   pdf.setLineWidth(0.35);
   pdf.rect(estCardX, estCardY, estCardWidth, estCardHeight, 'F');
   pdf.rect(estCardX, estCardY, estCardWidth, estCardHeight, 'D');
 
-  pdf.setFillColor(241, 245, 249); 
+  pdf.setFillColor(241, 245, 249);
   pdf.rect(estCardX, estCardY, estCardWidth, 9, 'F');
   pdf.setDrawColor(226, 232, 240);
   pdf.line(estCardX, estCardY + 9, estCardX + estCardWidth, estCardY + 9);
@@ -938,106 +660,151 @@ function drawPricingCard(pdf: jsPDF, estCardX: number, estCardY: number, estCard
   pdf.setTextColor(15, 23, 42);
   pdf.text('MATERIAL ESTIMATES & PRICING', estCardX + 6, estCardY + 6);
 
-  let headerY = estCardY + 14;
+  const headerY = estCardY + 14;
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(7.5);
-  pdf.setTextColor(100, 116, 139); 
+  pdf.setTextColor(100, 116, 139);
   pdf.text('DESIGN AREA', estCardX + 6, headerY);
   pdf.text('MATERIAL', estCardX + 44, headerY);
   pdf.text('SUGGESTED ORDER', estCardX + 104, headerY);
   pdf.text('UNIT COST', estCardX + 144, headerY);
   pdf.text('TOTAL EST.', estCardX + 174, headerY, { align: 'right' });
-
   pdf.line(estCardX, headerY + 2, estCardX + estCardWidth, headerY + 2);
 
-  const rows: any[] = [];
-  const stats = computeComprehensiveStatistics(params);
+  const rows: Array<{
+    areaName: string;
+    materialType: string;
+    suggestedOrderText: string;
+    unitCostText: string;
+    totalCost: number;
+  }> = [];
+
+  const stats = computeComprehensiveStatistics({
+    ...params,
+    reuseCuts: params.reuseCuts ?? useAppStore.getState().reuseCuts,
+  });
 
   const getAreaEstimates = (areaId: string) => {
     let areaName = '';
-    let materialType = '';
-    let isMosaic = false;
+    let materialName = '';
     let settings = purchasingSettings[areaId];
-    if (!settings && areaId === 'main') settings = purchasingSettings['main'];
+    if (!settings && areaId === 'main') settings = purchasingSettings.main;
     if (!settings) return null;
-    let rawArea = 0;
-    let sa: SubArea | undefined;
+
     let totalRawTiles = 0;
+    let netAreaSqIn = 0;
+    let saObj: SubArea | undefined;
 
     if (areaId === 'main') {
       if (isBlankCanvasMode) return null;
       areaName = 'Main Wall Area';
-      materialType = tileName || 'Main Wall Tile';
-      isMosaic = soldAsMosaic || false;
-      totalRawTiles = stats.mainReport.totalTilesUsed;
-      
-      let parentArea = wallWidth * wallHeight;
-      if (wallVertices && wallVertices.length >= 3) {
-        parentArea = getPolygonArea(wallVertices);
-      } else if (wallBoundaryShape && wallBoundaryShape !== 'rectangle') {
-        parentArea = getTrueArea({ width: wallWidth, height: wallHeight, boundaryShape: wallBoundaryShape as any, archHeight: wallArchHeight, activeArches: wallActiveArches, archDepth: wallArchDepth });
+      materialName = tileName || 'Main Wall Tile';
+      totalRawTiles = stats.mainReport.totalTilesUsed || 0;
+      netAreaSqIn = stats.mainReport.netArea || 0;
+
+      const linkedChildren = subAreas.filter((s) => s.linkedMaterialId === 'main');
+      if (linkedChildren.length > 0) {
+        areaName += ` (+${linkedChildren.length})`;
+        linkedChildren.forEach((child) => {
+          const childReport = stats.subAreaReports.find((r) => r.subAreaId === child.id)?.report;
+          totalRawTiles += childReport?.totalTilesUsed || 0;
+          netAreaSqIn += childReport?.netArea || child.width * child.height;
+        });
       }
-      if (!wallVertices && wallExtensions && wallExtensions.length > 0) {
-        parentArea += wallExtensions.reduce((sum, ext) => sum + getTrueArea(ext), 0);
-      }
-      const childrenArea = subAreas.reduce((sum, sa) => sum + getTrueArea(sa), 0);
-      const netArea = Math.max(0, parentArea - childrenArea);
-      rawArea = netArea;
     } else {
-      sa = subAreas.find(s => s.id === areaId);
-      if (!sa) return null;
-      areaName = sa.name || 'Sub-Area';
-      materialType = sa.tileName || 'Accent Tile';
-      isMosaic = sa.soldAsMosaic !== undefined ? sa.soldAsMosaic : (soldAsMosaic || false);
-      rawArea = getTrueArea(sa);
-      totalRawTiles = stats.subAreaReports.find(r => r.subAreaId === areaId)?.report.totalTilesUsed || 0;
+      saObj = subAreas.find((s) => s.id === areaId);
+      if (!saObj) return null;
+      areaName = saObj.name || 'Sub-Area';
+      materialName = saObj.tileName || 'Accent Tile';
+
+      const parentReport = stats.subAreaReports.find((r) => r.subAreaId === areaId)?.report;
+      totalRawTiles = parentReport?.totalTilesUsed || 0;
+      netAreaSqIn = parentReport?.netArea || saObj.width * saObj.height;
+
+      const linkedChildren = subAreas.filter((s) => s.linkedMaterialId === areaId);
+      if (linkedChildren.length > 0) {
+        areaName += ` (+${linkedChildren.length})`;
+        linkedChildren.forEach((child) => {
+          const childReport = stats.subAreaReports.find((r) => r.subAreaId === child.id)?.report;
+          totalRawTiles += childReport?.totalTilesUsed || 0;
+          netAreaSqIn += childReport?.netArea || child.width * child.height;
+        });
+      }
     }
 
     const isImperial = unit === 'in';
-    const baseSqFt = isImperial ? (rawArea / 144) : (rawArea / 929.0304);
-    const totalRequiredSqFt = baseSqFt * (1 + (overage / 100));
+    const conversionFactor = isImperial ? 144 : 929.0304;
 
+    const isMosaic = areaId === 'main' ? (soldAsMosaic || false) : (saObj?.soldAsMosaic !== undefined ? saObj.soldAsMosaic : (soldAsMosaic || false));
+    const mW = areaId === 'main' ? mosaicWidth : (saObj?.mosaicWidth || mosaicWidth);
+    const mH = areaId === 'main' ? mosaicHeight : (saObj?.mosaicHeight || mosaicHeight);
+    const tW = areaId === 'main' ? tileWidth : (saObj?.tileWidth || tileWidth);
+    const tH = areaId === 'main' ? tileHeight : (saObj?.tileHeight || tileHeight);
+
+    const sheetSqIn = isMosaic ? ((mW || 12) * (mH || 12)) : ((tW || 6) * (tH || 6));
+    const sheetSqFt = sheetSqIn / conversionFactor;
+
+    let totalRequiredSqFt = 0;
     let suggestedOrderText = '';
     let unitCostText = '';
     let totalCost = 0;
 
-    if (settings.purchaseType === 'carton') {
-      const sqFtPerCarton = Number(settings.sqFtPerCarton) || 0;
-      const pricePerSqFt = settings.pricePerSqFt || 0;
-      
-      const cartonsNeeded = (sqFtPerCarton > 0) ? Math.ceil(totalRequiredSqFt / sqFtPerCarton) : 0;
-      const purchasedSqFt = cartonsNeeded * sqFtPerCarton;
-      totalCost = purchasedSqFt * pricePerSqFt;
-      
-      suggestedOrderText = `${cartonsNeeded} Cartons`;
-      unitCostText = `${Number(pricePerSqFt || 0).toFixed(2)} / sq.ft`;
-    } else if (settings.purchaseType === 'piece') {
-      const pricePerSheet = settings.pricePerSheet || 0;
-      const piecesNeeded = Math.ceil(totalRawTiles * (1 + (overage / 100)));
-      totalCost = piecesNeeded * pricePerSheet;
-      
-      suggestedOrderText = `${piecesNeeded} Pieces`;
-      unitCostText = `${Number(pricePerSheet || 0).toFixed(2)} / piece`;
+    if (isMosaic) {
+      const netAreaSqFt = netAreaSqIn / conversionFactor;
+      totalRequiredSqFt = netAreaSqFt * (1 + overage / 100);
+      const sheetsNeeded = Math.ceil(totalRequiredSqFt / (sheetSqFt || 1));
+
+      if (settings.purchaseType === 'carton') {
+        const sqFtPerCarton = Number(settings.sqFtPerCarton) || 0;
+        const pricePerSqFt = settings.pricePerSqFt || 0;
+        const cartonsNeeded = sqFtPerCarton > 0 ? Math.ceil(totalRequiredSqFt / sqFtPerCarton) : 0;
+        const purchasedSqFt = cartonsNeeded * sqFtPerCarton;
+        totalCost = purchasedSqFt * pricePerSqFt;
+        suggestedOrderText = `${cartonsNeeded} Cartons`;
+        unitCostText = `$${Number(pricePerSqFt || 0).toFixed(2)} / sq.ft`;
+      } else {
+        const pricePerSheet = settings.pricePerSheet || 0;
+        totalCost = sheetsNeeded * pricePerSheet;
+        suggestedOrderText = `${sheetsNeeded} Sheets (${(sheetsNeeded * sheetSqFt).toFixed(2)} sq ft)`;
+        unitCostText = `$${Number(pricePerSheet || 0).toFixed(2)} / sheet`;
+      }
     } else {
-      const pricePerSheet = settings.pricePerSheet || 0;
-      const mW = areaId === 'main'
-        ? (mosaicWidth || 12)
-        : (sa!.mosaicWidth || mosaicWidth || 12);
-      const mH = areaId === 'main'
-        ? (mosaicHeight || 12)
-        : (sa!.mosaicHeight || mosaicHeight || 12);
-      const conversionFactor = isImperial ? 144 : 929.0304;
-      const sheetAreaSqFt = (mW * mH) / conversionFactor;
-      
-      const sheetsNeeded = (sheetAreaSqFt > 0) ? Math.ceil(totalRequiredSqFt / sheetAreaSqFt) : 0;
-      totalCost = sheetsNeeded * pricePerSheet;
-      
-      suggestedOrderText = `${sheetsNeeded} Sheets`;
-      unitCostText = `${Number(pricePerSheet || 0).toFixed(2)} / sheet`;
+      const physicalAreaSqIn = totalRawTiles * sheetSqIn;
+      const physicalAreaSqFt = physicalAreaSqIn / conversionFactor;
+      totalRequiredSqFt = physicalAreaSqFt * (1 + overage / 100);
+
+      if (settings.purchaseType === 'carton') {
+        const sqFtPerCarton = Number(settings.sqFtPerCarton) || 0;
+        const pricePerSqFt = settings.pricePerSqFt || 0;
+        const cartonsNeeded = sqFtPerCarton > 0 ? Math.ceil(totalRequiredSqFt / sqFtPerCarton) : 0;
+        const purchasedSqFt = cartonsNeeded * sqFtPerCarton;
+        totalCost = purchasedSqFt * pricePerSqFt;
+        suggestedOrderText = `${cartonsNeeded} Cartons`;
+        unitCostText = `$${Number(pricePerSqFt || 0).toFixed(2)} / sq.ft`;
+      } else if (settings.purchaseType === 'piece') {
+        const pricePerSheet = settings.pricePerSheet || 0;
+        const piecesNeeded = Math.ceil(totalRawTiles * (1 + overage / 100));
+        totalCost = piecesNeeded * pricePerSheet;
+        suggestedOrderText = `${piecesNeeded} Pieces`;
+        unitCostText = `$${Number(pricePerSheet || 0).toFixed(2)} / piece`;
+      } else {
+        const pricePerSheet = settings.pricePerSheet || 0;
+        const sheetsNeeded = sheetSqFt > 0 ? Math.ceil(totalRequiredSqFt / sheetSqFt) : 0;
+        totalCost = sheetsNeeded * pricePerSheet;
+        suggestedOrderText = `${sheetsNeeded} Sheets`;
+        unitCostText = `$${Number(pricePerSheet || 0).toFixed(2)} / sheet`;
+      }
     }
 
-    return { areaName, materialType, suggestedOrderText, unitCostText, totalCost };
+    return {
+      areaName,
+      materialType: materialName,
+      suggestedOrderText,
+      unitCostText,
+      totalCost,
+    };
   };
+
   const isPaint = params.colorPattern === 'paint' && stats.mainReport.colorGroups && stats.mainReport.colorGroups.length > 0;
 
   if (isPaint) {
@@ -1045,8 +812,15 @@ function drawPricingCard(pdf: jsPDF, estCardX: number, estCardY: number, estCard
     if (mainSettings) {
       stats.mainReport.colorGroups!.forEach((g) => {
         const isImperial = unit === 'in';
-        const baseSqFt = isImperial ? (g.netArea / 144) : (g.netArea / 929.0304);
-        const totalRequiredSqFt = baseSqFt * (1 + (overage / 100));
+        const conversionFactor = isImperial ? 144 : 929.0304;
+
+        const groupRawTiles = g.count || 0;
+        const isMosaic = soldAsMosaic || false;
+        const sheetSqIn = isMosaic ? (mosaicWidth * mosaicHeight) : (tileWidth * tileHeight);
+
+        const physicalAreaSqIn = groupRawTiles * sheetSqIn;
+        const physicalAreaSqFt = physicalAreaSqIn / conversionFactor;
+        const totalRequiredSqFt = physicalAreaSqFt * (1 + overage / 100);
 
         let suggestedOrderText = '';
         let unitCostText = '';
@@ -1055,47 +829,32 @@ function drawPricingCard(pdf: jsPDF, estCardX: number, estCardY: number, estCard
         if (mainSettings.purchaseType === 'carton') {
           const sqFtPerCarton = Number(mainSettings.sqFtPerCarton) || 0;
           const pricePerSqFt = mainSettings.pricePerSqFt || 0;
-          
-          const cartonsNeeded = (sqFtPerCarton > 0) ? Math.ceil(totalRequiredSqFt / sqFtPerCarton) : 0;
+          const cartonsNeeded = sqFtPerCarton > 0 ? Math.ceil(totalRequiredSqFt / sqFtPerCarton) : 0;
           const purchasedSqFt = cartonsNeeded * sqFtPerCarton;
           totalCost = purchasedSqFt * pricePerSqFt;
-          
           suggestedOrderText = `${cartonsNeeded} Cartons`;
           unitCostText = `$${Number(pricePerSqFt || 0).toFixed(2)} / sq.ft`;
         } else if (mainSettings.purchaseType === 'piece') {
           const pricePerSheet = mainSettings.pricePerSheet || 0;
-          const tW = params.tileWidth || 6;
-          const tH = params.tileHeight || 6;
-          const conversionFactor = isImperial ? 144 : 929.0304;
-          const sheetAreaSqFt = (tW * tH) / conversionFactor;
-          const reqSqFt = isImperial ? (g.netArea / 144) : (g.netArea / 929.0304);
-          const reqSqFtWithOverage = reqSqFt * (1 + (overage / 100));
-          const piecesNeeded = sheetAreaSqFt > 0 ? Math.ceil(reqSqFtWithOverage / sheetAreaSqFt) : 0;
+          const piecesNeeded = Math.ceil(groupRawTiles * (1 + overage / 100));
           totalCost = piecesNeeded * pricePerSheet;
-          
           suggestedOrderText = `${piecesNeeded} Pieces`;
           unitCostText = `$${Number(pricePerSheet || 0).toFixed(2)} / piece`;
         } else {
           const pricePerSheet = mainSettings.pricePerSheet || 0;
-          const mW = mosaicWidth || 12;
-          const mH = mosaicHeight || 12;
-          const conversionFactor = isImperial ? 144 : 929.0304;
-          const sheetAreaSqFt = (mW * mH) / conversionFactor;
-          const reqSqFt = isImperial ? (g.netArea / 144) : (g.netArea / 929.0304);
-          const reqSqFtWithOverage = reqSqFt * (1 + (overage / 100));
-          const sheetsNeeded = sheetAreaSqFt > 0 ? Math.ceil(reqSqFtWithOverage / sheetAreaSqFt) : 0;
+          const sheetAreaSqFt = sheetSqIn / conversionFactor;
+          const sheetsNeeded = sheetAreaSqFt > 0 ? Math.ceil(totalRequiredSqFt / sheetAreaSqFt) : 0;
           totalCost = sheetsNeeded * pricePerSheet;
-          
           suggestedOrderText = `${sheetsNeeded} Sheets`;
           unitCostText = `$${Number(pricePerSheet || 0).toFixed(2)} / sheet`;
         }
 
         rows.push({
           areaName: `Main Wall (${g.color})`,
-          materialType: `Custom Paint Override`,
+          materialType: tileName || 'Main Wall Tile',
           suggestedOrderText,
           unitCostText,
-          totalCost
+          totalCost,
         });
       });
     }
@@ -1104,26 +863,26 @@ function drawPricingCard(pdf: jsPDF, estCardX: number, estCardY: number, estCard
     if (mainEst) rows.push(mainEst);
   }
 
-  subAreas.forEach((sa) => {
+  subAreas.filter((sa) => !sa.linkedMaterialId).forEach((sa) => {
     const saEst = getAreaEstimates(sa.id);
     if (saEst) rows.push(saEst);
   });
 
-  let rowY = estCardY + 23;
+  let rowY = estCardY + 21;
   let grandTotal = 0;
 
   rows.forEach((row, index) => {
     if (index % 2 === 0) {
-      pdf.setFillColor(248, 250, 252); 
+      pdf.setFillColor(248, 250, 252);
       pdf.rect(estCardX + 4, rowY - 5, estCardWidth - 8, 7.5, 'F');
     }
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(7.5);
-    pdf.setTextColor(15, 23, 42); 
+    pdf.setTextColor(15, 23, 42);
     pdf.text(row.areaName, estCardX + 6, rowY);
 
     pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(51, 65, 85); 
+    pdf.setTextColor(51, 65, 85);
     const wrappedMatType = pdf.splitTextToSize(row.materialType, 56);
     pdf.text(wrappedMatType, estCardX + 44, rowY);
 
@@ -1132,7 +891,7 @@ function drawPricingCard(pdf: jsPDF, estCardX: number, estCardY: number, estCard
     pdf.text(row.suggestedOrderText, estCardX + 104, rowY);
 
     pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(100, 116, 139); 
+    pdf.setTextColor(100, 116, 139);
     pdf.text(row.unitCostText, estCardX + 144, rowY);
 
     pdf.setFont('helvetica', 'bold');
@@ -1144,13 +903,13 @@ function drawPricingCard(pdf: jsPDF, estCardX: number, estCardY: number, estCard
   });
 
   const totalY = estCardY + estCardHeight - 12;
-  pdf.setDrawColor(203, 213, 225); 
+  pdf.setDrawColor(203, 213, 225);
   pdf.setLineWidth(0.4);
   pdf.line(estCardX + 4, totalY - 2, estCardX + estCardWidth - 4, totalY - 2);
 
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(10);
-  pdf.setTextColor(79, 70, 229); 
+  pdf.setTextColor(79, 70, 229);
   const grandTotalText = `Grand Total Estimated Material Cost: $${grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   pdf.text(grandTotalText, estCardX + estCardWidth - 6, totalY + 4, { align: 'right' });
 }

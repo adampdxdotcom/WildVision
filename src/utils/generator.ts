@@ -202,11 +202,25 @@ export function generateTiles(params: {
     const sX = stepX || 1;
     const sY = stepY || 1;
 
+    let minU = Math.floor(unrotatedMinX / sX);
+    let maxU = Math.ceil(unrotatedMaxX / sX);
+    let minV = Math.floor(unrotatedMinY / sY);
+    let maxV = Math.ceil(unrotatedMaxY / sY);
+
+    if (pattern === 'herringbone' || pattern === '3d_cube' || pattern === 'star_lattice') {
+      const rangeU = maxU - minU;
+      const rangeV = maxV - minV;
+      minU -= Math.round(rangeU * 0.5);
+      maxU += Math.round(rangeU * 0.5);
+      minV -= Math.round(rangeV * 0.5);
+      maxV += Math.round(rangeV * 0.5);
+    }
+
     return {
-      minU: Math.floor(unrotatedMinX / sX),
-      maxU: Math.ceil(unrotatedMaxX / sX),
-      minV: Math.floor(unrotatedMinY / sY),
-      maxV: Math.ceil(unrotatedMaxY / sY)
+      minU,
+      maxU,
+      minV,
+      maxV
     };
   };
 

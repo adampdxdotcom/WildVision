@@ -33,6 +33,7 @@ export interface ColorCard {
     svgText: string | null;
     accentColor: string;
   } | null;
+  printConfig?: { setName: string; opacity: number };
 }
 
 export type AngleDisplayMode = 'all' | 'non-standard' | 'none';
@@ -79,6 +80,9 @@ export interface LayoutPreset {
   groutColor: string;
   tileName?: string;
   colorVariation?: ColorVariation;
+  layoutFoldType?: 'inward' | 'outward';
+  foldLines?: any[];
+  subAreas?: any[];
 }
 
 export interface CustomColors {
@@ -109,10 +113,12 @@ export interface AreaReport {
   totalTilesUsed: number;
   fullTilesCount: number;
   cutTilesCount: number;
+  fractionalCutCount?: number;
+  strictCutCount?: number;
   primaryPieceCount?: number;
   secondaryPieceCount?: number;
   versaillesBreakdown?: { actualWidth: number; actualHeight: number; count: number }[];
-  colorGroups?: { color: string; count: number; netArea: number; percentage: number }[];
+  colorGroups?: { color: string; count: number; netArea: number; percentage: number; strictCutCount?: number; fractionalCutCount?: number; fullCount?: number }[];
   netArea?: number;
   // Sill / Frame stats
   hasSill?: boolean;
@@ -201,6 +207,8 @@ export interface SubArea {
   depth?: number;
   linkedToId?: string;
   isLinked?: boolean;
+  linkedMaterialId?: string;
+  isMaterialParent?: boolean;
 }
 
 export interface SubAreaReport {
@@ -229,7 +237,7 @@ export interface WallExtension {
 
 export type ActiveTool = 'select' | 'pen' | 'pen-arch' | 'eraser' | 'marquee' | 'fold-line' | 'text' | 'stitch' | 'fill' | 'pin' | 'extrude' | 'paint';
 
-export type ViewMode = '2d' | '3d' | 'pattern_studio' | 'presentation';
+export type ViewMode = '2d' | '3d' | 'pattern_studio' | 'presentation' | 'splatter';
 
 export interface CanvasLabel {
   id: string;
@@ -242,6 +250,7 @@ export interface FoldLine {
   id: string;
   startNodeIndex: number;
   endNodeIndex: number;
+  foldAngle?: number;
 }
 
 export interface Stitch {
@@ -372,6 +381,10 @@ export interface ViewSettingsState {
 export interface SavedProjectData {
   version: string;
   projectName: string;
+  before_splat_url?: string | null;
+  after_splat_url?: string | null;
+  publicShowQuantities?: boolean;
+  publicShowPricing?: boolean;
   tileColorOverrides?: Record<string, number>;
   activeBrushColorIndex?: number;
   [key: string]: any;

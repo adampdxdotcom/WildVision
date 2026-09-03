@@ -9,6 +9,9 @@ export const GuidanceBanner: React.FC<GuidanceBannerProps> = ({ isDraggingBg }) 
   const isBgUnlocked = useAppStore(state => state.isBgUnlocked);
   const backgroundImage = useAppStore(state => state.backgroundImage);
   const bgOpacity = useAppStore(state => state.bgOpacity);
+  const isPublicViewer = useAppStore(state => state.isPublicViewer);
+
+  if (isPublicViewer) return null;
 
   return (
     <div id="floating-guidance-banner" className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-white/90 backdrop-blur-xs select-none shadow-sm rounded-full text-[10px] text-slate-500 font-medium pointer-events-none border border-slate-200 flex items-center gap-1 z-10">

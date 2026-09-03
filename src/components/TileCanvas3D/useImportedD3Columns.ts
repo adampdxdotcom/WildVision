@@ -162,7 +162,47 @@ export function useImportedD3Columns(
         rowIntervals.push({ startY: lastY, endY: bounds.maxY, height: bounds.maxY - lastY });
       }
 
-      const createPanel = (startY: number, endY: number, height: number): Panel3D => {
+      const getVerticalFoldAngle = (x: number): number => {
+        if (foldLines && wallVertices) {
+          for (const fold of foldLines) {
+            const vStart = wallVertices[fold.startNodeIndex];
+            const vEnd = wallVertices[fold.endNodeIndex];
+            if (vStart && vEnd) {
+              const isVert = Math.abs(vStart.x - vEnd.x) < Math.abs(vStart.y - vEnd.y);
+              if (isVert) {
+                const fx = (vStart.x + vEnd.x) / 2;
+                if (Math.abs(fx - x) < 1.0) {
+                  return fold.foldAngle !== undefined && fold.foldAngle !== null ? fold.foldAngle : 90;
+                }
+              }
+            }
+          }
+        }
+        return 90;
+      };
+
+      const getHorizontalFoldAngle = (y: number, startX: number, endX: number): number => {
+        if (foldLines && wallVertices) {
+          for (const fold of foldLines) {
+            const vStart = wallVertices[fold.startNodeIndex];
+            const vEnd = wallVertices[fold.endNodeIndex];
+            if (vStart && vEnd) {
+              const isVert = Math.abs(vStart.x - vEnd.x) < Math.abs(vStart.y - vEnd.y);
+              if (!isVert) {
+                const fy = (vStart.y + vEnd.y) / 2;
+                const xMin = Math.min(vStart.x, vEnd.x);
+                const xMax = Math.max(vStart.x, vEnd.x);
+                if (Math.abs(fy - y) < 1.0 && Math.max(startX, xMin) < Math.min(endX, xMax) - 0.5) {
+                  return fold.foldAngle !== undefined && fold.foldAngle !== null ? fold.foldAngle : 90;
+                }
+              }
+            }
+          }
+        }
+        return 90;
+      };
+
+      const createPanel = (startY: number, endY: number, height: number, flapFoldAngle?: number): Panel3D => {
         const tex = texture.clone();
         tex.repeat.set(col.width / bounds.width, height / bounds.height);
         tex.offset.set(
@@ -212,6 +252,7 @@ export function useImportedD3Columns(
           texture: tex,
           backingTexture: backTex,
           bumpTexture: bumpedTex,
+          foldAngle: flapFoldAngle ?? 90,
         };
       };
 
@@ -226,15 +267,20 @@ export function useImportedD3Columns(
 
       rowIntervals.forEach((row) => {
         if (row.startY >= globalEndY - 0.01 && row.startY < colMaxY - 0.05) {
-          topFlaps.push(createPanel(row.startY, row.endY, row.height));
+          const angle = getHorizontalFoldAngle(row.startY, col.startX, col.endX);
+          topFlaps.push(createPanel(row.startY, row.endY, row.height, angle));
         }
         if (row.endY <= globalStartY + 0.01 && row.endY > colMinY + 0.05) {
-          bottomFlaps.push(createPanel(row.startY, row.endY, row.height));
+          const angle = getHorizontalFoldAngle(row.endY, col.startX, col.endX);
+          bottomFlaps.push(createPanel(row.startY, row.endY, row.height, angle));
         }
       });
 
       topFlaps.sort((a, b) => a.startY - b.startY);
       bottomFlaps.sort((a, b) => b.startY - a.startY);
+
+      const leftFoldAngle = getVerticalFoldAngle(col.startX);
+      const rightFoldAngle = getVerticalFoldAngle(col.endX);
 
       return {
         width: col.width,
@@ -242,6 +288,10 @@ export function useImportedD3Columns(
         mainRow,
         topFlaps,
         bottomFlaps,
+        foldAngle: leftFoldAngle,
+        rightFoldAngle: rightFoldAngle,
+        startX: col.startX,
+        endX: col.endX,
       };
     });
 

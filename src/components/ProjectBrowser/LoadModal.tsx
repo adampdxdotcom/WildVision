@@ -160,12 +160,18 @@ export const LoadModal: React.FC<LoadModalProps> = ({
             explicitPermission = myShare.permission_tier;
           }
         }
-        loadProjectState(project.state_payload, project.id, project.name, (project as any).user_id, explicitPermission);
         
         let payload = project.state_payload;
         if (typeof payload === 'string') {
           try { payload = JSON.parse(payload); } catch (e) { payload = {}; }
         }
+
+        if (payload && typeof payload === 'object') {
+          payload.before_splat_url = (project as any).before_splat_url || null;
+          payload.after_splat_url = (project as any).after_splat_url || null;
+        }
+
+        loadProjectState(payload, project.id, project.name, (project as any).user_id, explicitPermission);
         
         if (payload?.linkedSubfloorProjectId !== undefined) {
           linkProject(payload.linkedSubfloorProjectId);

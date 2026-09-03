@@ -16,10 +16,23 @@ export function useBackingTexture() {
     wallBoundaryShape,
     wallArchHeight,
     wallActiveArches,
-    wallArchDepth
+    wallArchDepth,
+    isDrafting
   } = useAppStore();
 
+  // Dedicated cleanup effect to avoid memory leaks on unmount
   useEffect(() => {
+    return () => {
+      setTexture(prev => {
+        if (prev) prev.dispose();
+        return null;
+      });
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isDrafting) return;
+
     // Determine combined bounds
     const bounds = getCombinedWallBounds(wallWidth, wallHeight, wallExtensions, wallVertices);
     
@@ -127,12 +140,10 @@ export function useBackingTexture() {
     newTexture.colorSpace = THREE.SRGBColorSpace;
     newTexture.needsUpdate = true;
 
-    setTexture(newTexture);
-
-    // Cleanup texture when changing or unmounting to avoid GPU memory leaks
-    return () => {
-      newTexture.dispose();
-    };
+    setTexture(prev => {
+      if (prev) prev.dispose();
+      return newTexture;
+    });
   }, [
     wallWidth,
     wallHeight,
@@ -141,7 +152,8 @@ export function useBackingTexture() {
     wallBoundaryShape,
     wallArchHeight,
     wallActiveArches,
-    wallArchDepth
+    wallArchDepth,
+    isDrafting
   ]);
 
   return texture;

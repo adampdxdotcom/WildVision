@@ -47,6 +47,7 @@ export interface AiRenderSlice {
       | ((prev: AiRenderItem[]) => AiRenderItem[])
   ) => void;
   updateRenderDetails: (renderId: string, updates: { name?: string; notes?: string }) => Promise<void>;
+  deleteRender: (renderId: string) => Promise<void>;
   activeView: 'canvas' | 'gallery';
   setActiveView: (view: 'canvas' | 'gallery') => void;
   monthlyRenderCount: number;
@@ -99,6 +100,65 @@ export const createAiRenderSlice: StateCreator<any, [], [], AiRenderSlice> = (se
     } catch (err) {
       console.error('Failed to update render details:', err);
       throw err;
+    }
+  },
+  deleteRender: async (renderId: string) => {
+    const state = get();
+    const renderToDelete = state.generatedRenders.find((r: AiRenderItem) => r.id === renderId);
+    if (!renderToDelete) return;
+
+    // Find all child variations if deleting a parent/root render
+    const childVariations = state.generatedRenders.filter((r: AiRenderItem) => r.parent_id === renderId);
+    const itemsToDelete = [renderToDelete, ...childVariations];
+    const idsToDelete = itemsToDelete.map((item) => item.id);
+
+    // 1. Remove all target renders and variations from local store immediately
+    set((prev: any) => ({
+      generatedRenders: prev.generatedRenders.filter((r: AiRenderItem) => !idsToDelete.includes(r.id)),
+      ...(idsToDelete.includes(prev.featuredRenderId) ? { featuredRenderId: null } : {}),
+    }));
+
+    // 2. Extract storage paths & remove from Supabase Storage bucket
+    const extractStoragePath = (url?: string | null): string | null => {
+      if (!url) return null;
+      try {
+        const match = url.match(/wildvision_renders\/([^?]+)/);
+        if (match && match[1]) {
+          return decodeURIComponent(match[1]);
+        }
+      } catch (e) {
+        // ignore
+      }
+      return null;
+    };
+
+    const storagePaths: string[] = [];
+    for (const item of itemsToDelete) {
+      const aiPath = extractStoragePath(item.imageUrl);
+      const snapshotPath = extractStoragePath(item.sourceImage);
+      if (aiPath && !storagePaths.includes(aiPath)) storagePaths.push(aiPath);
+      if (snapshotPath && !storagePaths.includes(snapshotPath)) storagePaths.push(snapshotPath);
+    }
+
+    if (storagePaths.length > 0) {
+      try {
+        await supabase.storage.from('wildvision_renders').remove(storagePaths);
+      } catch (err) {
+        console.warn('Failed to delete storage objects:', err);
+      }
+    }
+
+    // 3. Delete records from Supabase table 'ai_renders'
+    const realDbIds = idsToDelete.filter((id) => !id.startsWith('render-'));
+    if (realDbIds.length > 0) {
+      try {
+        const { error } = await supabase.from('ai_renders').delete().in('id', realDbIds);
+        if (error) {
+          console.error('Failed to delete ai_render records:', error);
+        }
+      } catch (err) {
+        console.error('Exception deleting ai_render records:', err);
+      }
     }
   },
   activeView: 'canvas',

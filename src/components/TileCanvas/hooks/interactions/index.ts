@@ -116,6 +116,8 @@ export const useCanvasInteractions = ({
   const setIsDrafting = useAppStore(state => state.setIsDrafting);
   const colorPattern = useAppStore(state => state.colorPattern);
   const isReadOnly = useAppStore(state => state.isReadOnly);
+  const isPublicViewer = useAppStore(state => state.isPublicViewer);
+  const effectiveReadOnly = isReadOnly || isPublicViewer;
 
   const lockBroker = useLockBroker();
 
@@ -128,6 +130,7 @@ export const useCanvasInteractions = ({
 
   const marquee = useMarqueeSelector();
 
+  const [hoveredSubAreaEdge, setHoveredSubAreaEdge] = useState<{ id: string; handle: 'l' | 'r' | 't' | 'b' } | null>(null);
   const [hoveredSegment, setHoveredSegment] = useState<{ type: 'wall' | 'fold'; indexA: number; indexB: number } | null>(null);
   const [draggingSegment, setDraggingSegment] = useState<{
     type: 'wall' | 'fold';
@@ -164,11 +167,12 @@ export const useCanvasInteractions = ({
 
   const { activeCursor, setActiveCursor } = useCursorManager(
     isPanningCanvas,
-    isReadOnly,
+    effectiveReadOnly,
     isActiveContextPainting,
     activeTool,
     isBgUnlocked,
-    backgroundImage
+    backgroundImage,
+    hoveredSubAreaEdge
   );
 
   const { handleFillClick } = useFillHandler({
@@ -269,10 +273,13 @@ export const useCanvasInteractions = ({
   const { handleHoverCheck } = useHoverHandler({
     wallVertices: wallVertices || [],
     foldLines,
+    subAreas,
+    activeSubAreaId,
     wallToScreen,
     containerRef,
     setHoveredSegment,
-    setActiveCursor
+    setActiveCursor,
+    setHoveredSubAreaEdge
   });
 
   const { handleExtrudeStart, handleExtrudeMove } = useExtrudeHandler({
@@ -429,6 +436,25 @@ const clickedSceneObject = Object.values(sceneObjects).find(obj => {
          setActiveCursor('default');
          return;
        }
+    }
+
+    if (hoveredSubAreaEdge) {
+      const sa = subAreas.find((s) => s.id === hoveredSubAreaEdge.id);
+      if (sa && !sa.locked) {
+        setActiveSubAreaId(sa.id);
+        setActiveWallExtensionId(null);
+        dragMachine.setDraggingSubAreaCorner(hoveredSubAreaEdge.handle);
+        dragMachine.setDraggingSubAreaId(sa.id);
+        setDragStart({ x: clientX, y: clientY });
+        dragMachine.setSubAreaStartPos({
+          x: sa.x,
+          y: sa.y,
+          width: sa.width,
+          height: sa.height,
+        });
+        setActiveCursor(hoveredSubAreaEdge.handle === 'l' || hoveredSubAreaEdge.handle === 'r' ? 'ew-resize' : 'ns-resize');
+        return;
+      }
     }
 
     if (activeSubAreaId) {
@@ -644,6 +670,7 @@ const clickedSceneObject = Object.values(sceneObjects).find(obj => {
     dragMachine.setDraggingSubAreaVertexIndex(null);
     handleSetDraggingSegment(null);
     setHoveredSegment(null);
+    setHoveredSubAreaEdge(null);
     lastMouseScreenRef.current = null;
     setIsDrafting(false);
   };
@@ -653,7 +680,7 @@ const clickedSceneObject = Object.values(sceneObjects).find(obj => {
     
     if (e.button === 1 || e.button === 2) {
       e.preventDefault();
-      if (colorPattern !== 'paint' && !isReadOnly) {
+      if (colorPattern !== 'paint' && !effectiveReadOnly) {
         setIsDrafting(true);
       }
       dragMachine.setIsDragging(true);
@@ -662,7 +689,7 @@ const clickedSceneObject = Object.values(sceneObjects).find(obj => {
       return;
     }
 
-    if (isReadOnly) {
+    if (effectiveReadOnly) {
       if (e.button === 0) {
         e.preventDefault();
         dragMachine.setIsDragging(true);
@@ -735,5 +762,6 @@ const clickedSceneObject = Object.values(sceneObjects).find(obj => {
     hoveredSegment,
     draggingSegment,
     activeGuides,
+    hoveredSubAreaEdge,
   };
 };

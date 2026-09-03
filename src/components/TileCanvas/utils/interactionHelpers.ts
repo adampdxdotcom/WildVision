@@ -36,7 +36,25 @@ export const checkSubAreaCornerHit = (
   if (Math.hypot(clickX - ptBR.px, clickY - ptBR.py) < tolerance) return { corner: 'br' as const, cursor: 'nwse-resize' };
   if (Math.hypot(clickX - ptTL.px, clickY - ptTL.py) < tolerance) return { corner: 'tl' as const, cursor: 'nwse-resize' };
   if (Math.hypot(clickX - ptTR.px, clickY - ptTR.py) < tolerance) return { corner: 'tr' as const, cursor: 'nesw-resize' };
-  
+
+  const minY = Math.min(ptBL.py, ptTL.py);
+  const maxY = Math.max(ptBL.py, ptTL.py);
+  const minX = Math.min(ptBL.px, ptBR.px);
+  const maxX = Math.max(ptBL.px, ptBR.px);
+
+  if (Math.abs(clickX - ptBL.px) < tolerance && clickY >= minY - tolerance && clickY <= maxY + tolerance) {
+    return { corner: 'l' as const, cursor: 'ew-resize' };
+  }
+  if (Math.abs(clickX - ptBR.px) < tolerance && clickY >= minY - tolerance && clickY <= maxY + tolerance) {
+    return { corner: 'r' as const, cursor: 'ew-resize' };
+  }
+  if (Math.abs(clickY - ptBL.py) < tolerance && clickX >= minX - tolerance && clickX <= maxX + tolerance) {
+    return { corner: 'b' as const, cursor: 'ns-resize' };
+  }
+  if (Math.abs(clickY - ptTL.py) < tolerance && clickX >= minX - tolerance && clickX <= maxX + tolerance) {
+    return { corner: 't' as const, cursor: 'ns-resize' };
+  }
+
   return null;
 };
 

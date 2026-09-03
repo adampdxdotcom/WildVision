@@ -1,0 +1,231 @@
+# WILDVISION DEVELOPMENT SESSION HISTORY
+
+# Session 1 - Core Math & Modularization v1.0
+- **Math Corrections:** Replaced herringbone grid with interlocking basis vectors; fixed vertical alignment offsets and tile bottom-left anchor origin.
+- **Modularization:** Extracted jsPDF code to `pdfExport.ts`; split `SidebarControls.tsx` into specialized panels; decoupled canvas drawing from `geometry.ts`, `generator.ts`, and `analytics.ts`.
+- **Features:** Added L-shape Wall Extensions, SubArea stencil masking, new tile shapes (Triangles, Pickets, Scallops, Octagon & Dot), waste factor, magnetic snapping, and local JSON I/O.
+- **Performance:** Debounced analytics calculations and added zero-value exception guards.
+
+# Session 2 - Parametric Curves & Restructuring v1.2
+- **UI & Layers:** Consolidated sidebar to 3 tabs (Canvas, Accents, Settings); added drag-and-drop layer reordering for accent Z-indexes.
+- **Geometry & Features:** Added parametric elliptical arches/ovals for walls and niches; tracked interior niche sill/frame trim metadata; added spacebar panning.
+- **Rendering & PDF:** Implemented silhouette path masking for wall extensions; added segmented dimensions and overlapping niche area subtraction; added off-screen image compression for photo overlays.
+
+# Session 3 - Versailles Pattern & Multi-Color Logic v1.3
+- **Versailles Pattern:** Mapped a 12-piece interlocking matrix on a 6x6 grid with edge overhangs to break continuous grout seams.
+- **Shading & Colors:** Added deterministic coordinate-seeded HSL lightness shifts (V1-V4 shading); implemented multi-color stripe patterns and random color blending.
+
+# Session 4 - State Upgrade, Borders, & Vector CAD v1.4
+- **Zustand Migration:** Replaced top-level React state with a central Zustand store (`useAppStore`).
+- **Features & Pebble Mosaics:** Added 1-row deep customizable borders (Mitered vs. Straight) and seamless pebble tile rendering.
+- **Vector CAD Engine:** Converted walls to dynamic coordinate arrays (`wallVertices`); introduced Selector, Pen, Eraser, and Apex Hinge arch tools.
+
+# Session 5 - CAD Architecture & Dimensions v1.5
+- **Drafting & Layout:** Added arc length, span, and rise dimensions for curved segments; implemented marquee group selection.
+- **Canvas Refactoring:** Split canvas logic into `InteractiveNodes.tsx`, `useCanvasInteractions.ts`, and `useCanvasRenderer.ts`. Fixed PDF rendering order for curve dimensions.
+
+# Session 6 - Unfolded Elevation & 3D Engine v2.0
+- **3D & Origami Folding:** Integrated Three.js and `@react-three/fiber`; implemented fold lines (hinges), text labels, corner stitch tools, and continuous 2D-to-3D canvas texture baking.
+- **Refactoring:** Decoupled monolithic components into dedicated hooks (`useUndoRedo`, `useProjectIO`).
+
+# Session 7 - Volumetric Features & PDF Expansion v2.7
+- **3D Mechanics:** Fixed depth-sorting/Z-fighting at fold corners; added branded watermark backing on drywall exteriors.
+- **PDF & Drafting:** Expanded PDF export to 2 pages (Page 1: Scale Drawing, Page 2: Specs); added Fold-Bounded Region Fill tool; derived 3D volumetric Benches from 2D fold intersections.
+
+# Session 8 - Standalone Features & Snap Gravity v2.8
+- **Features:** Unified Shelf and Bench tools (auto-generating floor shadows and 3D floor cutouts in bench mode); enabled standalone floor curbs.
+- **CAD Controls:** Removed coordinate normalization to enable negative origin dragging; implemented decoupled 6"/12" grid snapping gravity.
+
+# Session 9 - Grayscale Depth Maps & Wood Grain v2.9
+- **3D Depth Maps:** Built a secondary hidden grayscale canvas to feed procedural normal/bump maps to Three.js for realistic tile micro-bevels.
+- **Textures:** Added auto-discovery for PNG textures with coordinate-anchored origin shifts to prevent texture-swimming; prepared transparent 3D viewports for photo camera-matching.
+
+# Session 10 - Plank Offsets & AI Pipeline v2.10
+- **Drafting:** Added vertical plank joint staggers and a CAD-style segment extrusion tool.
+- **Performance & AI:** Implemented conditional 3D canvas unmounting; built the "Wild Vision" AI rendering pipeline integrating direct 3D WebGL JPEGs with Gemini API image-to-image REST requests.
+
+# Session 11 - Diorama Shell & Lightbox Comparison v2.11
+- **3D Diorama Shell:** Built an automated 5-sided diorama box with adaptive bounds for 3D lower/upper cabinets and a hole-punching front facade.
+- **UI & Lightbox:** Locked 3D snapshots to a 4:3 aspect ratio card; built an interactive Before/After Lightbox comparison slider.
+
+# Session 12 - Self-Hosted Backend, RLS, & AI Proxy v3.0
+- **Backend Setup:** Deployed self-hosted Dockerized Supabase behind a Caddy reverse proxy; established `projects` and `ai_renders` PostgreSQL tables with private RLS storage buckets.
+- **Security & Analytics:** Created the `generate-ai-render` Deno Edge Function to hide API keys; implemented precise 3D OrbitControls camera tracking and exact credit/API spend logging.
+
+# Session 13 - Constraint Math, Inpainting, & Admin Console v3.13
+- **Drafting Math:** Refined grid snapping, Pen tool vector projections, and rigid-body angle locks.
+- **Inpainting & Admin:** Built a canvas mask editor for Gemini image editing; established `profiles` (RBAC) and `app_settings` tables; built the Admin Console and deployed the `admin-user-manager` Edge Function.
+
+# Session 14 - PDF Corrections, Camera Locks, & Auto-Save v3.14
+- **Engine Fixes:** Corrected PDF carton calculation rounding; built a "Camera Freeze" hook during active 2D drags to eliminate viewport treadmill bugs.
+- **3D Tools:** Added head-on camera framing presets, tripod walkthrough locks, and an auto-save safety lock on cloud-synced projects.
+
+# Session 15 - Absolute Environment Room & 3D Dimensions v3.15
+- **3D Room Shell:** Established a static 10'x10'x8' diorama room with softbox studio lighting and corner fold magnetism.
+- **Alcoves & CAD:** Implemented Earcut polygon hole-punching for recessed wall alcoves; added interactive, clickable 3D dimension pills.
+
+# Session 16 - Parametric Props & Performance Overhaul v3.16
+- **Scene Graph:** Migrated Zustand store to a multi-object scene graph (`sceneObjects`) supporting custom 3D parametric boxes and white clay `.glb` models.
+- **Performance:** Atomized Zustand selectors to eliminate React render storms; bypassed GPU buffer resets; implemented wireframe drafting mode during active mouse drags.
+
+# Session 17A/B - Custom Polygon Engine & Pattern Studio
+- **Tile Analytics:** Added primary/secondary role data-tagging for multi-tile composite patterns (e.g., Octagon & Dot).
+- **Custom Patterns:** Built a custom JSON macro-block tessellation engine; created the `custom_patterns` database table; created the Pattern Studio sandbox with `patternBuilderSlice.ts`.
+
+# Session 18 - Optimization & Code Review
+- **Engine Speed:** Added AABB bounding-box culling in `generator.ts`; implemented numerical rounding helpers; memoized viewport boundary math.
+- **Cleanup:** Replaced spacebar panning with middle-click dragging; added CAD zoom-to-cursor; transitioned Three.js mesh instances to auto-disposing R3F declarative format.
+
+# Session 19 - Gravatar, Portability, & Real-Time Logging
+- **User Pipeline:** Automated Gravatar generation on auth triggers; built account self-deletion with client-side ZIP data takeouts (`jszip`).
+- **Telemetry:** Built `logger.ts` streaming real-time system events over WebSockets to an Admin Console terminal (`system_logs`).
+
+# Session 20 - Viewport Decoupling & SaaS Credit Economy
+- **Rendering:** Decoupled 3D canvas aspect ratio using a viewfinder mask overlay; built a 1K/2K/4K high-res WebGL scaling engine.
+- **Billing & Polish:** Converted user limits to a dynamic credit economy; optimized pointer/touch handling for Apple Pencil and iPad gestures.
+
+# Session 21 - State History & Interactive Presentation Mode
+- **State & Sharing:** Consolidated atomic undo/redo stacks (`restoreSnapshot`); created public presentation URLs (`share_token`) for unauthenticated read-only slider views.
+- **UI & Telemetry:** Added header sync status lights, 3D wall translation clamping, and secure cross-origin Blob downloads.
+
+# Session 22 - Absolute Viewport, Smart Guides, & Linked Instancing
+- **CAD Engine:** Converted 2D canvas to an absolute CAD coordinate system; added Auto-Fit and Center tools; added Shift-key orthogonal locking.
+- **Accents:** Built a Smart Guide magnetic alignment engine for SubAreas; introduced Master-Instance linked cloning (`linkedToId`) to sync material edits across duplicated accents.
+
+# Session 23 - 3D Assembly, SVG Patterns, & Focus Editors
+- **3D Staging:** Enabled importing saved JSON layouts into the 3D room as staging objects with live cloud sync; added cross-tab autosave locks via `BroadcastChannel`.
+- **Patterns & UI:** Built client-side SVG vector pattern uploading with dynamic color-swapping; overhauled Accent panel UI with de-nested focus editors and squircle shading selectors.
+
+# Session 24 - Custom Surfaces, Staging Alcoves, & Paint Mode
+- **Slab Materials:** Created `custom_surfaces` storage bucket and `user_surfaces` database table; implemented client-side image compression and aspect-cover UV mapping for solid slabs.
+- **Features:** Added the Flatsket Weave pattern; implemented 3D recessed staging alcoves with automated drywall tunnel casing; modularized `RoomSetupEditor.tsx`.
+
+# Session 25 - AABB Grid Projection & Parametric Paint Mode
+- **2D Optimization:** Replaced radial generation sweeps with fast AABB grid projections anchored strictly to world `(0,0)`, creating permanent deterministic tile IDs.
+- **Paint Mode:** Built Paint Mode mapping palette indices to deterministic tile IDs (`tileColorOverrides`); synchronized painted tiles with 3D texture bakes; updated analytics for color-grouped carton purchasing.
+- **Architecture:** Extracted stateless universal component adapters (`UniversalTileSpecs`, etc.) and decoupled canvas interaction hooks.
+
+# Session 26A/26/26B - Subfloor Integration & Deep Linking
+- **API Gateway:** Engineered the `subfloor-proxy` Edge Function; enriched Subfloor's database with visual colors/shapes and sample checkout joins.
+- **Estimating & Sync:** Built a transactional SQL quote engine (`material_orders`) to push estimates; established a media bridge for syncing photos/PDFs; built bidirectional deep-linking ("Open in Subfloor" / "Wild Vision Teleport Badge").
+
+# Session 27 - Automated Deployment & Viewport Framing
+- **CI/CD:** Created server deployment scripts (`update.sh`) with rsync pruning and automated Gitea repository commits.
+- **Viewport:** Calibrated Caddy reverse proxy for production; implemented AABB layout centering and auto-fit hydration hooks.
+
+# Session 28 - Real-Time Multiplayer Collaboration
+- **Multiplayer Engine:** Built a Supabase Realtime WebSocket engine (`useMultiplayer`) broadcasting state mutations, cursor positions, and atomic undo/redo steps.
+- **Access Control:** Implemented Read/Write permission tiers, active element locking to prevent CAD tearing, and owner-delegated autosaving.
+
+# Session 29 - CRM Dashboard & Dynamic AI Models
+- **Admin Tools:** Built the `get_admin_user_metrics` RPC for user engagement tracking; updated user deletion to sweep isolated Supabase storage directories.
+- **AI Infrastructure:** Created the `ai_models` table to dynamically manage API slugs and pricing parameters without codebase redeployments.
+
+# Session 30B - Polar Arrays & Multi-View Workspace v4.30
+- **Pattern Studio:** Built a parametric Polar Array rotation tool with dynamic main-canvas generator stamping; upgraded to a multi-view workspace (`PatternWorkspace`) supporting split-screen editing.
+- **Physics:** Fixed SVG pointer offset physics and dynamic aspect-ratio scaling.
+
+# Session 31 - Tone Mapping & Material Scale Upgrades v4.31
+- **3D Visuals:** Replaced ACES tone mapping with `NoToneMapping` and flat ambient lighting to restore color accuracy; added dynamic darker crease outlines.
+- **State & Scale:** Decoupled pattern state between Main Wall and Accents; implemented real-world texture scale mapping (`realWorldWidth`) and coordinate-anchored "cookie-cutter" slab cuts.
+
+# Session 33 - Orthographic Elevations & 3-Page PDF v5.00
+- **Orthographic Mode:** Added a 3D Orthographic camera with cardinal wall snapping (Front, Back, Left, Right) and pitch/yaw lockouts.
+- **PDF Pipeline:** Built a WebGL math-cropping pipeline to extract clean elevation JPEGs, compiling deluxe 3-page PDFs (Page 1: 2D Blueprint, Page 2: 3D Elevation, Page 3: Specs/Pricing).
+
+# Session 34 - Camera Alignment & Storage-First Architecture v5.34
+- **Engine Polish:** Fixed 2D AABB auto-fit math and 3D camera jump bugs; added showroom turntable rotation controls for staging props.
+- **Storage:** Transitioned clay model tracking to a file-system-first architecture inside Supabase Storage (`clay_models/`).
+
+# Sessions 35 - 37 - WildVision Mobile & AR Companion Suite
+- **Android App:** Built native Android app using Jetpack Compose, CameraX, and ARCore (`SceneView`); implemented real-time 3D wireframe room extrusion and 2D floor projection math.
+- **Cloud Pipeline:** Added desktop GLB scene exporting (`GlbExporterManager.tsx`) syncing to Supabase Storage; built mobile 3D model loading using native SceneView OrbitControls.
+
+# Session 38 - Accent Physics & Rigid Body Propagation
+- **Physics Engine:** Expanded diagonal pattern limits using radial hypotenuse bounds; restored edge resizing and body drag translation for SubAreas.
+- **CAD Propagation:** Built an orthogonal rigid-body solver that propagates typed segment dimension changes to adjacent nodes to preserve 90° corners.
+
+# Session 39 - WebGL Triangulation Fix
+- **3D Hole Punching:** Corrected Earcut polygon hole-punching winding order (CW) and centering offsets in `WallPanel.tsx`, resolving mesh destruction artifacts.
+
+# Session 40 - Print Sets & History Wiping v5.40
+- **Print Sets:** Built auto-discovery for print set assets with deterministic spatial coordinate hashing.
+- **State & UI:** Wiped history stacks on project hydration to establish ground-zero baseline states; hidden main wall nodes when editing accents; added contrasting edge overlays to 3D parametric boxes.
+
+# Session 41 - AI Pipeline & Infrastructure Hardening
+- **Infrastructure:** Removed 2D canvas interception of 3D snapshot triggers; updated Edge Function to stream direct raw bytes (fixing V8 buffer crashes); increased Kong/Deno timeouts to 120 seconds.
+
+# Session 42 - Master-Instance Accent Material Linking
+- **Data Model:** Added `isMaterialParent` and `linkedMaterialId` to SubAreas.
+- **Sync Engine:** Built a Two-Pass synchronization engine in `materialSlice.ts` to push deep-cloned aesthetic updates from parents to children; aggregated child area metrics into parent tabs in the Quantities panel and Subfloor export.
+
+# Session 43 - Fractional Estimating ("Reuse Cuts") v5.43
+- **Estimating Engine:** Built the "Reuse Cuts" fractional area calculation engine with a 15% kerf penalty; unified all purchasing math to derive strictly from `totalRawTiles`.
+- **Mosaics & Integration:** Corrected mosaic sheet area conversions; silenced unconfigured Subfloor integration background fetch errors.
+
+# Session 44 - Public Interactive CAD Viewer & Client Analytics
+- **Public Viewer (`?view=cad`):** Created a full-screen, read-only 2D/3D interactive CAD viewer bypassing the presentation slider; added a public link generator to `ShareModal.tsx`; stripped down header/sidebar UI; enforced interaction/physics lockouts.
+- **Viewer Polish:** Added responsive viewport sizing (`w-full md:w-[75%]`); added a 4-second fading "Click and drag to rotate" 3D hint; added an **Inches vs. cm** toggle to the Layers menu; removed origin debug dot; suppressed nodes, angles, and fold lines.
+- **Viewport Hydration:** Fixed initial auto-fit scaling in `useCanvasViewport.ts` by checking DOM container width (`>100px`) and `wallVertices` hydration before running fit math.
+- **Client View Analytics:** Built the `project_views` table with debounced `log_project_view` RPC telemetry and `get_project_view_analytics` RPC; added a **Client Activity** dashboard card to the Settings panel displaying view counts and relative timestamps ("2 hours ago").
+
+# SESSION 45 SUMMARY — CLIENT ESTIMATOR & PUBLIC VIEWER REFINEMENTS
+
+### 1. Client Link Preferences & Author Controls
+* **Domain Types & State Management (`types.ts`, `projectSlice.ts`):**
+  Added two new state flags to the global store: `publicShowQuantities` (boolean, default: `false`) and `publicShowPricing` (boolean, default: `false`), along with state updater actions (`setPublicShowQuantities`, `setPublicShowPricing`). These flags are automatically serialized, hydrated from Supabase project JSON snapshots, and reset during workspace clears.
+* **Author Settings Panel (`CalibrationSettings.tsx`):**
+  Added a new **CLIENT LINK PREFERENCES** card in the author's Settings tab (positioned directly above "Client Activity"). Features two toggles allowing authors to control whether public link visitors can view material quantities and optional pricing/costs. The pricing toggle automatically disables and greys out if quantities visibility is turned off.
+
+### 2. Client-Facing Quantities & Estimator Suite
+* **Dedicated Read-Only Presentation View (`ClientQuantitiesView.tsx`):**
+  Created a presentation-only component displaying:
+  * Design Area selection tabs (Project Totals, individual walls/accents).
+  * Total Surface Area, Perfect Sheets/Tiles Used, Cut Sheets, Total Raw Equivalents, and Recommended Square Footage.
+  * Static Calculation Method badge ("Strict Pieces" or "Reuse Cuts") without interactive toggles.
+  * Read-only **Purchasing & Costs Estimator** table (conditionally rendered only when `publicShowPricing` is `true`), hiding all input fields and formatting prices as static currency.
+* **Viewport Slide-Out Drawer (`ClientQuantitiesDrawer.tsx`):**
+  Built a left-to-right animated slide-out drawer anchored strictly inside the canvas viewport container below the header bar. Includes a header with dynamic title and close (`X`) button, wrapping `<ClientQuantitiesView />` in a scroll-isolated container.
+
+### 3. Public Viewer Header & Mobile Layout Refinements
+* **Header UI Sanitization (`CanvasHeader.tsx`):**
+  * Standardized `isPublicViewerMode` across `CanvasHeader.tsx` so URL-based links (`?view=cad`) behave identically to store-based public viewer states.
+  * Removed status/sync dots, "CLOUD *" indicators, "LOCKED" badges, extra sub-area measurement text, and the "PUBLIC VIEWER" badge.
+  * Added flexbox truncation (`min-w-0 flex-1 truncate`) to the project title so it shrinks gracefully on small screens.
+* **Dynamic Header Trigger Button:**
+  Added a responsive button on the right side of the black canvas header bar. Dynamically switches labels between **"View Estimate"** (if pricing is enabled) and **"View Quantities"** (if pricing is disabled).
+
+### 4. Auto-Fit & Floating HUD Interaction Fixes
+* **Viewport Auto-Fit framing (`useCanvasViewport.ts`):**
+  Fixed asynchronous hydration conflicts in `useCanvasViewport.ts` so that `performAutoFit()` triggers as soon as `wallVertices` geometry finishes loading from Supabase and container DOM dimensions stabilize (`clientWidth >= 100px`), scaling public CAD links to fit the screen (~38% scale) on first load.
+* **Floating HUD Controls (`ZoomControls.tsx`, `VisibilityMenu.tsx`, `FloatingToolbar.tsx`):**
+  Added `pointer-events-auto z-50` and stopped pointer/touch event propagation (`onPointerDown`, `onTouchStart`, `onMouseDown`) on floating HUD elements. This prevents parent canvas gesture handlers and read-only interaction locks from intercepting clicks/taps on Zoom In/Out, Center/Bullseye Fit, and Layers controls.
+* **3D Hinge Chains & Pivot Anchor Math (`HingeChains.tsx`):**
+  - Corrected recursive position offsets in `LeftHingeChain` so that recursive child column origins anchor to `-columns[index + 1].d3Width` (the parent column's left edge / `startX`).
+  - Preserved symmetric rotation sign conventions (`rotY = -foldAngleRad` for Right columns and `rotY = +foldAngleRad` for Left columns).
+  - Outward Fireplace (-90°) folds and Inward Shower (+90°) folds now rotate cleanly around exact hinge boundaries without detachment or floating mesh artifacts.
+* **3D Z-Axis Projection for Fireplace / Bump-Out Mode (`MainTileLayoutGroup.tsx`, `ImportedLayoutObject.tsx`):**
+  - Dynamically detects outward folding side returns (foldAngle < 0, e.g., -90°).
+  - Automatically shifts the main front wall panel forward along the Z-axis by `+outwardReturnDepth` (e.g. +12").
+  - Ensures the front wall projects into the 3D room interior as a chimney breast, while the back edges of the side returns rest flush against the room's back drywall plane (`Z = 0`).
+
+### 5. Continuous Fold Angle & 3D Fireplace Bump-Out Engine
+* **Domain Types & Hinge State (`types.ts`, `draftingSlice.ts`):**
+  Updated the `FoldLine` interface to support an optional `foldAngle?: number` property (in degrees, default: `90`). Added the `setFoldAngle` store action and updated serialization/hydration logic.
+* **Wall Setup Authoring Control:**
+  Added a global **"Layout Fold Type"** toggle switch in the Wall Setup sidebar: **"Shower / Alcove (Inward +90°)"** vs **"Fireplace / Bump-Out (Outward -90°)"**.
+* **3D Hinge Matrix Math (`HingeChains.tsx`, `useD3Columns.ts`):**
+  Updated 3D column segment math and hinge rotation calculations to convert `foldAngle` dynamically from degrees to radians. Mapped `foldAngle` onto column segments in `useD3Columns.ts` and corrected relative rotation signs across left (`+foldAngle`) and right (`-foldAngle`) hinges.
+* **3D Z-Axis Forward Projection (`MainTileLayoutGroup.tsx`, `ImportedLayoutObject.tsx`):**
+  In Bump-Out / Fireplace mode (`foldAngle = -90°`), the engine calculates the return depth (e.g., 12") and shifts the main front wall panel **forward into the room along the Z-axis by `+returnDepth`**. This cleanly projects the structure into the room interior as a 3D chimney breast while anchoring the back edges of the side returns flush against the room's back drywall wall plane (`Z = 0`).
+
+
+
+
+
+  
+
+
+
+
+

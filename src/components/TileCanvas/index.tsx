@@ -5,6 +5,7 @@ import { FloatingToolbar } from './components/FloatingToolbar';
 import { InteractiveNodes } from './components/InteractiveNodes';
 import { CanvasLabelsOverlay } from './CanvasLabelsOverlay';
 import { VisibilityMenu } from './components/VisibilityMenu';
+import { ClientQuantitiesDrawer } from '../ClientQuantitiesDrawer';
 
 import { useCanvasViewport } from './useCanvasViewport';
 import { useCanvasInteractions } from './hooks/interactions';
@@ -102,25 +103,18 @@ const CanvasInteractiveSurface: React.FC = () => {
   const draftStitchNodeIndex = useAppStore(state => state.draftStitchNodeIndex);
   const foldLines = useAppStore(state => state.foldLines);
   const removeFold = useAppStore(state => state.removeFold);
-  const capture3DTrigger = useAppStore(state => state.capture3DTrigger);
-  const setCaptured3DImage = useAppStore(state => state.setCaptured3DImage);
   const isDrafting = useAppStore(state => state.isDrafting);
   const tileColorOverrides = useAppStore(state => state.tileColorOverrides);
+  const isClientQuantitiesOpen = useAppStore(state => state.isClientQuantitiesOpen);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [hoveredFoldIndex, setHoveredFoldIndex] = React.useState<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const [mouseScreenPos, setMouseScreenPos] = React.useState<{ px: number; py: number } | null>(null);
 
 
 
-
-  React.useEffect(() => {
-    if (capture3DTrigger > 0 && canvasRef.current) {
-      const dataUrl = canvasRef.current.toDataURL('image/jpeg', 0.9);
-      setCaptured3DImage(dataUrl);
-    }
-  }, [capture3DTrigger, setCaptured3DImage]);
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -133,6 +127,9 @@ const CanvasInteractiveSurface: React.FC = () => {
   const flatsketHorizontalRows = useAppStore(state => state.flatsketHorizontalRows);
 
   const subAreaTileMap = React.useMemo(() => {
+    if (isDrafting) {
+      return {};
+    }
     const map: Record<string, TileInstance[]> = {};
     for (const sa of subAreas) {
       if (sa.visible === false) continue;
@@ -183,7 +180,7 @@ const CanvasInteractiveSurface: React.FC = () => {
     subAreas, activeCustomPattern, flatsketVerticalRows, flatsketHorizontalRows,
     isBlankCanvasMode, wallWidth, wallHeight, shape, tileWidth, tileHeight,
     pattern, groutWidth, offsetX, offsetY, angle, wallExtensions, isPicket,
-    picketLength, wallVertices
+    picketLength, wallVertices, isDrafting
   ]);
 
   const {
@@ -282,6 +279,9 @@ const CanvasInteractiveSurface: React.FC = () => {
     hoveredSegment,
     draggingSegment,
     activeGuides,
+    hoveredSubAreaEdge,
+    draggingSubAreaCorner,
+    draggingSubAreaId,
   } = useCanvasInteractions({
     scale,
     dimensions,
@@ -314,6 +314,7 @@ const CanvasInteractiveSurface: React.FC = () => {
   // Execute drawing coordinating logic inside custom canvas renderer hook
   useCanvasRenderer({
     canvasRef,
+    overlayCanvasRef,
     dimensions,
     viewport,
     combinedWidth,
@@ -328,6 +329,9 @@ const CanvasInteractiveSurface: React.FC = () => {
     hoveredSegment,
     draggingSegment,
     subAreaTileMap,
+    hoveredSubAreaEdge,
+    draggingSubAreaHandle: draggingSubAreaCorner,
+    draggingSubAreaId,
   });
 
   React.useEffect(() => {
@@ -335,6 +339,10 @@ const CanvasInteractiveSurface: React.FC = () => {
     if (!container) return;
 
     const preventDefaultTouch = (e: TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest('button, a, input, select, textarea, [role="button"], .pointer-events-auto')) {
+        return;
+      }
       if (e.cancelable) {
         e.preventDefault();
       }
@@ -350,6 +358,11 @@ const CanvasInteractiveSurface: React.FC = () => {
   }, []);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement | null;
+    if (target && target.closest('button, a, input, select, textarea, [role="button"], .pointer-events-auto')) {
+      return;
+    }
+
     if (e.pointerType === 'touch') {
       handleTouchDown(e);
       return;
@@ -455,10 +468,10 @@ const CanvasInteractiveSurface: React.FC = () => {
         onPointerCancel={handlePointerLeave}
       >
         {/* Tool Switcher */}
-        <FloatingToolbar />
+        {!isClientQuantitiesOpen && <FloatingToolbar />}
 
         {/* CAD-style Layer Visibility Menu */}
-        <VisibilityMenu />
+        {!isClientQuantitiesOpen && <VisibilityMenu />}
 
         {/* Real-Time Multiplayer Cursors */}
         <MultiplayerCursors wallToScreen={wallToScreen} />
@@ -553,8 +566,16 @@ const CanvasInteractiveSurface: React.FC = () => {
           data-render-h={renderH}
         />
 
+        <canvas
+          ref={overlayCanvasRef}
+          className="absolute inset-0 block w-full h-full pointer-events-none z-10"
+        />
+
         {/* Floating Elegant Zoom Controls */}
-        <ZoomControls onCenter={performCenter} />
+        {!isClientQuantitiesOpen && <ZoomControls onCenter={performCenter} />}
+
+        {/* Client Quantities & Cost Estimator Drawer Overlay */}
+        <ClientQuantitiesDrawer />
       </div>
   );
 };

@@ -10,6 +10,7 @@ import { drawRoundTile, drawHexagonTileDirect, drawPolygonTile, drawScallopTile,
 import { Viewport, mapToCanvas } from '../canvasUtils';
 import { useAppStore } from '../../../store/useAppStore';
 import { getPatternImage, ensureColorCard, getCardPatternImageAndBlob } from '../../../utils/svgPatternManager';
+import { getPrintForLocation } from '../../../utils/printSetManager';
 import { getPatternColor } from './colorUtils';
 
 /**
@@ -139,21 +140,31 @@ export function drawMainTiles(
       patternImg = getPatternImage(uploadedSvgText, resolvedTileColor, patternAccentColor, onImageLoaded);
     }
 
+    let printImg: HTMLImageElement | null = null;
+    let printOpacity = 1.0;
+    if (baseCard.printConfig && baseCard.printConfig.setName) {
+      const printItem = getPrintForLocation(baseCard.printConfig.setName, tile.center.x, tile.center.y);
+      if (printItem && printItem.img) {
+        printImg = printItem.img;
+        printOpacity = baseCard.printConfig.opacity ?? 1.0;
+      }
+    }
+
     if (tile.shape === 'round') {
       const radius = (actualTileW / 2) * viewport.scale;
-      drawRoundTile(ctx, pCenter, radius, resolvedTileColor, resolvedSpecular, isBumpMapMode, materialImage, tile.center, patternImg, angleRad, viewport.scale);
+      drawRoundTile(ctx, pCenter, radius, resolvedTileColor, resolvedSpecular, isBumpMapMode, materialImage, tile.center, patternImg, angleRad, viewport.scale, printImg, printOpacity);
     } else if (tile.shape === 'scallop') {
       const radius = (actualTileW / 2) * viewport.scale;
-      drawScallopTile(ctx, pCenter, radius, resolvedTileColor, resolvedSpecular, angleRad, isBumpMapMode, materialImage, tile.center, patternImg, angleRad, viewport.scale);
+      drawScallopTile(ctx, pCenter, radius, resolvedTileColor, resolvedSpecular, angleRad, isBumpMapMode, materialImage, tile.center, patternImg, angleRad, viewport.scale, printImg, printOpacity);
     } else if (tile.shape === 'pebble') {
       const pTileColors = disableTileColorOnPdf 
         ? ['#ffffff'] 
         : tileColors.map(c => typeof c === 'string' ? c : c.hex);
       const pColorPattern = disableTileColorOnPdf ? 'single' : colorPattern;
       const pColorVar = disableTileColorOnPdf ? 'V1' : colorVariation;
-      drawPebbleTile(ctx, canvasVertices, pCenter, resolvedTileColor, resolvedSpecular, pTileColors, pColorPattern, pColorVar, tile.center, isBumpMapMode, materialImage, patternImg, angleRad, viewport.scale);
+      drawPebbleTile(ctx, canvasVertices, pCenter, resolvedTileColor, resolvedSpecular, pTileColors, pColorPattern, pColorVar, tile.center, isBumpMapMode, materialImage, patternImg, angleRad, viewport.scale, printImg, printOpacity);
     } else {
-      drawPolygonTile(ctx, canvasVertices, pCenter, resolvedTileColor, resolvedSpecular, tile.shape, isBumpMapMode, materialImage, tile.center, patternImg, angleRad, viewport.scale);
+      drawPolygonTile(ctx, canvasVertices, pCenter, resolvedTileColor, resolvedSpecular, tile.shape, isBumpMapMode, materialImage, tile.center, patternImg, angleRad, viewport.scale, printImg, printOpacity);
     }
 
     ctx.restore();

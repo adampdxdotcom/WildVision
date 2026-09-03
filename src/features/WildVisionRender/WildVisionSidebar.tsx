@@ -148,7 +148,6 @@ export const WildVisionSidebar: React.FC = () => {
           return;
         }
         try {
-          logger.info('AI Generation requested');
           const currentSavedCameraFov = useAppStore.getState().savedCameraFov;
           const currentOverlayFocalLength = useAppStore.getState().overlayFocalLength;
           const currentWildVisionPrompt = useAppStore.getState().wildVisionPrompt || '';
@@ -199,6 +198,14 @@ export const WildVisionSidebar: React.FC = () => {
 
           const geminiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || '';
 
+          logger.info('AI Generation requested', {
+            renderResolution,
+            renderAspectRatio,
+            api_slug: useAppStore.getState().activeAiModel?.api_slug,
+            baseImageLength: baseImageStripped?.length || 0,
+            styleImageLength: finalStyleRefStripped?.length || 0
+          });
+
           const { data, error } = await supabase.functions.invoke('generate-ai-render', {
             body: {
               api_slug: useAppStore.getState().activeAiModel?.api_slug,
@@ -240,7 +247,7 @@ USER REQUEST: ${combinedPrompt}` }
                 }
               ],
               generationConfig: {
-                responseModalalities: ["IMAGE"],
+                responseModalities: ["IMAGE"],
                 candidateCount: 1
               }
             },
@@ -281,12 +288,20 @@ USER REQUEST: ${combinedPrompt}` }
           console.log('Proxy API Response:', data);
 
           const base64Bytes = data?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+          
+          const promptTokens = data?.usageMetadata?.promptTokenCount || 0;
+          const outputTokens = data?.usageMetadata?.candidatesTokenCount || 0;
+
+          logger.info('AI Generation proxy response received', {
+            hasBase64Bytes: !!base64Bytes,
+            promptTokens,
+            outputTokens
+          });
+
           if (!base64Bytes) {
             throw new Error('AI response did not contain an image in the expected path (candidates[0].content.parts[0].inlineData.data).');
           }
 
-          const promptTokens = data?.usageMetadata?.promptTokenCount || 0;
-          const outputTokens = data?.usageMetadata?.candidatesTokenCount || 0;
           const outputCount = data?.candidates?.length || 1;
 
           const tempId = `render-${Date.now()}-0`;
@@ -454,7 +469,11 @@ USER REQUEST: ${combinedPrompt}` }
             setActiveView('gallery');
           }
         } catch (error: any) {
-          logger.error('AI Generation failed', { error: error.message || String(error) });
+          logger.error('AI Generation failed', { 
+            error: error.message || String(error),
+            fullError: typeof error === 'object' && error !== null ? JSON.stringify(error, Object.getOwnPropertyNames(error)) : String(error),
+            stack: error?.stack
+          });
           console.error('REST API Wild Vision error:', error);
           if (active) {
             setErrorMsg(`Failed to generate renders: ${error.message || error}`);

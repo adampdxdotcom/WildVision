@@ -12,6 +12,8 @@ export interface Panel3D {
   backingTexture: THREE.Texture;
   bumpTexture?: THREE.Texture;
   isGhost?: boolean;
+  foldAngle?: number;
+  invertMaterials?: boolean;
 }
 
 export interface ColumnSegment {
@@ -20,6 +22,10 @@ export interface ColumnSegment {
   mainRow: Panel3D;
   topFlaps: Panel3D[];
   bottomFlaps: Panel3D[];
+  foldAngle?: number;
+  rightFoldAngle?: number;
+  startX?: number;
+  endX?: number;
 }
 
 export interface FeatureProps {

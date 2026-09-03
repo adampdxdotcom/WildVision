@@ -176,92 +176,91 @@ export const ShelfFeature: React.FC<ShelfFeatureProps> = ({
   const fallbackColor = sa.tileColor || '#475569';
 
   // Determine extrusion Z offset in local space.
-  // When isFloorMounted === true, the local +Z points upward into the 3D room,
-  // so we set localZ to depthD3 / 2 to position the box on top of the floor plane.
-  const localZ = depthD3 / 2;
+  // Add a slight 0.002 offset to prevent Z-fighting clipping artifacts against the backing wall/floor
+  const localZ = depthD3 / 2 + 0.002;
 
   if (isFloorMounted) {
     return (
-      <mesh position={[localX, localY, localZ]} key={isolatedBumpTex ? 'shelf_floor_bump' : 'shelf_floor_flat'}>
+      <mesh position={[localX, localY, localZ]} key={isolatedBumpTex ? 'shelf_floor_bump' : 'shelf_floor_flat'} castShadow receiveShadow>
         <boxGeometry args={[d3Width, d3Height, depthD3]} />
         
         {/* 0: Right (+X) - vertical face of curb */}
         {topTexture ? (
-          <meshStandardMaterial attach="material-0" map={topTexture} bumpMap={topBumpTexture || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} />
+          <meshStandardMaterial attach="material-0" map={topTexture} bumpMap={topBumpTexture || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
         ) : (
-          <meshStandardMaterial attach="material-0" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} />
+          <meshStandardMaterial attach="material-0" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
         )}
 
         {/* 1: Left (-X) - vertical face of curb */}
         {topTexture ? (
-          <meshStandardMaterial attach="material-1" map={topTexture} bumpMap={topBumpTexture || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} />
+          <meshStandardMaterial attach="material-1" map={topTexture} bumpMap={topBumpTexture || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
         ) : (
-          <meshStandardMaterial attach="material-1" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} />
+          <meshStandardMaterial attach="material-1" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
         )}
 
         {/* 2: Top (+Y) of box (vertical back face of curb) */}
         {topTexture ? (
-          <meshStandardMaterial attach="material-2" map={topTexture} bumpMap={topBumpTexture || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} />
+          <meshStandardMaterial attach="material-2" map={topTexture} bumpMap={topBumpTexture || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
         ) : (
-          <meshStandardMaterial attach="material-2" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} />
+          <meshStandardMaterial attach="material-2" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
         )}
 
         {/* 3: Bottom (-Y) of box (vertical front face of curb) */}
         {topTexture ? (
-          <meshStandardMaterial attach="material-3" map={topTexture} bumpMap={topBumpTexture || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} />
+          <meshStandardMaterial attach="material-3" map={topTexture} bumpMap={topBumpTexture || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
         ) : (
-          <meshStandardMaterial attach="material-3" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} />
+          <meshStandardMaterial attach="material-3" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
         )}
 
         {/* 4: Front (+Z) of box - top of curb (faces up into room, displays floor pattern) */}
         {isolatedTex ? (
-          <meshStandardMaterial attach="material-4" map={isolatedTex} bumpMap={isolatedBumpTex || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} />
+          <meshStandardMaterial attach="material-4" map={isolatedTex} bumpMap={isolatedBumpTex || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
         ) : (
-          <meshStandardMaterial attach="material-4" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} />
+          <meshStandardMaterial attach="material-4" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
         )}
 
         {/* 5: Back (-Z) of box - bottom of curb touching subfloor */}
-        <meshStandardMaterial attach="material-5" color="#334155" roughness={0.4} metalness={0.1} side={THREE.DoubleSide} />
+        <meshStandardMaterial attach="material-5" color="#334155" roughness={0.4} metalness={0.1} side={THREE.DoubleSide} polygonOffset={true} polygonOffsetFactor={1} polygonOffsetUnits={1} />
       </mesh>
     );
   }
 
   return (
-    <mesh position={[localX, localY, localZ]} key={isolatedBumpTex ? 'shelf_wall_bump' : 'shelf_wall_flat'}>
+    <mesh position={[localX, localY, localZ]} key={isolatedBumpTex ? 'shelf_wall_bump' : 'shelf_wall_flat'} castShadow receiveShadow>
       <boxGeometry args={[d3Width, d3Height, depthD3]} />
       {/* 0: Right (+X) */}
       {sideTexture ? (
-        <meshStandardMaterial attach="material-0" map={sideTexture} bumpMap={sideBumpTexture || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} />
+        <meshStandardMaterial attach="material-0" map={sideTexture} bumpMap={sideBumpTexture || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
       ) : (
-        <meshStandardMaterial attach="material-0" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} />
+        <meshStandardMaterial attach="material-0" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
       )}
 
       {/* 1: Left (-X) */}
       {sideTexture ? (
-        <meshStandardMaterial attach="material-1" map={sideTexture} bumpMap={sideBumpTexture || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} />
+        <meshStandardMaterial attach="material-1" map={sideTexture} bumpMap={sideBumpTexture || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
       ) : (
-        <meshStandardMaterial attach="material-1" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} />
+        <meshStandardMaterial attach="material-1" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
       )}
 
       {/* 2: Top (+Y) */}
       {topTexture ? (
-        <meshStandardMaterial attach="material-2" map={topTexture} bumpMap={topBumpTexture || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} />
+        <meshStandardMaterial attach="material-2" map={topTexture} bumpMap={topBumpTexture || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
       ) : (
-        <meshStandardMaterial attach="material-2" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} />
+        <meshStandardMaterial attach="material-2" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
       )}
 
       {/* 3: Bottom (-Y) */}
-      <meshStandardMaterial attach="material-3" color="#334155" roughness={0.4} metalness={0.1} side={THREE.DoubleSide} />
+      <meshStandardMaterial attach="material-3" color="#334155" roughness={0.4} metalness={0.1} side={THREE.DoubleSide} polygonOffset={true} polygonOffsetFactor={1} polygonOffsetUnits={1} />
 
       {/* 4: Front (+Z) */}
       {isolatedTex ? (
-        <meshStandardMaterial attach="material-4" map={isolatedTex} bumpMap={isolatedBumpTex || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} />
+        <meshStandardMaterial attach="material-4" map={isolatedTex} bumpMap={isolatedBumpTex || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
       ) : (
-        <meshStandardMaterial attach="material-4" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} />
+        <meshStandardMaterial attach="material-4" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
       )}
 
       {/* 5: Back (-Z) */}
-      <meshStandardMaterial attach="material-5" color="#cbd5e1" roughness={0.5} metalness={0.02} side={THREE.DoubleSide} />
+      <meshStandardMaterial attach="material-5" color="#cbd5e1" roughness={0.5} metalness={0.02} side={THREE.DoubleSide} polygonOffset={true} polygonOffsetFactor={1} polygonOffsetUnits={1} />
     </mesh>
   );
 };

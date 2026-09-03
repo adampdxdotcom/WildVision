@@ -57,7 +57,9 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
     wallBorder, setWallBorder,
     mainShapeSettings, setMainShapeSettings,
     zoom, setZoom,
+    triggerFitWorkspace,
     foldLines, setFoldLines,
+    layoutFoldType, setLayoutFoldType,
     roomDimensions, setRoomDimensions,
     roomColors, setRoomColors,
     layoutTransform, setLayoutTransform,
@@ -295,9 +297,10 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
         if (data.isPainted !== undefined) setIsPainted(Boolean(data.isPainted));
         if (data.isBlankCanvasMode !== undefined) setIsBlankCanvasMode(Boolean(data.isBlankCanvasMode));
         if (data.activePresetId !== undefined) setActivePresetId(data.activePresetId);
-        // Always reset zoom to 1.0 (auto-fit) when loading project files to prevent clipping
-        setZoom(1.0);
+        // Trigger workspace auto-fit after applying loaded project state
+        triggerFitWorkspace();
         if (data.mainShapeSettings !== undefined) setMainShapeSettings(data.mainShapeSettings);
+        if (data.layoutFoldType !== undefined) setLayoutFoldType(data.layoutFoldType);
         if (data.foldLines !== undefined) setFoldLines(data.foldLines);
         if (data.roomDimensions !== undefined) setRoomDimensions(data.roomDimensions);
         if (data.roomColors !== undefined) setRoomColors(data.roomColors);
@@ -427,6 +430,7 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
           wallAngle: data.wallAngle || 0,
           wallBorder: data.wallBorder || { enabled: false, tileName: 'Border Tile', tileWidth: 4, tileHeight: 2, cornerJoint: 'straight', color: '#1e293b' },
           mainShapeSettings: data.mainShapeSettings || {},
+          layoutFoldType: data.layoutFoldType || layoutFoldType || 'inward',
           foldLines: data.foldLines || [],
           roomDimensions: data.roomDimensions || roomDimensions,
           roomColors: data.roomColors || roomColors,
@@ -567,9 +571,10 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
     if (data.isPainted !== undefined) setIsPainted(Boolean(data.isPainted));
     if (data.isBlankCanvasMode !== undefined) setIsBlankCanvasMode(Boolean(data.isBlankCanvasMode));
     if (data.activePresetId !== undefined) setActivePresetId(data.activePresetId);
-    // Always reset zoom to 1.0 (auto-fit) when loading custom presets to prevent clipping
-    setZoom(1.0);
+    // Trigger workspace auto-fit after applying custom preset
+    triggerFitWorkspace();
     if (data.mainShapeSettings !== undefined) setMainShapeSettings(data.mainShapeSettings);
+    if (data.layoutFoldType !== undefined) setLayoutFoldType(data.layoutFoldType);
     if (data.foldLines !== undefined) setFoldLines(data.foldLines);
     if (data.roomDimensions !== undefined) setRoomDimensions(data.roomDimensions);
     if (data.roomColors !== undefined) setRoomColors(data.roomColors);
@@ -751,7 +756,7 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
     setIsPainted(true);
     setIsBlankCanvasMode(false);
     setActivePresetId('subway-backsplash');
-    setZoom(1.0);
+    triggerFitWorkspace();
     setSoldAsMosaic(false);
     setMosaicWidth(12);
     setMosaicHeight(12);

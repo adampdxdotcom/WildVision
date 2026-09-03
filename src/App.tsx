@@ -24,6 +24,7 @@ import { WildVisionSidebar } from './features/WildVisionRender/WildVisionSidebar
 import { WildVisionGallery } from './features/WildVisionRender/WildVisionGallery';
 import PatternBuilderLayout from './features/PatternBuilder/PatternBuilderLayout';
 import { supabase } from './utils/supabaseClient';
+import { logProjectView } from './utils/telemetry';
 
 import { NewProjectModal } from './components/ProjectBrowser/NewProjectModal';
 import { SaveModal } from './components/ProjectBrowser/SaveModal';
@@ -36,6 +37,7 @@ import { UpdatePasswordModal } from './components/Auth/UpdatePasswordModal';
 import { WildVisionLightbox } from './features/WildVisionRender/WildVisionLightbox';
 import { PresentationView } from './features/PresentationMode/PresentationView';
 import { NotFoundView } from './components/Layout/NotFoundView';
+import SplatterViewer from './features/SplatterViewer/index';
 import { useMultiplayer } from './hooks/useMultiplayer';
 
 export default function App() {
@@ -102,6 +104,7 @@ export default function App() {
     canvasLabels,
     foldLines,
     viewMode, setViewMode,
+    isClientQuantitiesOpen,
     isImportLayoutModalOpen, setIsImportLayoutModalOpen,
     isWildVisionOpen,
     generatedRenders,
@@ -117,6 +120,7 @@ export default function App() {
     currentProjectId,
     sceneObjects,
     updateSceneObject,
+    isPublicViewer,
   } = useAppStore();
 
   const tileDotColor = compositeColors.secondary || '#334155';
@@ -173,11 +177,17 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('share');
+    const viewParam = params.get('view');
     if (token) {
       setIsInitializingShare(true);
-      loadSharedProject(token)
+      const isCadView = viewParam === 'cad';
+      loadSharedProject(token, { isCadView })
         .then((success) => {
-          if (!success) {
+          if (success) {
+            if (isCadView) {
+              logProjectView(token, 'cad_viewer');
+            }
+          } else {
             showToast("Failed to load shared project design. It may have been deleted or the link is invalid.", "error");
           }
         })
@@ -695,7 +705,7 @@ export default function App() {
         ) : (
           <>
             {/* LEFT CONTAINER: Sidebar specifications controls */}
-            {activeView !== 'gallery' && (
+            {activeView !== 'gallery' && !isPublicViewer && (
               <section id="sidebar-scroll-area" className="w-[360px] xl:w-[420px] h-full hidden md:flex flex-col flex-shrink-0 overflow-hidden pr-2">
                 {isWildVisionOpen ? (
                   <WildVisionSidebar />
@@ -713,13 +723,15 @@ export default function App() {
             )}
 
             {/* RIGHT CONTAINER: Visual simulator canvas viewport (responsive flex column) */}
-            <section className="flex-1 h-full flex flex-col min-h-0 overflow-hidden gap-4">
+            <section className={isPublicViewer ? "w-full md:w-[75%] mx-auto h-full flex flex-col min-h-0 overflow-hidden gap-4" : "flex-1 h-full flex flex-col min-h-0 overflow-hidden gap-4"}>
               
-              <div className="md:hidden w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-center shadow-xs">
-                <p className="text-[13px] text-slate-200 font-medium leading-tight">
-                  This app is best on desktop or tablet. You can load and view project files, but they cannot be modified. If you really want try, switch your browser to 'Desktop site'.
-                </p>
-              </div>
+              {!isPublicViewer && (
+                <div className="md:hidden w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-center shadow-xs">
+                  <p className="text-[13px] text-slate-200 font-medium leading-tight">
+                    This app is best on desktop or tablet. You can load and view project files, but they cannot be modified. If you really want try, switch your browser to 'Desktop site'.
+                  </p>
+                </div>
+              )}
 
               {/* Visual Canvas Viewport Section */}
               <div className="flex-1 min-h-0 flex flex-col pb-1">
@@ -730,39 +742,45 @@ export default function App() {
                   <WildVisionGallery />
                 ) : (
                   <div className="flex-1 min-h-0 flex flex-col relative">
-                    {viewMode === '2d' ? (
+                    <div className={viewMode === '2d' ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
                       <TileCanvas />
-                    ) : (
+                    </div>
+                    <div className={viewMode === '3d' ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
                       <TileCanvas3D />
-                    )}
+                    </div>
+                    <div className={viewMode === 'splatter' ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
+                      <SplatterViewer />
+                    </div>
 
                     {/* Floated 2D / 3D Segmented Switch */}
-                    <div className="absolute bottom-4 right-4 z-40 bg-white/90 backdrop-blur-md p-1 rounded-lg flex items-center gap-1 border border-slate-300 shadow-md">
-                      <button
-                        onClick={() => {
-                          useAppStore.getState().setViewMode('2d');
-                        }}
-                        className={`px-2.5 py-1 text-xs font-extrabold rounded-md transition-all duration-150 cursor-pointer ${
-                          viewMode === '2d'
-                            ? 'bg-indigo-600 text-white shadow-xs'
-                            : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900'
-                        }`}
-                      >
-                        2D
-                      </button>
-                      <button
-                        onClick={() => {
-                          useAppStore.getState().setViewMode('3d');
-                        }}
-                        className={`px-2.5 py-1 text-xs font-extrabold rounded-md transition-all duration-150 cursor-pointer ${
-                          viewMode === '3d'
-                            ? 'bg-indigo-600 text-white shadow-xs'
-                            : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900'
-                        }`}
-                      >
-                        3D
-                      </button>
-                    </div>
+                    {!isClientQuantitiesOpen && (
+                      <div className="absolute bottom-4 right-4 z-40 bg-white/90 backdrop-blur-md p-1 rounded-lg flex items-center gap-1 border border-slate-300 shadow-md">
+                        <button
+                          onClick={() => {
+                            useAppStore.getState().setViewMode('2d');
+                          }}
+                          className={`px-2.5 py-1 text-xs font-extrabold rounded-md transition-all duration-150 cursor-pointer ${
+                            viewMode === '2d'
+                              ? 'bg-indigo-600 text-white shadow-xs'
+                              : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900'
+                          }`}
+                        >
+                          2D
+                        </button>
+                        <button
+                          onClick={() => {
+                            useAppStore.getState().setViewMode('3d');
+                          }}
+                          className={`px-2.5 py-1 text-xs font-extrabold rounded-md transition-all duration-150 cursor-pointer ${
+                            viewMode === '3d'
+                              ? 'bg-indigo-600 text-white shadow-xs'
+                              : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900'
+                          }`}
+                        >
+                          3D
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

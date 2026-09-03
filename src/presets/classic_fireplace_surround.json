@@ -1,0 +1,96 @@
+{
+  "version": "1.0",
+  "projectName": "Classic Fireplace Surround",
+  "layoutFoldType": "outward",
+  "wallWidth": 84,
+  "wallHeight": 72,
+  "wallVertices": [
+    { "x": -12, "y": 0 },
+    { "x": 0, "y": 0 },
+    { "x": 60, "y": 0 },
+    { "x": 72, "y": 0 },
+    { "x": 72, "y": 72 },
+    { "x": 60, "y": 72 },
+    { "x": 0, "y": 72 },
+    { "x": -12, "y": 72 }
+  ],
+  "unit": "in",
+  "shape": "rectangle",
+  "tileWidth": 6,
+  "tileHeight": 6,
+  "pattern": "stack",
+  "groutWidth": 0.125,
+  "angle": 0,
+  "tileName": "Slate Black Fireplace Tile",
+  "tileColors": [
+    "#1e293b"
+  ],
+  "colorPattern": "single",
+  "tilesPerStripe": 1,
+  "groutColor": "#64748b",
+  "tileSpecular": true,
+  "offsetX": 0,
+  "offsetY": 0,
+  "subAreas": [
+    {
+      "id": "sa_firebox_niche",
+      "name": "Firebox Recess",
+      "x": 12,
+      "y": 12,
+      "width": 36,
+      "height": 36,
+      "depth": 14,
+      "shape": "rectangle",
+      "accentType": "niche",
+      "hasSill": true,
+      "sillDepth": 14,
+      "sillTileName": "Firebox Lining",
+      "sillTileColor": "#0f172a",
+      "tileColor": "#020617",
+      "tileColors": [
+        "#0f172a"
+      ],
+      "colorPattern": "single",
+      "groutColor": "#334155",
+      "groutWidth": 0.125,
+      "tileWidth": 6,
+      "tileHeight": 6,
+      "pattern": "stack"
+    },
+    {
+      "id": "sa_hearth_bench",
+      "name": "Hearth Staging Bench",
+      "x": -12,
+      "y": 0,
+      "width": 84,
+      "height": 10,
+      "depth": 18,
+      "shape": "rectangle",
+      "accentType": "bench",
+      "tileColor": "#334155",
+      "tileColors": [
+        "#334155"
+      ],
+      "colorPattern": "single",
+      "groutColor": "#475569",
+      "groutWidth": 0.125,
+      "tileWidth": 12,
+      "tileHeight": 12,
+      "pattern": "stack"
+    }
+  ],
+  "foldLines": [
+    {
+      "id": "fold_left_return",
+      "startNodeIndex": 1,
+      "endNodeIndex": 6,
+      "foldAngle": -90
+    },
+    {
+      "id": "fold_right_return",
+      "startNodeIndex": 2,
+      "endNodeIndex": 5,
+      "foldAngle": -90
+    }
+  ]
+}
