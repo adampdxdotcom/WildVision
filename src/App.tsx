@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { TileShape, RectanglePattern } from './types';
 import { TileCanvas } from './components/TileCanvas';
-import { TileCanvas3D } from './components/TileCanvas3D';
+const TileCanvas3D = React.lazy(() => import('./components/TileCanvas3D').then(m => ({ default: m.TileCanvas3D })));
 import { SidebarControls } from './components/SidebarControls';
 import { computeComprehensiveStatistics } from './utils/analytics';
 import { calculateCenteredOffsets } from './utils/geometry';
 import { Save, CheckCircle, AlertCircle, X } from 'lucide-react';
-import { handleExportPDF as handleExportPDFUtil } from './utils/pdfExport';
-import { TutorialOverlay } from './components/Tutorial/TutorialOverlay';
+
+const TutorialOverlay = React.lazy(() => import('./components/Tutorial/TutorialOverlay').then(m => ({ default: m.TutorialOverlay })));
 import { tutorialSteps } from './components/Tutorial/tutorialSteps';
 
 import { useAppStore } from './store/useAppStore';
@@ -20,9 +20,9 @@ import { logger } from './utils/logger';
 import { useProjectIO } from './hooks/useProjectIO';
 import { useCloudAutoSave } from './hooks/useCloudAutoSave';
 import { useProjectLock } from './hooks/useProjectLock';
-import { WildVisionSidebar } from './features/WildVisionRender/WildVisionSidebar';
-import { WildVisionGallery } from './features/WildVisionRender/WildVisionGallery';
-import PatternBuilderLayout from './features/PatternBuilder/PatternBuilderLayout';
+const WildVisionSidebar = React.lazy(() => import('./features/WildVisionRender/WildVisionSidebar').then(m => ({ default: m.WildVisionSidebar })));
+const WildVisionGallery = React.lazy(() => import('./features/WildVisionRender/WildVisionGallery').then(m => ({ default: m.WildVisionGallery })));
+const PatternBuilderLayout = React.lazy(() => import('./features/PatternBuilder/PatternBuilderLayout'));
 import { supabase } from './utils/supabaseClient';
 import { logProjectView } from './utils/telemetry';
 
@@ -30,16 +30,21 @@ import { NewProjectModal } from './components/ProjectBrowser/NewProjectModal';
 import { SaveModal } from './components/ProjectBrowser/SaveModal';
 import { LoadModal } from './components/ProjectBrowser/LoadModal';
 import { AuthModal } from './components/Auth/AuthModal';
-import { AdminDashboardModal } from './components/Auth/AdminDashboardModal';
+const AdminDashboardModal = React.lazy(() => import('./components/Auth/AdminDashboardModal').then(m => ({ default: m.AdminDashboardModal })));
 import { UpgradeModal } from './components/Auth/UpgradeModal';
 import { UpdatePasswordModal } from './components/Auth/UpdatePasswordModal';
 
-import { WildVisionLightbox } from './features/WildVisionRender/WildVisionLightbox';
-import { PresentationView } from './features/PresentationMode/PresentationView';
+
+const PresentationView = React.lazy(() => import('./features/PresentationMode/PresentationView').then(m => ({ default: m.PresentationView })));
 import { NotFoundView } from './components/Layout/NotFoundView';
-import SplatterViewer from './features/SplatterViewer/index';
+const SplatterViewer = React.lazy(() => import('./features/SplatterViewer/index'));
 import { useMultiplayer } from './hooks/useMultiplayer';
 
+const FallbackSpinner = () => (
+  <div className="flex-1 flex flex-col items-center justify-center min-h-0 bg-slate-950/50 backdrop-blur-sm h-full w-full">
+    <div className="w-8 h-8 border-[3px] border-slate-700 border-t-sky-400 rounded-full animate-spin"></div>
+  </div>
+);
 export default function App() {
   useMultiplayer();
   const {
@@ -468,6 +473,7 @@ export default function App() {
             wallHeight: roomDimensions.height,
           };
 
+          const { handleExportPDF: handleExportPDFUtil } = await import('./utils/pdfExport');
           const res = await handleExportPDFUtil({
             elevationMetadata,
             pdfLayoutMode: viewSettings.pdf.pdfLayoutMode,
@@ -630,7 +636,7 @@ export default function App() {
   if (viewMode === 'presentation') {
     return (
       <div className="h-screen w-screen flex flex-col overflow-hidden bg-slate-950 text-slate-100 antialiased font-sans relative">
-        <PresentationView />
+        <React.Suspense fallback={<FallbackSpinner />}><PresentationView /></React.Suspense>
         {/* Floating Toast Notification */}
         {toastMessage && (
           <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl animate-fade-in max-w-sm w-full mx-4">
@@ -701,14 +707,14 @@ export default function App() {
       {/* Main Content Layout Block */}
       <main className="flex-1 min-h-0 w-full flex overflow-hidden p-4 sm:p-6 lg:p-8 gap-8">
         {viewMode === 'pattern_studio' ? (
-          <PatternBuilderLayout />
+          <React.Suspense fallback={<FallbackSpinner />}><PatternBuilderLayout /></React.Suspense>
         ) : (
           <>
             {/* LEFT CONTAINER: Sidebar specifications controls */}
             {activeView !== 'gallery' && !isPublicViewer && (
               <section id="sidebar-scroll-area" className="w-[360px] xl:w-[420px] h-full hidden md:flex flex-col flex-shrink-0 overflow-hidden pr-2">
                 {isWildVisionOpen ? (
-                  <WildVisionSidebar />
+                  <React.Suspense fallback={<FallbackSpinner />}><WildVisionSidebar /></React.Suspense>
                 ) : (
                   <SidebarControls
                     onResetAlignment={handleResetAlignment}
@@ -737,19 +743,19 @@ export default function App() {
               <div className="flex-1 min-h-0 flex flex-col pb-1">
 
                 {isAdminConsoleOpen ? (
-                  <AdminDashboardModal />
+                  <React.Suspense fallback={<FallbackSpinner />}><AdminDashboardModal /></React.Suspense>
                 ) : activeView === 'gallery' ? (
-                  <WildVisionGallery />
+                  <React.Suspense fallback={<FallbackSpinner />}><WildVisionGallery /></React.Suspense>
                 ) : (
                   <div className="flex-1 min-h-0 flex flex-col relative">
                     <div className={viewMode === '2d' ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
                       <TileCanvas />
                     </div>
                     <div className={viewMode === '3d' ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
-                      <TileCanvas3D />
+                      <React.Suspense fallback={<FallbackSpinner />}><TileCanvas3D /></React.Suspense>
                     </div>
                     <div className={viewMode === 'splatter' ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
-                      <SplatterViewer />
+                      <React.Suspense fallback={<FallbackSpinner />}><SplatterViewer /></React.Suspense>
                     </div>
 
                     {/* Floated 2D / 3D Segmented Switch */}
@@ -876,7 +882,7 @@ export default function App() {
 
       <UpdatePasswordModal />
 
-      <TutorialOverlay
+      <React.Suspense fallback={null}><TutorialOverlay
         currentStepIndex={tutorialStepIndex}
         onClose={() => setTutorialStepIndex(-1)}
         onNext={() => {
@@ -892,6 +898,7 @@ export default function App() {
         }}
         onGotoStep={(index) => setTutorialStepIndex(index)}
       />
+      </React.Suspense>
       
     </div>
   );

@@ -531,7 +531,7 @@ export function useDragController({
 
       // Apply Precision Corner Snapping if not holding Freeform key
       if (!isFreeform) {
-        const snapThreshold = 1.2; // threshold in inches
+        const snapThreshold = 6; // threshold in inches
         
         let bestXDiff = snapThreshold;
         let snapCorrectionX = 0;
@@ -705,13 +705,14 @@ export function useDragController({
         if (planeKey === 'back' || planeKey === 'floor' || planeKey === 'ceiling') {
           const sizeX = offsetXMax - offsetXMin;
           if (sizeX <= roomDimensions.width) {
-            if (xInch + offsetXMin < leftWallX) {
+            const distLeft = (xInch + offsetXMin) - leftWallX;
+            const distRight = rightWallX - (xInch + offsetXMax);
+            if (distLeft < 6 && distLeft <= distRight) {
               xInch = leftWallX - offsetXMin;
-            } else if (xInch + offsetXMax > rightWallX) {
+            } else if (distRight < 6) {
               xInch = rightWallX - offsetXMax;
             }
           } else {
-            // Allows movement inward toward the center if it ever exceeds room boundaries rather than freezing
             xInch = Math.max(leftWallX, Math.min(rightWallX, xInch));
           }
         }
@@ -720,13 +721,14 @@ export function useDragController({
         if (planeKey === 'left' || planeKey === 'right' || planeKey === 'floor' || planeKey === 'ceiling') {
           const sizeZ = offsetZMax - offsetZMin;
           if (sizeZ <= roomDimensions.depth) {
-            if (zInch + offsetZMin < backWallZ) {
+            const distBack = (zInch + offsetZMin) - backWallZ;
+            const distFront = frontWallZ - (zInch + offsetZMax);
+            if (distBack < 6 && distBack <= distFront) {
               zInch = backWallZ - offsetZMin;
-            } else if (zInch + offsetZMax > frontWallZ) {
+            } else if (distFront < 6) {
               zInch = frontWallZ - offsetZMax;
             }
           } else {
-            // Allows movement inward toward the center rather than freezing
             zInch = Math.max(backWallZ, Math.min(frontWallZ, zInch));
           }
         }
@@ -734,9 +736,11 @@ export function useDragController({
         // Y containment
         const sizeY = offsetYMax - offsetYMin;
         if (sizeY <= roomDimensions.height) {
-          if (yInch + offsetYMin < floorYVal) {
+          const distFloor = (yInch + offsetYMin) - floorYVal;
+          const distCeil = ceilingYVal - (yInch + offsetYMax);
+          if (distFloor < 6 && distFloor <= distCeil) {
             yInch = floorYVal - offsetYMin;
-          } else if (yInch + offsetYMax > ceilingYVal) {
+          } else if (distCeil < 6) {
             yInch = ceilingYVal - offsetYMax;
           }
         } else {
@@ -765,25 +769,35 @@ export function useDragController({
         const frontWallZ = roomDimensions.depth / 2;
 
         if (planeKey === 'back' || planeKey === 'floor' || planeKey === 'ceiling') {
-          if (minGlobalX < leftWallX) {
+          const distLeft = minGlobalX - leftWallX;
+          const distRight = rightWallX - maxGlobalX;
+          if (distLeft < 6 && distLeft <= distRight) {
             xInch += (leftWallX - minGlobalX);
-          }
-          if (maxGlobalX > rightWallX) {
+          } else if (distRight < 6) {
             xInch += (rightWallX - maxGlobalX);
           }
         }
         if (planeKey === 'left' || planeKey === 'right' || planeKey === 'floor' || planeKey === 'ceiling') {
-          if (minGlobalZ < backWallZ) {
+          const distBack = minGlobalZ - backWallZ;
+          const distFront = frontWallZ - maxGlobalZ;
+          if (distBack < 6 && distBack <= distFront) {
             zInch += (backWallZ - minGlobalZ);
-          }
-          if (maxGlobalZ > frontWallZ) {
+          } else if (distFront < 6) {
             zInch += (frontWallZ - maxGlobalZ);
           }
         }
 
         const minY = -roomDimensions.height / 2 + bounds.height / 2;
         const maxY = roomDimensions.height / 2 - bounds.height / 2;
-        yInch = Math.max(minY, Math.min(maxY, yInch));
+        const distFloor = yInch - minY;
+        const distCeil = maxY - yInch;
+        if (distFloor < 6 && distFloor <= distCeil) {
+          yInch = minY;
+        } else if (distCeil < 6) {
+          yInch = maxY;
+        } else {
+          yInch = Math.max(minY, Math.min(maxY, yInch));
+        }
       }
     }
 
