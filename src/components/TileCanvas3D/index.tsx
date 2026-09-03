@@ -551,7 +551,21 @@ export const TileCanvas3D: React.FC = () => {
                ];
                candidates.sort((a, b) => b.dot - a.dot);
                const best = candidates[0];
-               const hitPlane = best && best.dot > 0.7 ? best.plane : '';
+               
+               let hitPlane = '';
+               if (best && best.dot > 0.7) {
+                 let dist = Infinity;
+                 if (best.plane === 'back') dist = Math.abs(worldPos.z - (-rDepth / 2));
+                 else if (best.plane === 'left') dist = Math.abs(worldPos.x - (-rWidth / 2));
+                 else if (best.plane === 'right') dist = Math.abs(worldPos.x - (rWidth / 2));
+                 else if (best.plane === 'floor') dist = Math.abs(worldPos.y - (-rHeight / 2));
+                 else if (best.plane === 'ceiling') dist = Math.abs(worldPos.y - (rHeight / 2));
+
+                 // Only punch a hole if the panel is in direct contact/flush with the room perimeter wall (within tolerance)
+                 if (dist <= 0.08) {
+                   hitPlane = best.plane;
+                 }
+               }
 
                if (hitPlane) {
                   let hX = 0, hY = 0;
