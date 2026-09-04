@@ -348,20 +348,15 @@ export function drawSubAreas(
     const saOriginX = sa.x + sa.offsetX;
     const saOriginY = sa.y + sa.offsetY;
 
-    let saTiles: TileInstance[] = [];
+    let rawTiles: TileInstance[] = [];
     if (subAreaTileMap && subAreaTileMap[sa.id]) {
-      const generated = subAreaTileMap[sa.id];
-      saTiles = generated.map(t => ({
-        ...t,
-        center: { x: t.center.x + sa.x, y: t.center.y + sa.y },
-        vertices: t.vertices.map(v => ({ x: v.x + sa.x, y: v.y + sa.y })),
-      }));
+      rawTiles = subAreaTileMap[sa.id];
     } else {
       const activePat = sa.customPatternPayload || (useAppStore.getState().activeCustomPattern);
       const flatsketV = sa.flatsketVerticalRows || (useAppStore.getState().flatsketVerticalRows);
       const flatsketH = sa.flatsketHorizontalRows || (useAppStore.getState().flatsketHorizontalRows);
 
-      const generated = generateTiles({
+      rawTiles = generateTiles({
         wallWidth: sa.width,
         wallHeight: sa.height,
         shape: sa.shape,
@@ -380,22 +375,17 @@ export function drawSubAreas(
         flatsketHorizontalRows: flatsketH,
         layoutId: sa.id,
       });
-      saTiles = generated.map(t => ({
-        ...t,
-        center: { x: t.center.x + sa.x, y: t.center.y + sa.y },
-        vertices: t.vertices.map(v => ({ x: v.x + sa.x, y: v.y + sa.y })),
-      }));
     }
 
     // 4. Filter and mask organic edge tiles, or prepare for drawing
-    let finalSaTiles = saTiles;
+    let finalSaTiles = rawTiles;
 
     if (sa.organicEdges) {
       ctx.save();
       defineBoundaryPath();
       const matrix = ctx.getTransform();
-      finalSaTiles = saTiles.filter((tile) => {
-        const centerCanvas = mapToCanvas(tile.center.x, tile.center.y, viewport);
+      finalSaTiles = rawTiles.filter((tile) => {
+        const centerCanvas = mapToCanvas(tile.center.x + sa.x, tile.center.y + sa.y, viewport);
         const transformedX = centerCanvas.x * matrix.a + centerCanvas.y * matrix.c + matrix.e;
         const transformedY = centerCanvas.x * matrix.b + centerCanvas.y * matrix.d + matrix.f;
         return ctx.isPointInPath(transformedX, transformedY);
@@ -406,8 +396,8 @@ export function drawSubAreas(
       ctx.save();
       ctx.fillStyle = sa.groutColor;
       for (const tile of finalSaTiles) {
-        const canvasVertices = tile.vertices.map((v) => mapToCanvas(v.x, v.y, viewport));
-        const pCenter = mapToCanvas(tile.center.x, tile.center.y, viewport);
+        const canvasVertices = tile.vertices.map((v) => mapToCanvas(v.x + sa.x, v.y + sa.y, viewport));
+        const pCenter = mapToCanvas(tile.center.x + sa.x, tile.center.y + sa.y, viewport);
 
         ctx.beginPath();
         if (tile.shape === 'round') {
@@ -451,20 +441,34 @@ export function drawSubAreas(
     }
 
     // 5. Fill accent band tiles
+    const state = useAppStore.getState();
+    const tileColorOverrides = state.tileColorOverrides || {};
+    const uploadedSvgText = state.uploadedSvgText;
+    const patternAccentColor = state.patternAccentColor || '#000000';
+    const onImageLoaded = () => {
+      useAppStore.getState().setIsCanvasDirty(true);
+    };
+
     for (const tile of finalSaTiles) {
-      const xs = tile.vertices.map((v) => v.x);
-      const ys = tile.vertices.map((v) => v.y);
-      const xMin = Math.min(...xs);
-      const xMax = Math.max(...xs);
-      const yMin = Math.min(...ys);
-      const yMax = Math.max(...ys);
+      let xMin = Infinity;
+      let xMax = -Infinity;
+      let yMin = Infinity;
+      let yMax = -Infinity;
+      for (let vi = 0; vi < tile.vertices.length; vi++) {
+        const vx = tile.vertices[vi].x + sa.x;
+        const vy = tile.vertices[vi].y + sa.y;
+        if (vx < xMin) xMin = vx;
+        if (vx > xMax) xMax = vx;
+        if (vy < yMin) yMin = vy;
+        if (vy > yMax) yMax = vy;
+      }
 
       const overlapsX = xMin < sa.x + sa.width && xMax > sa.x;
       const overlapsY = yMin < sa.y + sa.height && yMax > sa.y;
       if (!overlapsX || !overlapsY) continue;
 
-      const canvasVertices = tile.vertices.map((v) => mapToCanvas(v.x, v.y, viewport));
-      const pCenter = mapToCanvas(tile.center.x, tile.center.y, viewport);
+      const canvasVertices = tile.vertices.map((v) => mapToCanvas(v.x + sa.x, v.y + sa.y, viewport));
+      const pCenter = mapToCanvas(tile.center.x + sa.x, tile.center.y + sa.y, viewport);
 
       ctx.save();
 
@@ -482,8 +486,6 @@ export function drawSubAreas(
       const baseSaColorHex = baseSaCard.hex;
       let resolvedSaTileColor = disableTileColorOnPdf ? '#ffffff' : baseSaColorHex;
 
-      const state = useAppStore.getState();
-      const tileColorOverrides = state.tileColorOverrides || {};
       const customPaintOverride = tileColorOverrides[tile.id];
 
       if (customPaintOverride !== undefined) {
@@ -496,14 +498,6 @@ export function drawSubAreas(
       if (!disableTileColorOnPdf) {
         resolvedSaTileColor = getVariedColor(resolvedSaTileColor, tile.center.x, tile.center.y, sa.colorVariation || 'V1');
       }
-
-      const uploadedSvgText = state.uploadedSvgText;
-      const patternAccentColor = state.patternAccentColor || '#000000';
-      const saAngleRad = ((sa.angle || 0) * Math.PI) / 180;
-
-      const onImageLoaded = () => {
-        useAppStore.getState().setIsCanvasDirty(true);
-      };
 
       let patternImg: HTMLImageElement | null = null;
       if (baseSaCard.pattern && baseSaCard.pattern.svgText) {

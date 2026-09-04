@@ -194,6 +194,10 @@ export function useCanvasRenderer({
     img.src = texDef.url;
   }, [materialTexture]);
 
+  // Stabilize subArea texture keys so positioning/nudge/color updates don't re-trigger texture preload loops
+  const subAreasTextureKey = subAreas.map((sa) => `${sa.id}:${sa.materialTexture || 'none'}`).join('|');
+  const subAreasSurfaceKey = subAreas.map((sa) => `${sa.id}:${sa.surfaceUrl || ''}`).join('|');
+
   useEffect(() => {
     const texturesToLoad = Array.from(
       new Set(
@@ -214,7 +218,7 @@ export function useCanvasRenderer({
         }
       });
     });
-  }, [subAreas]);
+  }, [subAreasTextureKey]);
 
   useEffect(() => {
     const surfacesToLoad = Array.from(
@@ -225,12 +229,14 @@ export function useCanvasRenderer({
       )
     );
 
+    if (surfacesToLoad.length === 0) return;
+
     surfacesToLoad.forEach((url) => {
       getLoadedSurfaceImage(url, () => {
         useAppStore.getState().setIsCanvasDirty(true);
       });
     });
-  }, [subAreas]);
+  }, [subAreasSurfaceKey]);
 
   const tileSpecular = viewSettings.render.enableReflection;
   const disableTileColorOnPdf = viewSettings.pdf.disableTileColor;
@@ -701,7 +707,9 @@ export function useCanvasRenderer({
     accentTexturesLoadedKey,
     tileColorOverrides,
     disableColorWithTexture,
-    sceneObjects
+    sceneObjects,
+    isDrafting,
+    subAreaTileMap
   ]);
 
   useEffect(() => {

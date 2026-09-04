@@ -78,6 +78,7 @@ export function useCanvasViewport({
   const [isPanningCanvas, setIsPanningCanvas] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [panOffsetStart, setPanOffsetStart] = useState({ x: 0, y: 0 });
+  const panStageRef = useRef<HTMLDivElement | null>(null);
 
   // Background overlay dragging states
   const [isDraggingBg, setIsDraggingBg] = useState(false);
@@ -453,12 +454,14 @@ export function useCanvasViewport({
     return { px, py };
   };
 
-  // Panning UI Action handlers
+  // Panning UI Action handlers (GPU-accelerated CSS transform)
   const handlePanStart = (clientX: number, clientY: number) => {
-    useAppStore.getState().setIsDrafting(true);
     setIsPanningCanvas(true);
     setPanStart({ x: clientX, y: clientY });
     setPanOffsetStart({ x: panX, y: panY });
+    if (panStageRef.current) {
+      panStageRef.current.style.willChange = 'transform';
+    }
   };
 
   const handlePanMove = (clientX: number, clientY: number) => {
@@ -467,14 +470,16 @@ export function useCanvasViewport({
     panXRef.current = panOffsetStart.x + dx;
     panYRef.current = panOffsetStart.y + dy;
     
-    if (typeof window !== 'undefined') {
-      requestAnimationFrame(() => {
-        window.dispatchEvent(new CustomEvent('wildvision:forceCanvasRedraw'));
-      });
+    if (panStageRef.current) {
+      panStageRef.current.style.transform = `translate3d(${dx}px, ${dy}px, 0px)`;
     }
   };
 
   const handlePanEnd = () => {
+    if (panStageRef.current) {
+      panStageRef.current.style.transform = '';
+      panStageRef.current.style.willChange = 'auto';
+    }
     setIsPanningCanvas(false);
     setPanX(panXRef.current);
     setPanY(panYRef.current);
@@ -530,6 +535,7 @@ export function useCanvasViewport({
     handlePanStart,
     handlePanMove,
     handlePanEnd,
+    panStageRef,
     handleBgDragStart,
     handleBgDragMove,
     handleBgDragEnd,

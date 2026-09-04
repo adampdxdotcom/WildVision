@@ -56,6 +56,18 @@ export function drawMainTiles(
       });
   }
 
+  const state = useAppStore.getState();
+  const tileColorOverrides = state.tileColorOverrides || {};
+  const compositeColors = state.compositeColors || {};
+  const uploadedSvgText = state.uploadedSvgText;
+  const patternAccentColor = state.patternAccentColor || '#000000';
+  const angleDeg = state.angle || 0;
+  const angleRad = (angleDeg * Math.PI) / 180;
+
+  const onImageLoaded = () => {
+    useAppStore.getState().setIsCanvasDirty(true);
+  };
+
   for (const tile of tiles) {
     const xs = tile.vertices.map((v) => v.x);
     const ys = tile.vertices.map((v) => v.y);
@@ -86,8 +98,6 @@ export function drawMainTiles(
     const baseColor = baseCard.hex;
     let resolvedTileColor = disableTileColorOnPdf ? '#ffffff' : baseColor;
 
-    const state = useAppStore.getState();
-    const tileColorOverrides = state.tileColorOverrides || {};
     const customPaintOverride = tileColorOverrides[tile.id];
 
     if (customPaintOverride !== undefined && !isBumpMapMode) {
@@ -115,18 +125,10 @@ export function drawMainTiles(
       }
     }
 
-    const uploadedSvgText = state.uploadedSvgText;
-    const patternAccentColor = state.patternAccentColor || '#000000';
-    const angleDeg = state.angle || 0;
-    const angleRad = (angleDeg * Math.PI) / 180;
     if (!disableTileColorOnPdf) {
       resolvedTileColor = getVariedColor(resolvedTileColor, tile.center.x, tile.center.y, colorVariation);
     }
     const resolvedSpecular = disableTileColorOnPdf ? false : tileSpecular;
-
-    const onImageLoaded = () => {
-      useAppStore.getState().setIsCanvasDirty(true);
-    };
 
     let patternImg: HTMLImageElement | null = null;
     if (baseCard.pattern && baseCard.pattern.svgText) {

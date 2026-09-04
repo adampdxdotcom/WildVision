@@ -1,5 +1,6 @@
 import { StateCreator } from 'zustand';
 import { supabase } from '../../utils/supabaseClient';
+import { ComfyUiConfig } from '../../types';
 
 export interface ActiveAiModel {
   api_slug: string;
@@ -64,6 +65,10 @@ export interface AiRenderSlice {
   getRenderCreditCost: () => number;
   activeAiModel: ActiveAiModel | null;
   setActiveAiModel: (model: ActiveAiModel | null) => void;
+  aiEngine: 'gemini' | 'comfyui';
+  setAiEngine: (engine: 'gemini' | 'comfyui') => void;
+  comfyUiConfig: ComfyUiConfig | null;
+  setComfyUiConfig: (config: ComfyUiConfig | null) => void;
 }
 
 export const createAiRenderSlice: StateCreator<any, [], [], AiRenderSlice> = (set, get) => ({
@@ -212,6 +217,41 @@ export const createAiRenderSlice: StateCreator<any, [], [], AiRenderSlice> = (se
   setRenderResolution: (updater) => set((state: any) => ({ renderResolution: typeof updater === 'function' ? updater(state.renderResolution) : updater })),
   activeAiModel: null,
   setActiveAiModel: (model) => set({ activeAiModel: model }),
+  aiEngine: (() => {
+    try {
+      return (localStorage.getItem('wildvision_ai_engine') as 'gemini' | 'comfyui') || 'gemini';
+    } catch {
+      return 'gemini';
+    }
+  })(),
+  setAiEngine: (engine) => {
+    try {
+      localStorage.setItem('wildvision_ai_engine', engine);
+    } catch (e) {
+      console.warn('Could not persist wildvision_ai_engine to localStorage:', e);
+    }
+    set({ aiEngine: engine });
+  },
+  comfyUiConfig: (() => {
+    try {
+      const raw = localStorage.getItem('wildvision_comfyui_config');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  })(),
+  setComfyUiConfig: (config) => {
+    try {
+      if (config) {
+        localStorage.setItem('wildvision_comfyui_config', JSON.stringify(config));
+      } else {
+        localStorage.removeItem('wildvision_comfyui_config');
+      }
+    } catch (e) {
+      console.warn('Could not persist wildvision_comfyui_config to localStorage:', e);
+    }
+    set({ comfyUiConfig: config });
+  },
 
   getRenderCreditCost: () => {
     const res = get().renderResolution;

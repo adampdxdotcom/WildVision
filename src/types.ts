@@ -390,6 +390,26 @@ export interface SavedProjectData {
   [key: string]: any;
 }
 
+export type ComfyAspectRatio = '1:1' | '4:3' | '16:9' | '9:16';
+export type ComfyResolution = '1K' | '2K' | '4K';
+
+export interface ComfyUiConfig {
+  server_url: string;
+  api_key?: string;
+  prompt_node_id: string;
+  latent_node_id: string;
+  output_node_id: string;
+  base_prompt: string;
+  negative_prompt: string;
+  aspect_ratio: ComfyAspectRatio;
+  resolution: ComfyResolution;
+  steps: number;
+  cfg_scale: number;
+  sampler: string;
+  scheduler: string;
+  workflow_json: string;
+}
+
 export interface AppSettings {
   id: number;
   active_model?: string | null;
@@ -397,6 +417,8 @@ export interface AppSettings {
   maintenance_mode?: boolean | null;
   subfloor_url?: string | null;
   subfloor_api_key?: string | null;
+  ai_engine?: 'gemini' | 'comfyui';
+  comfyui_settings?: ComfyUiConfig | null;
   created_at?: string;
   updated_at?: string;
 }

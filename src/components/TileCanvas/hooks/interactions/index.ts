@@ -672,6 +672,7 @@ const clickedSceneObject = Object.values(sceneObjects).find(obj => {
     setHoveredSegment(null);
     setHoveredSubAreaEdge(null);
     lastMouseScreenRef.current = null;
+    setActiveCursor('default');
     setIsDrafting(false);
   };
 
@@ -680,10 +681,6 @@ const clickedSceneObject = Object.values(sceneObjects).find(obj => {
     
     if (e.button === 1 || e.button === 2) {
       e.preventDefault();
-      if (colorPattern !== 'paint' && !effectiveReadOnly) {
-        setIsDrafting(true);
-      }
-      dragMachine.setIsDragging(true);
       handlePanStart(e.clientX, e.clientY);
       setActiveCursor('grabbing');
       return;
@@ -692,7 +689,6 @@ const clickedSceneObject = Object.values(sceneObjects).find(obj => {
     if (effectiveReadOnly) {
       if (e.button === 0) {
         e.preventDefault();
-        dragMachine.setIsDragging(true);
         handlePanStart(e.clientX, e.clientY);
         setActiveCursor('grabbing');
       }

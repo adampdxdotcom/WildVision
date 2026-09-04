@@ -126,61 +126,102 @@ const CanvasInteractiveSurface: React.FC = () => {
   const flatsketVerticalRows = useAppStore(state => state.flatsketVerticalRows);
   const flatsketHorizontalRows = useAppStore(state => state.flatsketHorizontalRows);
 
-  const subAreaTileMap = React.useMemo(() => {
-    if (isDrafting) {
-      return {};
+  // 1. Generate Main Wall tiles independently so subArea/accent changes do NOT recompute the main wall
+  const mainTiles = React.useMemo(() => {
+    if (isBlankCanvasMode) {
+      return [];
     }
+    return generateTiles({
+      wallWidth,
+      wallHeight,
+      shape,
+      tileWidth,
+      tileHeight,
+      pattern,
+      groutWidth,
+      offsetX,
+      offsetY,
+      angle,
+      extensions: wallExtensions,
+      isPicket,
+      picketLength,
+      wallVertices,
+      activeCustomPattern,
+      flatsketVerticalRows,
+      flatsketHorizontalRows,
+      layoutId: 'main',
+    });
+  }, [
+    isBlankCanvasMode, wallWidth, wallHeight, shape, tileWidth, tileHeight,
+    pattern, groutWidth, offsetX, offsetY, angle, wallExtensions, isPicket,
+    picketLength, wallVertices, activeCustomPattern,
+    flatsketVerticalRows, flatsketHorizontalRows
+  ]);
+
+  // 2. Cache subArea tiles per individual subArea so changing one subArea doesn't recompute others
+  const subAreaTileCacheRef = React.useRef<Map<string, { key: string; tiles: TileInstance[] }>>(new Map());
+
+  const subAreaTileMap = React.useMemo(() => {
     const map: Record<string, TileInstance[]> = {};
-    for (const sa of subAreas) {
-      if (sa.visible === false) continue;
-      map[sa.id] = generateTiles({
-        wallWidth: sa.width,
-        wallHeight: sa.height,
-        shape: sa.shape,
-        tileWidth: sa.tileWidth,
-        tileHeight: sa.tileHeight,
-        pattern: sa.pattern,
-        groutWidth: sa.groutWidth,
-        offsetX: sa.offsetX,
-        offsetY: sa.offsetY,
-        angle: sa.angle || 0,
-        isCutout: sa.isCutout,
-        activeCustomPattern: sa.customPatternPayload || activeCustomPattern,
-        flatsketVerticalRows: sa.flatsketVerticalRows || flatsketVerticalRows,
-        flatsketHorizontalRows: sa.flatsketHorizontalRows || flatsketHorizontalRows,
-        layoutId: sa.id,
-      } as any);
+    if (!isBlankCanvasMode) {
+      map['main'] = mainTiles;
     }
 
-    if (!isBlankCanvasMode) {
-      map['main'] = generateTiles({
-        wallWidth,
-        wallHeight,
-        shape,
-        tileWidth,
-        tileHeight,
-        pattern,
-        groutWidth,
-        offsetX,
-        offsetY,
-        angle,
-        extensions: wallExtensions,
-        isPicket,
-        picketLength,
-        wallVertices,
-        activeCustomPattern,
-        flatsketVerticalRows,
-        flatsketHorizontalRows,
-        layoutId: 'main',
-      });
+    const currentCache = subAreaTileCacheRef.current;
+    const activeIds = new Set<string>();
+
+    for (const sa of subAreas) {
+      if (sa.visible === false) continue;
+      activeIds.add(sa.id);
+
+      const customPat = sa.customPatternPayload || activeCustomPattern;
+      const fv = sa.flatsketVerticalRows || flatsketVerticalRows;
+      const fh = sa.flatsketHorizontalRows || flatsketHorizontalRows;
+
+      // Unique signature for this subArea's tile geometry
+      const cacheKey = `${sa.id}|${sa.width}|${sa.height}|${sa.shape}|${sa.tileWidth}|${sa.tileHeight}|${sa.pattern}|${sa.groutWidth}|${sa.offsetX}|${sa.offsetY}|${sa.angle || 0}|${sa.isCutout ? 1 : 0}|${sa.isPicket ? 1 : 0}|${sa.picketLength || 0}|${JSON.stringify(customPat || '')}|${JSON.stringify(fv || '')}|${JSON.stringify(fh || '')}|${JSON.stringify(sa.vertices || '')}`;
+
+      const cached = currentCache.get(sa.id);
+      if (cached && cached.key === cacheKey) {
+        map[sa.id] = cached.tiles;
+      } else {
+        const generated = generateTiles({
+          wallWidth: sa.width,
+          wallHeight: sa.height,
+          shape: sa.shape,
+          tileWidth: sa.tileWidth,
+          tileHeight: sa.tileHeight,
+          pattern: sa.pattern,
+          groutWidth: sa.groutWidth,
+          offsetX: sa.offsetX,
+          offsetY: sa.offsetY,
+          angle: sa.angle || 0,
+          isCutout: sa.isCutout,
+          activeCustomPattern: customPat,
+          flatsketVerticalRows: fv,
+          flatsketHorizontalRows: fh,
+          isPicket: sa.isPicket,
+          picketLength: sa.picketLength,
+          wallVertices: sa.vertices,
+          layoutId: sa.id,
+        } as any);
+
+        currentCache.set(sa.id, { key: cacheKey, tiles: generated });
+        map[sa.id] = generated;
+      }
+    }
+
+    // Clean up cache for deleted subAreas
+    for (const cachedId of Array.from(currentCache.keys())) {
+      if (!activeIds.has(cachedId)) {
+        currentCache.delete(cachedId);
+      }
     }
 
     return map;
   }, [
     subAreas, activeCustomPattern, flatsketVerticalRows, flatsketHorizontalRows,
-    isBlankCanvasMode, wallWidth, wallHeight, shape, tileWidth, tileHeight,
-    pattern, groutWidth, offsetX, offsetY, angle, wallExtensions, isPicket,
-    picketLength, wallVertices, isDrafting
+    isBlankCanvasMode, mainTiles
   ]);
 
   const {
@@ -212,6 +253,7 @@ const CanvasInteractiveSurface: React.FC = () => {
     handlePanStart,
     handlePanMove,
     handlePanEnd,
+    panStageRef,
     handleBgDragStart,
     handleBgDragMove,
     handleBgDragEnd,
@@ -453,7 +495,7 @@ const CanvasInteractiveSurface: React.FC = () => {
   return (
       <div
         ref={containerRef}
-        className="relative flex-1 min-h-[160px] border-x border-b border-slate-200 bg-slate-50 overflow-hidden rounded-b-xl touch-none select-none"
+        className="relative flex-1 min-h-[160px] border-x border-b border-slate-200 bg-slate-100 overflow-hidden rounded-b-xl touch-none select-none"
         style={{
           cursor: (activeTool === 'fold-line' && hoveredFoldIndex !== null) ? 'crosshair' : activeCursor,
           touchAction: 'none',
@@ -477,7 +519,7 @@ const CanvasInteractiveSurface: React.FC = () => {
         <MultiplayerCursors wallToScreen={wallToScreen} />
 
         {/* Polygon Vertices Interaction Overlay */}
-        {!isDrafting && (
+        <div className={isDrafting || isPanningCanvas ? 'hidden' : 'contents'}>
           <InteractiveNodes
             wallToScreen={wallToScreen}
             dimensions={dimensions}
@@ -488,16 +530,16 @@ const CanvasInteractiveSurface: React.FC = () => {
             activeEditingSegmentSubAreaId={activeEditingSegmentSubAreaId}
             setActiveEditingSegmentSubAreaId={setActiveEditingSegmentSubAreaId}
           />
-        )}
+        </div>
 
         {/* Canvas Labels Overlay */}
-        {!isDrafting && (
+        <div className={isDrafting || isPanningCanvas ? 'hidden' : 'contents'}>
           <CanvasLabelsOverlay
             wallToScreen={wallToScreen}
             screenToWall={screenToWall}
             scale={scale}
           />
-        )}
+        </div>
 
         {/* Marquee Selection Overlay */}
         {marqueeStart && marqueeEnd && (
@@ -540,36 +582,42 @@ const CanvasInteractiveSurface: React.FC = () => {
           />
         )}
 
-        {backgroundImage && (
-          <img
-            src={backgroundImage}
-            alt="Room Background"
-            className="absolute rounded-none pointer-events-none transition-opacity duration-200"
-            referrerPolicy="no-referrer"
-            style={{
-              left: '50%',
-              top: '50%',
-              transform: `translate(-50%, -50%) translate(${(bgOffsetX * zoom) + panX}px, ${(bgOffsetY * zoom) + panY}px) scale(${bgScale * zoom})`,
-              opacity: isDraggingBg ? bgOpacity * 0.3 : bgOpacity,
-              maxWidth: 'none',
-              maxHeight: 'none',
-            }}
+        {/* Pan Stage Wrapper (GPU-accelerated CSS transform during pan) */}
+        <div
+          ref={panStageRef}
+          className="absolute inset-0 w-full h-full pointer-events-none"
+        >
+          {backgroundImage && (
+            <img
+              src={backgroundImage}
+              alt="Room Background"
+              className="absolute rounded-none pointer-events-none transition-opacity duration-200"
+              referrerPolicy="no-referrer"
+              style={{
+                left: '50%',
+                top: '50%',
+                transform: `translate(-50%, -50%) translate(${(bgOffsetX * zoom) + panX}px, ${(bgOffsetY * zoom) + panY}px) scale(${bgScale * zoom})`,
+                opacity: isDraggingBg ? bgOpacity * 0.3 : bgOpacity,
+                maxWidth: 'none',
+                maxHeight: 'none',
+              }}
+            />
+          )}
+
+          <canvas
+            ref={canvasRef}
+            className="block w-full h-full relative"
+            data-corner-x={cornerX}
+            data-corner-y={cornerY}
+            data-render-w={renderW}
+            data-render-h={renderH}
           />
-        )}
 
-        <canvas
-          ref={canvasRef}
-          className="block w-full h-full relative"
-          data-corner-x={cornerX}
-          data-corner-y={cornerY}
-          data-render-w={renderW}
-          data-render-h={renderH}
-        />
-
-        <canvas
-          ref={overlayCanvasRef}
-          className="absolute inset-0 block w-full h-full pointer-events-none z-10"
-        />
+          <canvas
+            ref={overlayCanvasRef}
+            className="absolute inset-0 block w-full h-full pointer-events-none z-10"
+          />
+        </div>
 
         {/* Floating Elegant Zoom Controls */}
         {!isClientQuantitiesOpen && <ZoomControls onCenter={performCenter} />}
