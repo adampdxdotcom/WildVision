@@ -14,6 +14,10 @@ export interface Panel3D {
   isGhost?: boolean;
   foldAngle?: number;
   invertMaterials?: boolean;
+  hasFramingExtrusion?: boolean;
+  hasTopCap?: boolean;
+  hasLeftEndCap?: boolean;
+  hasRightEndCap?: boolean;
 }
 
 export interface ColumnSegment {
@@ -26,6 +30,7 @@ export interface ColumnSegment {
   rightFoldAngle?: number;
   startX?: number;
   endX?: number;
+  isRoot?: boolean;
 }
 
 export interface FeatureProps {

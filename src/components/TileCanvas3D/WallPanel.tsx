@@ -1,7 +1,7 @@
 import React from 'react';
 import * as THREE from 'three';
 import { useAppStore } from '../../store/useAppStore';
-import { getCombinedWallBounds, getCircleThroughPoints } from '../../utils/geometry';
+import { getCombinedWallBounds, getCircleThroughPoints, clipPolygonToBox, getTessellatedPath, getSignedArea } from '../../utils/geometry';
 import { getMaterialFinishProps } from './materialUtils';
 import { Panel3D } from './types';
 import { NicheFeature } from './features/NicheFeature';
@@ -17,9 +17,20 @@ export interface WallPanelProps {
   margin?: number;
   isFloor?: boolean;
   invertMaterials?: boolean;
+  sideColor?: string;
+  backColor?: string;
 }
 
-export const WallPanel: React.FC<WallPanelProps> = ({ panel, globalTexture, globalBumpTexture, margin, isFloor, invertMaterials }) => {
+export const WallPanel: React.FC<WallPanelProps> = ({
+  panel,
+  globalTexture,
+  globalBumpTexture,
+  margin,
+  isFloor,
+  invertMaterials,
+  sideColor = "#ffffff",
+  backColor = "#ffffff",
+}) => {
   const context = useLayoutConfig();
 
   const wallWidthStore = useAppStore((state) => state.wallWidth);
@@ -267,22 +278,56 @@ export const WallPanel: React.FC<WallPanelProps> = ({ panel, globalTexture, glob
       }
     }
 
-    if (holes.length === 0) {
-      return { intersectingSubAreas: intersecting, shape: null };
+    // Construct the outer boundary shape for the 3D extrusion
+    const s = new THREE.Shape();
+
+    let polygonFormed = false;
+    if (!isFloor && wallVertices && wallVertices.length >= 3) {
+      const tess = getTessellatedPath(wallVertices);
+      const clipped = clipPolygonToBox(
+        tess,
+        panel.startX,
+        panel.startX + panel.width,
+        panel.startY,
+        panel.startY + panel.height
+      );
+
+      if (clipped.length >= 3) {
+        const localPts = clipped.map((pt) => ({
+          x: ((pt.x - panel.startX) / panel.width - 0.5) * panel.d3Width,
+          y: ((pt.y - panel.startY) / panel.height - 0.5) * panel.d3Height,
+        }));
+
+        // Ensure CCW winding for ExtrudeGeometry
+        if (getSignedArea(localPts) < 0) {
+          localPts.reverse();
+        }
+
+        s.moveTo(localPts[0].x, localPts[0].y);
+        for (let i = 1; i < localPts.length; i++) {
+          s.lineTo(localPts[i].x, localPts[i].y);
+        }
+        s.closePath();
+        polygonFormed = true;
+      }
     }
 
-    const s = new THREE.Shape();
-    const w2_base = panel.d3Width / 2;
-    const h2_base = panel.d3Height / 2;
-    s.moveTo(-w2_base, -h2_base);
-    s.lineTo(w2_base, -h2_base);
-    s.lineTo(w2_base, h2_base);
-    s.lineTo(-w2_base, h2_base);
-    s.closePath();
-    s.holes = holes;
+    if (!polygonFormed) {
+      const w2_base = panel.d3Width / 2;
+      const h2_base = panel.d3Height / 2;
+      s.moveTo(-w2_base, -h2_base);
+      s.lineTo(w2_base, -h2_base);
+      s.lineTo(w2_base, h2_base);
+      s.lineTo(-w2_base, h2_base);
+      s.closePath();
+    }
+
+    if (holes.length > 0) {
+      s.holes = holes;
+    }
 
     return { intersectingSubAreas: intersecting, shape: s };
-  }, [subAreas, panel, isFloor]);
+  }, [subAreas, panel, isFloor, wallVertices]);
 
   const materialRef1 = React.useRef<THREE.MeshStandardMaterial | null>(null);
   const materialRef2 = React.useRef<THREE.MeshStandardMaterial | null>(null);
@@ -296,45 +341,93 @@ export const WallPanel: React.FC<WallPanelProps> = ({ panel, globalTexture, glob
     }
   }, [panel.bumpTexture, panel.texture]);
 
-  const extrusionArgs = React.useMemo(() => {
-    let extShape = shape;
-    if (!extShape) {
-      extShape = new THREE.Shape();
-      const w2 = panel.d3Width / 2;
-      const h2 = panel.d3Height / 2;
-      extShape.moveTo(-w2, -h2);
-      extShape.lineTo(w2, -h2);
-      extShape.lineTo(w2, h2);
-      extShape.lineTo(-w2, h2);
-      extShape.closePath();
+  const studDepth3D = to3D(4); // 4" framing stud depth in 3D world units
+  const wallDepth3D = studDepth3D; // Extrude 4" straight back from front face
+
+  // Extrude shape: represents the full 4" thick solid wall slab
+  const geometry = React.useMemo(() => {
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: wallDepth3D, bevelEnabled: false, steps: 1 });
+    const posAttr = geo.getAttribute('position');
+    if (posAttr) {
+      const uvs: number[] = [];
+      const wVal = panel.d3Width;
+      const hVal = panel.d3Height;
+      for (let i = 0; i < posAttr.count; i++) {
+        const x = posAttr.getX(i);
+        const y = posAttr.getY(i);
+        const z = posAttr.getZ(i);
+        if (z < wallDepth3D / 2) {
+          uvs.push((-x + wVal / 2) / wVal, (y + hVal / 2) / hVal);
+        } else {
+          uvs.push((x + wVal / 2) / wVal, (y + hVal / 2) / hVal);
+        }
+      }
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+
+      const index = geo.getIndex();
+      if (index && geo.groups.length >= 2) {
+        const capGroup = geo.groups[0];
+        const sideGroup = geo.groups[1];
+        const indices = Array.from(index.array);
+
+        const frontIndices: number[] = [];
+        const backIndices: number[] = [];
+        const sideIndices: number[] = [];
+
+        // Sort cap triangles by whether their vertices are at front (z ≈ wallDepth3D) or back (z ≈ 0)
+        for (let i = capGroup.start; i < capGroup.start + capGroup.count; i += 3) {
+          const i0 = indices[i];
+          const i1 = indices[i + 1];
+          const i2 = indices[i + 2];
+          const avgZ = (posAttr.getZ(i0) + posAttr.getZ(i1) + posAttr.getZ(i2)) / 3;
+          if (avgZ > wallDepth3D / 2) {
+            frontIndices.push(i0, i1, i2);
+          } else {
+            backIndices.push(i0, i1, i2);
+          }
+        }
+
+        for (let i = sideGroup.start; i < sideGroup.start + sideGroup.count; i += 3) {
+          sideIndices.push(indices[i], indices[i + 1], indices[i + 2]);
+        }
+
+        const newIndices = [...frontIndices, ...sideIndices, ...backIndices];
+        geo.setIndex(newIndices);
+
+        geo.clearGroups();
+        // material-0: Front Tile face
+        geo.addGroup(0, frontIndices.length, 0);
+        // material-1: Side framing caps
+        geo.addGroup(frontIndices.length, sideIndices.length, 1);
+        // material-2: Drywall back face
+        geo.addGroup(frontIndices.length + sideIndices.length, backIndices.length, 2);
+      }
     }
-    return [extShape, { depth: 0.004, bevelEnabled: false, steps: 1 }];
-  }, [shape, panel.d3Width, panel.d3Height]);
+    geo.computeVertexNormals();
+    return geo;
+  }, [shape, wallDepth3D, panel.d3Width, panel.d3Height]);
+
+  React.useEffect(() => {
+    return () => {
+      geometry.dispose();
+    };
+  }, [geometry]);
 
   return (
     <>
-      {/* Front face (interior of folded room) */}
-      {shape ? (
-        <mesh position={[0, 0, 0.002]} castShadow receiveShadow>
-          <shapeGeometry
-            args={[shape]}
-            onUpdate={(geo) => {
-              const posAttr = geo.getAttribute('position');
-              if (posAttr) {
-                const uvs = [];
-                const wVal = panel.d3Width;
-                const hVal = panel.d3Height;
-                for (let i = 0; i < posAttr.count; i++) {
-                  const x = posAttr.getX(i);
-                  const y = posAttr.getY(i);
-                  uvs.push((x + wVal / 2) / wVal, (y + hVal / 2) / hVal);
-                }
-                geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-              }
-              geo.computeVertexNormals();
-            }}
-          />
+      {/* 
+        Solid 4" Extruded Wall Mesh:
+        Extruded along -Z (from front tile face at Z=0 to drywall back face at Z=-wallDepth3D).
+        We split the geometry groups:
+          - material-0: Front Cap (Tile texture)
+          - material-1: Perimeter Sides (framing casing)
+          - material-2: Back Cap (Solid drywall/backing color)
+      */}
+      <group position={[0, 0, -wallDepth3D]}>
+        <mesh geometry={geometry} castShadow receiveShadow>
+          {/* Material 0: Front Face (Tile Texture) */}
           <meshStandardMaterial
+            attach="material-0"
             ref={materialRef1}
             map={frontMap}
             bumpMap={frontBumpMap}
@@ -345,78 +438,25 @@ export const WallPanel: React.FC<WallPanelProps> = ({ panel, globalTexture, glob
             transparent={true}
             alphaTest={0.5}
           />
-        </mesh>
-      ) : (
-        <mesh position={[0, 0, 0.002]} castShadow receiveShadow>
-          <planeGeometry args={[width, height]} />
+          {/* Material 1: Perimeter Sides (framing border) */}
           <meshStandardMaterial
+            attach="material-1"
+            color={sideColor}
+            roughness={0.7}
+            metalness={0.02}
+            side={THREE.DoubleSide}
+          />
+          {/* Material 2: Back Face (Solid Drywall/Backing) */}
+          <meshStandardMaterial
+            attach="material-2"
             ref={materialRef2}
-            map={frontMap}
-            bumpMap={frontBumpMap}
-            bumpScale={frontBumpMap ? 0.8 : 0}
-            roughness={frontRoughness}
-            metalness={frontMetalness}
-            side={THREE.FrontSide}
-            transparent={true}
-            alphaTest={0.5}
+            color={backColor}
+            roughness={0.8}
+            metalness={0.01}
+            side={THREE.DoubleSide}
           />
         </mesh>
-      )}
-
-      {/* Back face (drywall watermark backing - faces exterior) */}
-      {shape ? (
-        <mesh position={[0, 0, -0.002]} rotation={[0, Math.PI, 0]} castShadow receiveShadow>
-          <shapeGeometry
-            args={[shape]}
-            onUpdate={(geo) => {
-              const posAttr = geo.getAttribute('position');
-              if (posAttr) {
-                const uvs = [];
-                const wVal = panel.d3Width;
-                const hVal = panel.d3Height;
-                for (let i = 0; i < posAttr.count; i++) {
-                  const x = posAttr.getX(i);
-                  const y = posAttr.getY(i);
-                  uvs.push((x + wVal / 2) / wVal, (y + hVal / 2) / hVal);
-                }
-                geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-              }
-              geo.computeVertexNormals();
-            }}
-          />
-          <meshStandardMaterial
-            map={backMap}
-            bumpMap={backBumpMap}
-            bumpScale={backBumpMap ? 0.8 : 0}
-            roughness={backRoughness}
-            metalness={backMetalness}
-            side={THREE.FrontSide}
-            transparent={true}
-            alphaTest={0.5}
-          />
-        </mesh>
-      ) : (
-        <mesh position={[0, 0, -0.002]} rotation={[0, Math.PI, 0]} castShadow receiveShadow>
-          <planeGeometry args={[width, height]} />
-          <meshStandardMaterial
-            map={backMap}
-            bumpMap={backBumpMap}
-            bumpScale={backBumpMap ? 0.8 : 0}
-            roughness={backRoughness}
-            metalness={backMetalness}
-            side={THREE.FrontSide}
-            transparent={true}
-            alphaTest={0.5}
-          />
-        </mesh>
-      )}
-
-      {/* Solid Volume Edge Caps (Seals the 4mm hollow gap between front and back planes) */}
-      <mesh position={[0, 0, -0.002]} castShadow receiveShadow>
-        <extrudeGeometry args={extrusionArgs as any} />
-        <meshBasicMaterial attach="material-0" visible={false} />
-        <meshStandardMaterial attach="material-1" color={invertMaterials ? "#f1f5f9" : "#e2e8f0"} roughness={0.9} />
-      </mesh>
+      </group>
 
       {/* Active volumetric features */}
       {intersectingSubAreas.map(({ sa, resolvedType, isOwner }, idx) => {

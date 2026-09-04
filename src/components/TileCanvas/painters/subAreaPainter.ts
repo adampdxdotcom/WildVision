@@ -357,6 +357,10 @@ export function drawSubAreas(
         vertices: t.vertices.map(v => ({ x: v.x + sa.x, y: v.y + sa.y })),
       }));
     } else {
+      const activePat = sa.customPatternPayload || (useAppStore.getState().activeCustomPattern);
+      const flatsketV = sa.flatsketVerticalRows || (useAppStore.getState().flatsketVerticalRows);
+      const flatsketH = sa.flatsketHorizontalRows || (useAppStore.getState().flatsketHorizontalRows);
+
       const generated = generateTiles({
         wallWidth: sa.width,
         wallHeight: sa.height,
@@ -371,6 +375,10 @@ export function drawSubAreas(
         isPicket: sa.isPicket,
         picketLength: sa.picketLength,
         wallVertices: sa.vertices,
+        activeCustomPattern: activePat,
+        flatsketVerticalRows: flatsketV,
+        flatsketHorizontalRows: flatsketH,
+        layoutId: sa.id,
       });
       saTiles = generated.map(t => ({
         ...t,

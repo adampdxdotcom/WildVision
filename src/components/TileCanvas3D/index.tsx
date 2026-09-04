@@ -200,6 +200,8 @@ export const TileCanvas3D: React.FC = () => {
     mountAnchor: mainTileLayout.metadata?.mountAnchor || 'back'
   };
 
+  const [canvasKey, setCanvasKey] = React.useState(0);
+
   const planesConfig = {
     ceiling: { show: true, color: '#cbd5e1', position: 0, offset: 0 },
     back: { show: true, color: '#cbd5e1', position: 0, offset: 0 },
@@ -240,6 +242,7 @@ export const TileCanvas3D: React.FC = () => {
     foldLines,
     wallVertices,
     wallExtensions,
+    subAreas,
     anchoredRegionCenter,
     texture,
     backingTexture,
@@ -780,7 +783,14 @@ export const TileCanvas3D: React.FC = () => {
         )}
 
         <Canvas
-          gl={{ alpha: true, toneMapping: THREE.NoToneMapping }}
+          key={canvasKey}
+          gl={{
+            alpha: true,
+            toneMapping: THREE.NoToneMapping,
+            powerPreference: 'high-performance',
+            antialias: true,
+            preserveDrawingBuffer: true,
+          }}
           style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }}
           onPointerMissed={() => {
             setIsSelected(false);
@@ -789,11 +799,19 @@ export const TileCanvas3D: React.FC = () => {
           onCreated={({ gl }) => {
             const handleContextLost = (event: Event) => {
               event.preventDefault();
-              logger.error('WebGL context lost on 3D canvas', {
-                userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'
-               });
+              logger.warn('WebGL context lost on 3D canvas - attempting recovery', {
+                userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+              });
+              // Force Canvas recreation on context loss
+              setTimeout(() => {
+                setCanvasKey((prev) => prev + 1);
+              }, 100);
+            };
+            const handleContextRestored = () => {
+              logger.info('WebGL context restored');
             };
             gl.domElement.addEventListener('webglcontextlost', handleContextLost);
+            gl.domElement.addEventListener('webglcontextrestored', handleContextRestored);
           }}
         >
           <CameraController controlsRef={controlsRef} />

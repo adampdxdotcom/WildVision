@@ -18,6 +18,7 @@ interface UseD3ColumnsArgs {
   foldLines: FoldLine[] | null;
   wallVertices: { x: number; y: number }[] | null;
   wallExtensions: WallExtension[];
+  subAreas?: any[];
   anchoredRegionCenter: { x: number; y: number } | null;
   texture: THREE.Texture | null;
   backingTexture: THREE.Texture | null;
@@ -30,6 +31,7 @@ export function useD3Columns({
   foldLines,
   wallVertices,
   wallExtensions,
+  subAreas,
   anchoredRegionCenter,
   texture,
   backingTexture,
@@ -92,12 +94,98 @@ export function useD3Columns({
   const d3Columns = React.useMemo((): ColumnSegment[] => {
     if (!texture || !backingTexture || columnsList.length === 0) return [];
 
-    // First find the root column (the widest segment)
+    // First find the root column (the central column with largest wall area & fold connectivity)
     let rootColIdx = 0;
-    let maxColWidth = 0;
+    let bestColScore = -Infinity;
+
+    const getColumnPhysicalBounds = (colStartX: number, colEndX: number): { colMinY: number; colMaxY: number } => {
+      let cMinY = Infinity;
+      let cMaxY = -Infinity;
+
+      if (wallVertices && wallVertices.length >= 3) {
+        const tess = getTessellatedPath(wallVertices);
+        // Sample interior points of the column to avoid edge-vertex contamination from adjacent taller or shorter walls
+        const sampleXs = [
+          colStartX + 0.1,
+          (colStartX + colEndX) / 2,
+          colEndX - 0.1
+        ];
+
+        sampleXs.forEach((sx) => {
+          for (let i = 0; i < tess.length; i++) {
+            const p1 = tess[i];
+            const p2 = tess[(i + 1) % tess.length];
+            const minX = Math.min(p1.x, p2.x);
+            const maxX = Math.max(p1.x, p2.x);
+            if (sx >= minX - 0.001 && sx <= maxX + 0.001 && Math.abs(p2.x - p1.x) > 0.001) {
+              const t = (sx - p1.x) / (p2.x - p1.x);
+              if (t >= -0.001 && t <= 1.001) {
+                const y = p1.y + t * (p2.y - p1.y);
+                cMinY = Math.min(cMinY, y);
+                cMaxY = Math.max(cMaxY, y);
+              }
+            }
+          }
+        });
+
+        // Also check any vertices strictly within the column interior
+        tess.forEach((v) => {
+          if (v.x > colStartX + 0.05 && v.x < colEndX - 0.05) {
+            cMinY = Math.min(cMinY, v.y);
+            cMaxY = Math.max(cMaxY, v.y);
+          }
+        });
+      }
+
+      wallExtensions.forEach((ext) => {
+        const extMinX = ext.x;
+        const extMaxX = ext.x + ext.width;
+        if (Math.max(colStartX, extMinX) < Math.min(colEndX, extMaxX) - 0.05) {
+          cMinY = Math.min(cMinY, ext.y);
+          cMaxY = Math.max(cMaxY, ext.y + ext.height);
+        }
+      });
+
+      if (cMinY === Infinity) cMinY = bounds.minY;
+      if (cMaxY === -Infinity) cMaxY = bounds.maxY;
+
+      // Also account for cutout subAreas that span this column
+      if (subAreas && subAreas.length > 0) {
+        const colWidth = colEndX - colStartX;
+        subAreas.forEach((sa) => {
+          const isCutout = sa.isCutout || sa.accentType === 'cutout';
+          if (!isCutout) return;
+          const overlapMinX = Math.max(colStartX, sa.x);
+          const overlapMaxX = Math.min(colEndX, sa.x + sa.width);
+          // If cutout covers most/all of this column horizontally:
+          if (overlapMaxX - overlapMinX > colWidth * 0.7) {
+            // If cutout touches top of column:
+            if (sa.y + sa.height >= cMaxY - 0.5) {
+              cMaxY = Math.min(cMaxY, sa.y);
+            }
+            // If cutout touches bottom of column:
+            if (sa.y <= cMinY + 0.5) {
+              cMinY = Math.max(cMinY, sa.y + sa.height);
+            }
+          }
+        });
+      }
+
+      return { colMinY: cMinY, colMaxY: cMaxY };
+    };
+
     columnsList.forEach((col, i) => {
-      if (col.width > maxColWidth) {
-        maxColWidth = col.width;
+      const { colMinY: cMinY, colMaxY: cMaxY } = getColumnPhysicalBounds(col.startX, col.endX);
+      const physicalHeight = Math.max(0, cMaxY - cMinY);
+      const colArea = col.width * physicalHeight;
+      // Centrality preference: columns closer to horizontal midpoint of layout get a subtle bonus
+      const midLayoutX = bounds.minX + bounds.width / 2;
+      const colMidX = col.startX + col.width / 2;
+      const distFromCenter = Math.abs(colMidX - midLayoutX);
+      const score = colArea - distFromCenter * 2;
+
+      if (score > bestColScore) {
+        bestColScore = score;
         rootColIdx = i;
       }
     });
@@ -113,16 +201,16 @@ export function useD3Columns({
     const rootRowIntervals: { startY: number; endY: number; height: number }[] = [];
     let lastRootY = bounds.minY;
     for (const y of uniqueRootSplitYs) {
-      if (y > lastRootY) {
+      if (y > lastRootY + 0.01) {
         rootRowIntervals.push({ startY: lastRootY, endY: y, height: y - lastRootY });
         lastRootY = y;
       }
     }
-    if (lastRootY < bounds.maxY) {
+    if (lastRootY < bounds.maxY - 0.01) {
       rootRowIntervals.push({ startY: lastRootY, endY: bounds.maxY, height: bounds.maxY - lastRootY });
     }
 
-    // Determine the main row interval for the root column
+    // Determine the main row interval for the root column (the primary back wall)
     let rootMainRow = rootRowIntervals[0];
 
     if (anchoredRegionCenter !== null) {
@@ -138,15 +226,11 @@ export function useD3Columns({
         }
       }
     } else {
-      // Legacy behavior: find row closest to the vertical midpoint
-      const midY = bounds.minY + (bounds.height / 2);
-      let bestDist = Infinity;
+      // Automatic detection: the primary back wall is the interval with the largest vertical height in the root column
+      let maxHeight = -Infinity;
       for (const row of rootRowIntervals) {
-        const covers = row.startY <= midY && row.endY >= midY;
-        const pMid = row.startY + row.height / 2;
-        const dist = covers ? 0 : Math.abs(pMid - midY);
-        if (dist < bestDist) {
-          bestDist = dist;
+        if (row.height > maxHeight) {
+          maxHeight = row.height;
           rootMainRow = row;
         }
       }
@@ -156,57 +240,77 @@ export function useD3Columns({
     const globalEndY = rootMainRow.endY;
     const globalHeight = globalEndY - globalStartY;
 
-    const colStructures = columnsList.map((col) => {
+    const colStructures = columnsList.map((col, colIdx) => {
+      const isRoot = colIdx === rootColIdx;
       // Get physical bounds of this specific column to know where wall actually exists
-      let colMinY = Infinity;
-      let colMaxY = -Infinity;
-      
-      if (wallVertices && wallVertices.length >= 3) {
-         const tess = getTessellatedPath(wallVertices);
-         tess.forEach((v) => {
-           if (v.x >= col.startX - 0.1 && v.x <= col.endX + 0.1) {
-             colMinY = Math.min(colMinY, v.y);
-             colMaxY = Math.max(colMaxY, v.y);
-           }
-         });
-      }
-      
-      wallExtensions.forEach((ext) => {
-        const extMinX = ext.x;
-        const extMaxX = ext.x + ext.width;
-        if (Math.max(col.startX, extMinX) < Math.min(col.endX, extMaxX) - 0.05) {
-          colMinY = Math.min(colMinY, ext.y);
-          colMaxY = Math.max(colMaxY, ext.y + ext.height);
-        }
-      });
-
-      if (colMinY === Infinity) colMinY = bounds.minY;
-      if (colMaxY === -Infinity) colMaxY = bounds.maxY;
+      const { colMinY, colMaxY } = getColumnPhysicalBounds(col.startX, col.endX);
 
       // Find crossing horizontal folds inside this column's horizontal range
       const crossingFolds = horizontalFolds.filter((f) => {
         return Math.max(col.startX, f.x1) < Math.min(col.endX, f.x2) - 0.5;
       });
 
-      const splitYs = crossingFolds.map((f) => f.y);
-      // Force the global corridors as split points
-      splitYs.push(globalStartY);
-      splitYs.push(globalEndY);
+      let colMainStartY = colMinY;
+      let colMainEndY = colMaxY;
+      let colMainHeight = Math.max(0, colMaxY - colMinY);
+      let hasMainOverlap = colMainHeight > 0.05;
+      let rowIntervals: { startY: number; endY: number; height: number }[] = [];
 
-      const uniqueSplitYs = Array.from(new Set(splitYs))
-        .filter(y => y > bounds.minY && y < bounds.maxY)
-        .sort((a, b) => a - b);
+      if (isRoot) {
+        rowIntervals = rootRowIntervals;
+        colMainStartY = rootMainRow.startY;
+        colMainEndY = rootMainRow.endY;
+        colMainHeight = rootMainRow.height;
+        hasMainOverlap = true;
+      } else if (crossingFolds.length === 0) {
+        // No horizontal fold lines inside this side wall column -> single solid wall panel
+        rowIntervals = [{ startY: colMinY, endY: colMaxY, height: colMainHeight }];
+        colMainStartY = colMinY;
+        colMainEndY = colMaxY;
+        hasMainOverlap = colMainHeight > 0.05;
+      } else {
+        // Only slice at explicit horizontal fold lines that cross this column
+        const splitYs = crossingFolds
+          .map((f) => f.y)
+          .filter((y) => y > colMinY + 0.01 && y < colMaxY - 0.01);
+        const uniqueSplitYs = Array.from(new Set(splitYs)).sort((a, b) => a - b);
 
-      const rowIntervals: { startY: number; endY: number; height: number }[] = [];
-      let lastY = bounds.minY;
-      for (const y of uniqueSplitYs) {
-        if (y > lastY) {
-          rowIntervals.push({ startY: lastY, endY: y, height: y - lastY });
-          lastY = y;
+        let lastY = colMinY;
+        for (const y of uniqueSplitYs) {
+          if (y > lastY + 0.01) {
+            rowIntervals.push({ startY: lastY, endY: y, height: y - lastY });
+            lastY = y;
+          }
         }
-      }
-      if (lastY < bounds.maxY) {
-        rowIntervals.push({ startY: lastY, endY: bounds.maxY, height: bounds.maxY - lastY });
+        if (lastY < colMaxY - 0.01) {
+          rowIntervals.push({ startY: lastY, endY: colMaxY, height: colMaxY - lastY });
+        }
+
+        // Find the interval that best corresponds with the global main wall
+        let bestOverlap = -1;
+        let chosenRow = rowIntervals[0];
+        for (const row of rowIntervals) {
+          const overlap = Math.max(0, Math.min(row.endY, globalEndY) - Math.max(row.startY, globalStartY));
+          if (overlap > bestOverlap) {
+            bestOverlap = overlap;
+            chosenRow = row;
+          }
+        }
+        if (bestOverlap <= 0.01 && rowIntervals.length > 0) {
+          let maxH = -1;
+          for (const row of rowIntervals) {
+            if (row.height > maxH) {
+              maxH = row.height;
+              chosenRow = row;
+            }
+          }
+        }
+        if (chosenRow) {
+          colMainStartY = chosenRow.startY;
+          colMainEndY = chosenRow.endY;
+          colMainHeight = chosenRow.height;
+          hasMainOverlap = colMainHeight > 0.05;
+        }
       }
 
       // Helpers to retrieve dynamic foldAngle for vertical/horizontal folds
@@ -309,40 +413,67 @@ export function useD3Columns({
         };
       };
 
-      // Create mainRow covering [globalStartY, globalEndY]
-      const hasMainOverlap = Math.max(globalStartY, colMinY) < Math.min(globalEndY, colMaxY) - 0.05;
-      const mainRow = createPanel(globalStartY, globalEndY, globalHeight);
+      // Create mainRow covering this column's main base wall [colMainStartY, colMainEndY]
+      const mainRow = createPanel(colMainStartY, colMainEndY, colMainHeight);
       if (!hasMainOverlap) {
         mainRow.isGhost = true;
       }
 
       // Filter panels to find active top and bottom flaps
       // Since Y increases UPWARD:
-      // - Top flaps are above mainRow, i.e., startY >= globalEndY and startY < colMaxY - 0.05
-      // - Bottom flaps are below mainRow, i.e., endY <= globalStartY and endY > colMinY + 0.05
+      // - Top flaps are above mainRow, i.e., startY >= colMainEndY and startY < colMaxY - 0.05
+      // - Bottom flaps are below mainRow, i.e., endY <= colMainStartY and endY > colMinY + 0.05
       
       const topFlaps: Panel3D[] = [];
       const bottomFlaps: Panel3D[] = [];
 
       rowIntervals.forEach((row) => {
-        // Top flap check
-        if (row.startY >= globalEndY - 0.01 && row.startY < colMaxY - 0.05) {
+        // Top flap check: must be above mainRow and within this column's physical wall bounds
+        if (row.startY >= colMainEndY - 0.01 && row.endY <= colMaxY + 0.05 && row.startY < colMaxY - 0.05) {
           const angle = getHorizontalFoldAngle(row.startY, col.startX, col.endX);
           topFlaps.push(createPanel(row.startY, row.endY, row.height, angle));
         }
-        // Bottom flap check
-        if (row.endY <= globalStartY + 0.01 && row.endY > colMinY + 0.05) {
+        // Bottom flap check: must be below mainRow and within this column's physical wall bounds
+        if (row.endY <= colMainStartY + 0.01 && row.startY >= colMinY - 0.05 && row.endY > colMinY + 0.05) {
           const angle = getHorizontalFoldAngle(row.endY, col.startX, col.endX);
           bottomFlaps.push(createPanel(row.startY, row.endY, row.height, angle));
         }
       });
 
       // Sort flaps with the ones closest to the mainRow first
-      // Since topFlaps go UPWARD, they are sorted ascending by startY (closest to globalEndY first)
+      // Since topFlaps go UPWARD, they are sorted ascending by startY (closest to colMainEndY first)
       topFlaps.sort((a, b) => a.startY - b.startY);
 
-      // Since bottomFlaps go DOWNWARD, they are sorted descending by startY (closest to globalStartY first)
+      // Since bottomFlaps go DOWNWARD, they are sorted descending by startY (closest to colMainStartY first)
       bottomFlaps.sort((a, b) => b.startY - a.startY);
+
+      // Determine freestanding framing & cap properties:
+      // A panel is freestanding if its top is below the global wall height (e.g. pony wall) or it's an outer return.
+      const isColFreestandingTop = colMaxY < bounds.maxY - 0.5;
+      const isLeftmostCol = col.startX <= bounds.minX + 0.1;
+      const isRightmostCol = col.endX >= bounds.maxX - 0.1;
+
+      if (!mainRow.isGhost) {
+        if (isColFreestandingTop && topFlaps.length === 0) {
+          mainRow.hasFramingExtrusion = true;
+          mainRow.hasTopCap = true;
+        }
+        if (isLeftmostCol) {
+          mainRow.hasLeftEndCap = true;
+        }
+        if (isRightmostCol) {
+          mainRow.hasRightEndCap = true;
+        }
+      }
+
+      // If top flaps exist and the topmost flap ends below bounds.maxY, it gets a top cap
+      if (topFlaps.length > 0) {
+        const topMostFlap = topFlaps[topFlaps.length - 1];
+        if (topMostFlap.startY + topMostFlap.height < bounds.maxY - 0.5) {
+          topMostFlap.hasFramingExtrusion = true;
+          topMostFlap.hasTopCap = true;
+        }
+      }
 
       const leftFoldAngle = getVerticalFoldAngle(col.startX);
       const rightFoldAngle = getVerticalFoldAngle(col.endX);
@@ -357,10 +488,15 @@ export function useD3Columns({
         rightFoldAngle: rightFoldAngle,
         startX: col.startX,
         endX: col.endX,
+        isRoot: isRoot,
       };
     });
 
-    return colStructures;
+    const activeCols = colStructures.filter(
+      (col) => !(col.mainRow.isGhost && col.topFlaps.length === 0 && col.bottomFlaps.length === 0)
+    );
+
+    return activeCols.length > 0 ? activeCols : colStructures;
   }, [texture, backingTexture, bumpTexture, columnsList, horizontalFolds, bounds, to3D, wallVertices, wallExtensions]);
 
   // Clean up texture resources on recreate

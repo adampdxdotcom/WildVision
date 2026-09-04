@@ -39,15 +39,18 @@ export const MainTileLayoutGroup: React.FC<MainTileLayoutGroupProps> = ({
 }) => {
   const modelRef = React.useRef<THREE.Group>(null);
 
-  let rootIdx = 0;
-  let maxWidth = 0;
-  d3Columns.forEach((col, i) => {
-    if (col.width > maxWidth) {
-      maxWidth = col.width;
-      rootIdx = i;
-    }
-  });
-  const rootCol = d3Columns[rootIdx];
+  let rootIdx = d3Columns.findIndex((col) => col.isRoot);
+  if (rootIdx === -1) {
+    let maxWidth = 0;
+    d3Columns.forEach((col, i) => {
+      if (col.width > maxWidth) {
+        maxWidth = col.width;
+        rootIdx = i;
+      }
+    });
+    if (rootIdx === -1) rootIdx = 0;
+  }
+  const rootCol = d3Columns[rootIdx] || d3Columns[0];
 
   const totalBottomFlapsHeight = rootCol?.bottomFlaps
     ? rootCol.bottomFlaps.reduce((sum: number, flap: any) => sum + flap.d3Height, 0)

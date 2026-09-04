@@ -101,6 +101,108 @@ export function getPolygonArea(vertices: {x: number, y: number}[]): number {
   return Math.abs(getSignedArea(vertices));
 }
 
+/**
+ * Clips a 2D polygon against an axis-aligned bounding box using Sutherland-Hodgman clipping.
+ */
+export function clipPolygonToBox(
+  poly: { x: number; y: number }[],
+  minX: number,
+  maxX: number,
+  minY: number,
+  maxY: number
+): { x: number; y: number }[] {
+  if (!poly || poly.length < 3) return [];
+
+  const clipAgainstEdge = (
+    input: { x: number; y: number }[],
+    isInside: (p: { x: number; y: number }) => boolean,
+    intersect: (p1: { x: number; y: number }, p2: { x: number; y: number }) => { x: number; y: number }
+  ): { x: number; y: number }[] => {
+    const output: { x: number; y: number }[] = [];
+    if (input.length === 0) return output;
+
+    let prev = input[input.length - 1];
+    let prevInside = isInside(prev);
+
+    for (let i = 0; i < input.length; i++) {
+      const curr = input[i];
+      const currInside = isInside(curr);
+
+      if (currInside) {
+        if (!prevInside) {
+          output.push(intersect(prev, curr));
+        }
+        output.push(curr);
+      } else if (prevInside) {
+        output.push(intersect(prev, curr));
+      }
+
+      prev = curr;
+      prevInside = currInside;
+    }
+
+    return output;
+  };
+
+  let current = poly;
+
+  // 1. Clip Left: x >= minX
+  current = clipAgainstEdge(
+    current,
+    (p) => p.x >= minX - 1e-4,
+    (p1, p2) => {
+      const dx = p2.x - p1.x;
+      const t = Math.abs(dx) > 1e-7 ? (minX - p1.x) / dx : 0;
+      return { x: minX, y: p1.y + t * (p2.y - p1.y) };
+    }
+  );
+
+  // 2. Clip Right: x <= maxX
+  current = clipAgainstEdge(
+    current,
+    (p) => p.x <= maxX + 1e-4,
+    (p1, p2) => {
+      const dx = p2.x - p1.x;
+      const t = Math.abs(dx) > 1e-7 ? (maxX - p1.x) / dx : 0;
+      return { x: maxX, y: p1.y + t * (p2.y - p1.y) };
+    }
+  );
+
+  // 3. Clip Bottom: y >= minY
+  current = clipAgainstEdge(
+    current,
+    (p) => p.y >= minY - 1e-4,
+    (p1, p2) => {
+      const dy = p2.y - p1.y;
+      const t = Math.abs(dy) > 1e-7 ? (minY - p1.y) / dy : 0;
+      return { x: p1.x + t * (p2.x - p1.x), y: minY };
+    }
+  );
+
+  // 4. Clip Top: y <= maxY
+  current = clipAgainstEdge(
+    current,
+    (p) => p.y <= maxY + 1e-4,
+    (p1, p2) => {
+      const dy = p2.y - p1.y;
+      const t = Math.abs(dy) > 1e-7 ? (maxY - p1.y) / dy : 0;
+      return { x: p1.x + t * (p2.x - p1.x), y: maxY };
+    }
+  );
+
+  // Clean duplicate consecutive vertices
+  const cleaned: { x: number; y: number }[] = [];
+  for (let i = 0; i < current.length; i++) {
+    const next = current[(i + 1) % current.length];
+    const dist = Math.hypot(current[i].x - next.x, current[i].y - next.y);
+    if (dist > 1e-4) {
+      cleaned.push(current[i]);
+    }
+  }
+
+  return cleaned;
+}
+
 export function getInternalAngle(A: {x: number, y: number}, B: {x: number, y: number}, C: {x: number, y: number}, isCCW: boolean): number {
   const angleBA = Math.atan2(A.y - B.y, A.x - B.x);
   const angleBC = Math.atan2(C.y - B.y, C.x - B.x);
