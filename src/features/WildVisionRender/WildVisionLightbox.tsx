@@ -186,16 +186,17 @@ export const WildVisionLightbox: React.FC<WildVisionLightboxProps> = ({ id, aiIm
         onClick={(e) => e.stopPropagation()}
       >
         {isComparing && sourceImage ? (
-          /* Slider interactive mode */
+          /* Slider interactive mode - locks aspect ratio and dimensions to match AI render exactly */
           <div 
             className="relative max-w-full max-h-full flex items-center justify-center overflow-hidden rounded-lg shadow-2xl border border-slate-800"
+            style={dimensions ? { aspectRatio: `${dimensions.width} / ${dimensions.height}` } : undefined}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Bottom Image: AI Render */}
             <img 
               src={aiImage} 
               alt="AI Render" 
-              className="max-w-full max-h-full object-contain select-none pointer-events-none rounded-lg"
+              className="w-full h-full max-w-full max-h-full object-contain select-none pointer-events-none rounded-lg"
               referrerPolicy="no-referrer"
             />
 
@@ -203,7 +204,7 @@ export const WildVisionLightbox: React.FC<WildVisionLightboxProps> = ({ id, aiIm
             <img 
               src={sourceImage} 
               alt="3D Source" 
-              className="absolute inset-0 w-full h-full object-contain select-none pointer-events-none rounded-lg"
+              className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none rounded-lg"
               style={{
                 clipPath: `polygon(0 0, ${sliderPosition}% 0, ${sliderPosition}% 100%, 0 100%)`
               }}

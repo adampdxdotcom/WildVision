@@ -125,7 +125,7 @@ export const PresentationView: React.FC = () => {
               <img 
                 src={featuredRender.sourceImage || featuredRender.imageUrl} 
                 alt="3D Blueprint Snapshot" 
-                className="absolute inset-0 max-h-[70vh] w-full h-full object-contain select-none pointer-events-none rounded-2xl"
+                className="absolute inset-0 max-h-[70vh] w-full h-full object-cover select-none pointer-events-none rounded-2xl"
                 style={{
                   clipPath: `polygon(0 0, ${sliderPosition}% 0, ${sliderPosition}% 100%, 0 100%)`
                 }}
