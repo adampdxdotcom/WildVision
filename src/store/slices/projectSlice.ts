@@ -18,6 +18,8 @@ export interface ProjectSlice {
   resetToBlankWorkspace: () => void;
   isSaveFileLoaded: boolean;
   setIsSaveFileLoaded: (val: boolean) => void;
+  isProjectLoading: boolean;
+  setIsProjectLoading: (val: boolean) => void;
   saveProjectAs: (newName: string) => Promise<boolean>;
   pastStateStack: any[];
   futureStateStack: any[];
@@ -138,6 +140,8 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
   setIsAutoSaveEnabled: (enabled) => set({ isAutoSaveEnabled: enabled }),
   isSaveFileLoaded: false,
   setIsSaveFileLoaded: (val) => set({ isSaveFileLoaded: val }),
+  isProjectLoading: false,
+  setIsProjectLoading: (val) => set({ isProjectLoading: val }),
   pastStateStack: [],
   futureStateStack: [],
   isRestoringHistory: false,

@@ -1,0 +1,32 @@
+services:
+  # Development service (active with hot-reload)
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: wildvision-dev
+    ports:
+      - "5179:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    restart: unless-stopped
+
+  # Production preview service (compiled Nginx container)
+  app-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wildvision-prod
+    ports:
+      - "5179:80"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    profiles:
+      - prod

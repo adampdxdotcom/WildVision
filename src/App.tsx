@@ -33,6 +33,7 @@ import { AuthModal } from './components/Auth/AuthModal';
 const AdminDashboardModal = React.lazy(() => import('./components/Auth/AdminDashboardModal').then(m => ({ default: m.AdminDashboardModal })));
 import { UpgradeModal } from './components/Auth/UpgradeModal';
 import { UpdatePasswordModal } from './components/Auth/UpdatePasswordModal';
+import { LoadingOverlay } from './components/Common/LoadingOverlay';
 
 
 const PresentationView = React.lazy(() => import('./features/PresentationMode/PresentationView').then(m => ({ default: m.PresentationView })));
@@ -881,6 +882,8 @@ export default function App() {
       <UpgradeModal />
 
       <UpdatePasswordModal />
+
+      <LoadingOverlay />
 
       <React.Suspense fallback={null}><TutorialOverlay
         currentStepIndex={tutorialStepIndex}

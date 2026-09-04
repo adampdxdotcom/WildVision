@@ -190,20 +190,25 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
       return;
     }
 
+    useAppStore.setState({ isProjectLoading: true });
+
     const reader = new FileReader();
     reader.onload = (event) => {
-      try {
-        const text = (event.target?.result as string || '').trim();
-        if (!text) {
-          throw new Error('Project file is empty.');
-        }
-        const data = JSON.parse(text);
-        useAppStore.setState({ isSaveFileLoaded: true });
+      // Allow the loading overlay to render before running intensive calculations
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          try {
+            const text = (event.target?.result as string || '').trim();
+            if (!text) {
+              throw new Error('Project file is empty.');
+            }
+            const data = JSON.parse(text);
+            useAppStore.setState({ isSaveFileLoaded: true });
 
-        const clampSafe = (val: any, backup: number) => {
-          const num = Number(val);
-          return isNaN(num) ? backup : Math.min(2000, Math.max(0.1, num));
-        };
+            const clampSafe = (val: any, backup: number) => {
+              const num = Number(val);
+              return isNaN(num) ? backup : Math.min(2000, Math.max(0.1, num));
+            };
 
         if (data.projectName !== undefined) setProjectName(data.projectName);
         if (data.wallWidth !== undefined) setWallWidth(clampSafe(data.wallWidth, 120));
@@ -468,9 +473,13 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
       } catch (err) {
         console.warn('Failed to parse layout file:', err);
         alert('Failed to parse project file. The file may be corrupt or invalid.');
+      } finally {
+        useAppStore.setState({ isProjectLoading: false });
       }
       e.target.value = '';
-    };
+    }, 50);
+  });
+};
     reader.readAsText(file);
   };
 

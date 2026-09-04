@@ -147,48 +147,53 @@ export const LoadModal: React.FC<LoadModalProps> = ({
   };
 
   const handleLoadCloudProject = (project: Project) => {
-    try {
-      if (isImportMode && onImportPayload) {
-        onImportPayload(project.state_payload, 'cloud', project.id);
-        onClose();
-      } else {
-        
-        let explicitPermission = undefined;
-        if (user && project.user_id !== user.id && project.project_shares) {
-          const myShare = project.project_shares.find((s: any) => s.user_id === user.id);
-          if (myShare) {
-            explicitPermission = myShare.permission_tier;
+    useAppStore.setState({ isProjectLoading: true });
+    onClose();
+
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        try {
+          if (isImportMode && onImportPayload) {
+            onImportPayload(project.state_payload, 'cloud', project.id);
+          } else {
+            let explicitPermission = undefined;
+            if (user && project.user_id !== user.id && project.project_shares) {
+              const myShare = project.project_shares.find((s: any) => s.user_id === user.id);
+              if (myShare) {
+                explicitPermission = myShare.permission_tier;
+              }
+            }
+            
+            let payload = project.state_payload;
+            if (typeof payload === 'string') {
+              try { payload = JSON.parse(payload); } catch (e) { payload = {}; }
+            }
+
+            if (payload && typeof payload === 'object') {
+              payload.before_splat_url = (project as any).before_splat_url || null;
+              payload.after_splat_url = (project as any).after_splat_url || null;
+            }
+
+            loadProjectState(payload, project.id, project.name, (project as any).user_id, explicitPermission);
+            
+            if (payload?.linkedSubfloorProjectId !== undefined) {
+              linkProject(payload.linkedSubfloorProjectId);
+            } else {
+              linkProject(null);
+            }
+
+            if (payload?.integrationData) {
+              setIntegrationData(payload.integrationData);
+            }
           }
+        } catch (err: any) {
+          setError(err?.message || 'Failed to apply saved state');
+          logger.error('Failed to load project state', { projectId: project.id, error: err });
+        } finally {
+          useAppStore.setState({ isProjectLoading: false });
         }
-        
-        let payload = project.state_payload;
-        if (typeof payload === 'string') {
-          try { payload = JSON.parse(payload); } catch (e) { payload = {}; }
-        }
-
-        if (payload && typeof payload === 'object') {
-          payload.before_splat_url = (project as any).before_splat_url || null;
-          payload.after_splat_url = (project as any).after_splat_url || null;
-        }
-
-        loadProjectState(payload, project.id, project.name, (project as any).user_id, explicitPermission);
-        
-        if (payload?.linkedSubfloorProjectId !== undefined) {
-          linkProject(payload.linkedSubfloorProjectId);
-        } else {
-          linkProject(null);
-        }
-
-        if (payload?.integrationData) {
-          setIntegrationData(payload.integrationData);
-        }
-
-        onClose();
-      }
-    } catch (err: any) {
-      setError(err?.message || 'Failed to apply saved state');
-      logger.error('Failed to load project state', { projectId: project.id, error: err });
-    }
+      }, 50);
+    });
   };
 
   const handleDeleteCloudProject = async (e: React.MouseEvent, project: Project) => {
