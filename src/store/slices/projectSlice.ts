@@ -3,6 +3,7 @@ import { supabase } from '../../utils/supabaseClient';
 import { useAuthStore } from '../useAuthStore';
 import { logger } from '../../utils/logger';
 import { broadcastStateSync } from '../../utils/syncBroadcaster';
+import { fastDeepClone } from '../../utils/cloneState';
 
 export interface ProjectSlice {
   projectName: string;
@@ -71,7 +72,7 @@ export const getSnapshot = (state: any) => {
     projectName: state.projectName,
     wallWidth: state.wallWidth,
     wallHeight: state.wallHeight,
-    wallVertices: state.wallVertices ? JSON.parse(JSON.stringify(state.wallVertices)) : [],
+    wallVertices: state.wallVertices ? fastDeepClone(state.wallVertices) : [],
     unit: state.unit,
     shape: state.shape,
     tileWidth: state.tileWidth,
@@ -84,12 +85,12 @@ export const getSnapshot = (state: any) => {
     colorPattern: state.colorPattern,
     tilesPerStripe: state.tilesPerStripe,
     tileDotColor,
-    activeCustomPattern: state.activeCustomPattern ? JSON.parse(JSON.stringify(state.activeCustomPattern)) : null,
-    compositeColors: state.compositeColors ? JSON.parse(JSON.stringify(state.compositeColors)) : {},
+    activeCustomPattern: state.activeCustomPattern ? fastDeepClone(state.activeCustomPattern) : null,
+    compositeColors: state.compositeColors ? fastDeepClone(state.compositeColors) : {},
     colorVariation: state.colorVariation,
     groutColor: state.groutColor,
-    subAreas: state.subAreas ? JSON.parse(JSON.stringify(state.subAreas)) : [],
-    wallExtensions: state.wallExtensions ? JSON.parse(JSON.stringify(state.wallExtensions)) : [],
+    subAreas: state.subAreas ? fastDeepClone(state.subAreas) : [],
+    wallExtensions: state.wallExtensions ? fastDeepClone(state.wallExtensions) : [],
     isPainted: state.isPainted,
     soldAsMosaic: state.soldAsMosaic,
     mosaicWidth: state.mosaicWidth,
@@ -109,23 +110,23 @@ export const getSnapshot = (state: any) => {
     wallActiveArches: state.wallActiveArches,
     wallArchDepth: state.wallArchDepth,
     wallAngle: state.wallAngle,
-    wallBorder: state.wallBorder ? JSON.parse(JSON.stringify(state.wallBorder)) : null,
-    mainShapeSettings: state.mainShapeSettings ? JSON.parse(JSON.stringify(state.mainShapeSettings)) : null,
+    wallBorder: state.wallBorder ? fastDeepClone(state.wallBorder) : null,
+    mainShapeSettings: state.mainShapeSettings ? fastDeepClone(state.mainShapeSettings) : null,
     layoutFoldType: state.layoutFoldType || 'inward',
-    foldLines: state.foldLines ? (JSON.parse(JSON.stringify(state.foldLines)) as any[]).map((f: any) => ({ ...f, foldAngle: f.foldAngle !== undefined && f.foldAngle !== null ? f.foldAngle : (state.layoutFoldType === 'outward' ? -90 : 90) })) : [],
-    sceneObjects: state.sceneObjects ? JSON.parse(JSON.stringify(state.sceneObjects)) : [],
-    roomDimensions: state.roomDimensions ? JSON.parse(JSON.stringify(state.roomDimensions)) : null,
-    roomColors: state.roomColors ? JSON.parse(JSON.stringify(state.roomColors)) : null,
+    foldLines: state.foldLines ? (fastDeepClone(state.foldLines) as any[]).map((f: any) => ({ ...f, foldAngle: f.foldAngle !== undefined && f.foldAngle !== null ? f.foldAngle : (state.layoutFoldType === 'outward' ? -90 : 90) })) : [],
+    sceneObjects: state.sceneObjects ? fastDeepClone(state.sceneObjects) : [],
+    roomDimensions: state.roomDimensions ? fastDeepClone(state.roomDimensions) : null,
+    roomColors: state.roomColors ? fastDeepClone(state.roomColors) : null,
     uploadedSvgText: state.uploadedSvgText,
     patternAccentColor: state.patternAccentColor,
     publicShowQuantities: state.publicShowQuantities ?? false,
     publicShowPricing: state.publicShowPricing ?? false,
-    tileColorOverrides: state.tileColorOverrides ? JSON.parse(JSON.stringify(state.tileColorOverrides)) : {},
+    tileColorOverrides: state.tileColorOverrides ? fastDeepClone(state.tileColorOverrides) : {},
     activeBrushColorIndex: state.activeBrushColorIndex !== undefined ? state.activeBrushColorIndex : 1,
     linkedSubfloorProjectId: state.linkedSubfloorProjectId,
     before_splat_url: state.before_splat_url,
     after_splat_url: state.after_splat_url,
-    integrationData: state.integrationData ? JSON.parse(JSON.stringify(state.integrationData)) : null,
+    integrationData: state.integrationData ? fastDeepClone(state.integrationData) : null,
   };
 };
 
@@ -327,7 +328,7 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
       s.setFutureStateStack([current, ...s.futureStateStack]);
       s.restoreSnapshot(prev);
       restoredState = prev;
-      s.setLastSavedState(JSON.parse(JSON.stringify(prev)));
+      s.setLastSavedState(fastDeepClone(prev));
       if (newPast.length === 0) {
         s.setIsCanvasDirty(false);
       }
@@ -345,7 +346,7 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
       s.setFutureStateStack(s.futureStateStack.slice(1));
       s.setPastStateStack([...s.pastStateStack, current]);
       s.restoreSnapshot(next);
-      s.setLastSavedState(JSON.parse(JSON.stringify(next)));
+      s.setLastSavedState(fastDeepClone(next));
       s.setIsCanvasDirty(true);
 
       if (!s.isReceivingRemoteUpdate) {
@@ -379,7 +380,7 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
     for (const key of keys) {
       if (snapshot[key] !== undefined) {
         if (typeof snapshot[key] === 'object' && snapshot[key] !== null) {
-          updates[key] = JSON.parse(JSON.stringify(snapshot[key]));
+          updates[key] = fastDeepClone(snapshot[key]);
         } else {
           updates[key] = snapshot[key];
         }

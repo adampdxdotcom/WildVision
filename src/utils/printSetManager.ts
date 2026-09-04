@@ -32,8 +32,9 @@ export function formatSubfolderName(rawName: string): string {
 
 const setUrlsMap: Record<string, string[]> = {};
 const setImageCache: Record<string, HTMLImageElement[]> = {};
+const loadingSets = new Set<string>();
 
-// Group images by parent folder name (the set name) or filename if placed directly in sets
+// Discover all image paths inside src/assets/sets using Vite's glob
 for (const [path, module] of Object.entries(setModules)) {
   const matchFolder = path.match(/\/sets\/([^\/]+)\//);
   const matchFile = path.match(/\/sets\/([^\/]+)\.(png|jpg|jpeg)$/i);
@@ -51,26 +52,66 @@ for (const [path, module] of Object.entries(setModules)) {
     if (url) {
       if (!setUrlsMap[setName]) {
         setUrlsMap[setName] = [];
-        setImageCache[setName] = [];
       }
       setUrlsMap[setName].push(url);
-
-      // Preload and cache HTMLImageElement instances
-      if (typeof window !== 'undefined') {
-        const img = new Image();
-        img.onload = () => {
-          try {
-            const state = useAppStore.getState();
-            if (state && state.setIsCanvasDirty) {
-              state.setIsCanvasDirty(true);
-            }
-          } catch (_) {}
-        };
-        img.src = url;
-        setImageCache[setName].push(img);
-      }
     }
   }
+}
+
+/**
+ * Lazily loads and caches HTMLImageElement instances for a specific print set on-demand.
+ */
+export function preloadPrintSet(setName: string, onComplete?: () => void): void {
+  if (typeof window === 'undefined') return;
+
+  const formattedName = formatSubfolderName(setName);
+  const resolvedName = setUrlsMap[setName] ? setName : (setUrlsMap[formattedName] ? formattedName : null);
+  if (!resolvedName) return;
+
+  // Already loaded in memory
+  if (setImageCache[resolvedName] && setImageCache[resolvedName].length > 0) {
+    onComplete?.();
+    return;
+  }
+
+  // Already actively loading
+  if (loadingSets.has(resolvedName)) return;
+
+  const urls = setUrlsMap[resolvedName] || [];
+  if (urls.length === 0) return;
+
+  loadingSets.add(resolvedName);
+  const images: HTMLImageElement[] = [];
+  let loadedCount = 0;
+
+  const checkAllLoaded = () => {
+    loadedCount++;
+    if (loadedCount >= urls.length) {
+      loadingSets.delete(resolvedName);
+      onComplete?.();
+    }
+  };
+
+  urls.forEach((url) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const state = useAppStore.getState();
+        if (state?.setIsCanvasDirty) {
+          state.setIsCanvasDirty(true);
+        }
+      } catch (_) {}
+      checkAllLoaded();
+    };
+    img.onerror = () => {
+      checkAllLoaded();
+    };
+    img.src = url;
+    images.push(img);
+  });
+
+  setImageCache[resolvedName] = images;
 }
 
 /**
@@ -84,14 +125,23 @@ export function getAvailableSetNames(): string[] {
  * Get all image URLs for a given set name.
  */
 export function getSetUrls(setName: string): string[] {
-  return setUrlsMap[setName] || [];
+  const formattedName = formatSubfolderName(setName);
+  return setUrlsMap[setName] || setUrlsMap[formattedName] || [];
 }
 
 /**
  * Get preloaded HTMLImageElement instances for a set name.
+ * Automatically triggers on-demand lazy load if not already in memory.
  */
 export function getSetImages(setName: string): HTMLImageElement[] {
-  return setImageCache[setName] || [];
+  const formattedName = formatSubfolderName(setName);
+  const resolvedName = setUrlsMap[setName] ? setName : (setUrlsMap[formattedName] ? formattedName : null);
+  if (!resolvedName) return [];
+
+  if (!setImageCache[resolvedName]) {
+    preloadPrintSet(resolvedName);
+  }
+  return setImageCache[resolvedName] || [];
 }
 
 /**
@@ -110,14 +160,26 @@ export function hash2DCoordinates(x: number, y: number): number {
 /**
  * Selects and returns a specific image from a requested set array based on coordinates,
  * ensuring adjacent coordinates resolve to different indices to prevent identical neighboring prints.
+ * Automatically triggers lazy loading of the requested print set on first access.
  */
 export function getPrintForLocation(setName: string, x: number, y: number): PrintSetItem | null {
   const formattedName = formatSubfolderName(setName);
-  const urls = setUrlsMap[setName] || setUrlsMap[formattedName];
+  const resolvedName = setUrlsMap[setName] ? setName : (setUrlsMap[formattedName] ? formattedName : null);
+  if (!resolvedName) {
+    return null;
+  }
+
+  const urls = setUrlsMap[resolvedName];
   if (!urls || urls.length === 0) {
     return null;
   }
-  const images = setImageCache[setName] || setImageCache[formattedName];
+
+  // Trigger lazy loading on demand if not yet cached
+  if (!setImageCache[resolvedName]) {
+    preloadPrintSet(resolvedName);
+  }
+
+  const images = setImageCache[resolvedName];
   const hash = hash2DCoordinates(x, y);
   const index = hash % urls.length;
 

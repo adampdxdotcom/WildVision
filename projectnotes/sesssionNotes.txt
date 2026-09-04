@@ -219,6 +219,18 @@
 * **3D Z-Axis Forward Projection (`MainTileLayoutGroup.tsx`, `ImportedLayoutObject.tsx`):**
   In Bump-Out / Fireplace mode (`foldAngle = -90°`), the engine calculates the return depth (e.g., 12") and shifts the main front wall panel **forward into the room along the Z-axis by `+returnDepth`**. This cleanly projects the structure into the room interior as a 3D chimney breast while anchoring the back edges of the side returns flush against the room's back drywall wall plane (`Z = 0`).
 
+### 6. 3D Niche Texture Backplate & Sub-Area Bounding Fixes
+* **Isolated Sub-Area Texture Extraction (`NicheFeature.tsx`):**
+  - Replaced shallow `globalTexture.clone()` calls (which suffer from WebGL offset/repeat clipping bugs on canvas textures) with isolated 2D sub-rectangle extraction onto dedicated offscreen canvases matching `ShelfFeature.tsx`.
+  - Converted `useMemo` dependency arrays to use primitive coordinates (`bounds.minX`, `bounds.minY`, `bounds.width`, `bounds.height`) instead of volatile composite object references to prevent unnecessary texture regeneration and premature `dispose()` cycles.
+  - Added support for custom slab surfaces (`surfaceUrl`) and realistic physical roughness/metalness parameters on recessed niche backings.
+
+### 7. File Loading & Startup Performance Optimization (Phase 1)
+* **Lazy On-Demand Print Set Preloading (`printSetManager.ts`):**
+  - Converted `printSetManager.ts` from eager startup instantiations of `new Image()` for every print set to an on-demand preloader and memory cache (`preloadPrintSet`).
+  - Available set names and file URLs remain synchronous and fast, but DOM image decodes only fire when a set is actively rendered or selected by the user.
+  - Redraw notifications are dispatched cleanly to `setIsCanvasDirty` only when active assets finish loading.
+
 
 
 

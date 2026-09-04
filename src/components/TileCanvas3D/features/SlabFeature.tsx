@@ -54,6 +54,14 @@ export const SlabFeature: React.FC<FeatureProps> = ({
   const depthD3 = to3D(sa.depth ?? 0.1);
   const fallbackColor = sa.tileColor || '#94a3b8';
 
+  // Dispose cloned texture and loaded baseTexture on cleanup
+  React.useEffect(() => {
+    return () => {
+      texture?.dispose();
+      baseTexture?.dispose();
+    };
+  }, [texture, baseTexture]);
+
   const materialProps = {
     roughness: 0.2,
     metalness: 0.1,

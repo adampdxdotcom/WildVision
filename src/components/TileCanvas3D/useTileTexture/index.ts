@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import * as THREE from 'three';
 import { useAppStore } from '../../../store/useAppStore';
 import { useAssetPreloader } from './useAssetPreloader';
@@ -63,9 +63,14 @@ export function useTileTexture() {
   const tileSpecular = viewSettings.render.enableReflection;
   const disableTileColorOnPdf = viewSettings.pdf.disableTileColor;
 
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Dedicated cleanup effect to avoid memory leaks on unmount
   useEffect(() => {
     return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
       setTextures(prev => {
         if (prev.color) prev.color.dispose();
         if (prev.bump) prev.bump.dispose();
@@ -79,80 +84,93 @@ export function useTileTexture() {
       return;
     }
 
-    const {
-      canvas,
-      ctx,
-      bumpCanvas,
-      bumpCtx,
-      viewport,
-    } = setupBakingCanvases(wallWidth, wallHeight, wallExtensions, wallVertices || [], enableRealisticDepth);
-
-    if (!ctx) return;
-
-    drawTexture({
-      ctx,
-      bumpCtx,
-      viewport,
-      wallWidth,
-      wallHeight,
-      shape,
-      tileWidth,
-      tileHeight,
-      pattern,
-      groutWidth,
-      tileColors,
-      colorPattern,
-      colorVariation,
-      groutColor,
-      offsetX,
-      offsetY,
-      angle,
-      wallExtensions,
-      isPicket,
-      picketLength,
-      wallVertices: wallVertices || [],
-      tileOpacity,
-      subAreas,
-      wallBoundaryShape,
-      wallArchHeight,
-      wallActiveArches,
-      wallArchDepth,
-      compositeColors,
-      wallBorder,
-      isPainted,
-      unit,
-      tilesPerStripe,
-      isBlankCanvasMode,
-      materialTexture,
-      disableColorWithTexture,
-      materialImage,
-      tileSpecular,
-      disableTileColorOnPdf,
-      activeCustomPattern,
-      flatsketVerticalRows,
-      flatsketHorizontalRows,
-    });
-
-    const newColorTexture = new THREE.CanvasTexture(canvas);
-    newColorTexture.colorSpace = THREE.SRGBColorSpace;
-    newColorTexture.needsUpdate = true;
-
-    let newBumpTexture: THREE.CanvasTexture | null = null;
-    if (bumpCanvas) {
-      newBumpTexture = new THREE.CanvasTexture(bumpCanvas);
-      newBumpTexture.colorSpace = THREE.NoColorSpace;
-      newBumpTexture.needsUpdate = true;
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
 
-    setTextures(prev => {
-      // Safely dispose old textures
-      if (prev.color) prev.color.dispose();
-      if (prev.bump) prev.bump.dispose();
-      return {
-        color: newColorTexture,
-        bump: newBumpTexture,
-      };
-    });
+    // Debounce texture baking to consolidate high-frequency slider/color interactions
+    debounceTimerRef.current = setTimeout(() => {
+      const {
+        canvas,
+        ctx,
+        bumpCanvas,
+        bumpCtx,
+        viewport,
+      } = setupBakingCanvases(wallWidth, wallHeight, wallExtensions, wallVertices || [], enableRealisticDepth);
+
+      if (!ctx) return;
+
+      drawTexture({
+        ctx,
+        bumpCtx,
+        viewport,
+        wallWidth,
+        wallHeight,
+        shape,
+        tileWidth,
+        tileHeight,
+        pattern,
+        groutWidth,
+        tileColors,
+        colorPattern,
+        colorVariation,
+        groutColor,
+        offsetX,
+        offsetY,
+        angle,
+        wallExtensions,
+        isPicket,
+        picketLength,
+        wallVertices: wallVertices || [],
+        tileOpacity,
+        subAreas,
+        wallBoundaryShape,
+        wallArchHeight,
+        wallActiveArches,
+        wallArchDepth,
+        compositeColors,
+        wallBorder,
+        isPainted,
+        unit,
+        tilesPerStripe,
+        isBlankCanvasMode,
+        materialTexture,
+        disableColorWithTexture,
+        materialImage,
+        tileSpecular,
+        disableTileColorOnPdf,
+        activeCustomPattern,
+        flatsketVerticalRows,
+        flatsketHorizontalRows,
+      });
+
+      const newColorTexture = new THREE.CanvasTexture(canvas);
+      newColorTexture.colorSpace = THREE.SRGBColorSpace;
+      newColorTexture.needsUpdate = true;
+
+      let newBumpTexture: THREE.CanvasTexture | null = null;
+      if (bumpCanvas) {
+        newBumpTexture = new THREE.CanvasTexture(bumpCanvas);
+        newBumpTexture.colorSpace = THREE.NoColorSpace;
+        newBumpTexture.needsUpdate = true;
+      }
+
+      setTextures(prev => {
+        // Safely dispose old textures
+        if (prev.color) prev.color.dispose();
+        if (prev.bump) prev.bump.dispose();
+        return {
+          color: newColorTexture,
+          bump: newBumpTexture,
+        };
+      });
+    }, 16);
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
   }, [
     wallWidth,
     wallHeight,
