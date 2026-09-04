@@ -484,9 +484,25 @@ export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (se
   activeCustomPattern: null,
   setCustomPatternsList: (patterns) => set({ customPatternsList: patterns }),
   flatsketVerticalRows: 1,
-  setFlatsketVerticalRows: (updater) => set((state: any) => ({ flatsketVerticalRows: typeof updater === 'function' ? updater(state.flatsketVerticalRows) : updater })),
+  setFlatsketVerticalRows: (updater) => set((state: any) => {
+    const raw = typeof updater === 'function' ? updater(state.flatsketVerticalRows) : updater;
+    const nextVal = Math.max(1, Math.min(20, Math.round(Number(raw) || 1)));
+    if (!state.isReceivingRemoteUpdate) broadcastStateSync('setFlatsketVerticalRows', nextVal);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('wildvision:forceCanvasRedraw'));
+    }
+    return { flatsketVerticalRows: nextVal, isCanvasDirty: true };
+  }),
   flatsketHorizontalRows: 3,
-  setFlatsketHorizontalRows: (updater) => set((state: any) => ({ flatsketHorizontalRows: typeof updater === 'function' ? updater(state.flatsketHorizontalRows) : updater })),
+  setFlatsketHorizontalRows: (updater) => set((state: any) => {
+    const raw = typeof updater === 'function' ? updater(state.flatsketHorizontalRows) : updater;
+    const nextVal = Math.max(1, Math.min(20, Math.round(Number(raw) || 1)));
+    if (!state.isReceivingRemoteUpdate) broadcastStateSync('setFlatsketHorizontalRows', nextVal);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('wildvision:forceCanvasRedraw'));
+    }
+    return { flatsketHorizontalRows: nextVal, isCanvasDirty: true };
+  }),
   tileColorOverrides: {},
   activeBrushColorIndex: 1,
   setTileColorOverride: (tileId, colorIndex) => set((state: any) => {

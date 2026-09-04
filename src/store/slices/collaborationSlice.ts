@@ -125,6 +125,15 @@ export const createCollaborationSlice: StateCreator<
         case 'setTileColors':
           if (store.setTileColors) store.setTileColors(payload);
           break;
+        case 'setFlatsketVerticalRows':
+          if (store.setFlatsketVerticalRows) store.setFlatsketVerticalRows(payload);
+          break;
+        case 'setFlatsketHorizontalRows':
+          if (store.setFlatsketHorizontalRows) store.setFlatsketHorizontalRows(payload);
+          break;
+        case 'setBasketWeaveMultiplier':
+          if (store.setBasketWeaveMultiplier) store.setBasketWeaveMultiplier(payload);
+          break;
         // add other structural state updaters if needed
         default:
           console.warn('Unknown actionType in remote sync:', actionType);

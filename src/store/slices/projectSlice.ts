@@ -123,6 +123,13 @@ export const getSnapshot = (state: any) => {
     publicShowPricing: state.publicShowPricing ?? false,
     tileColorOverrides: state.tileColorOverrides ? fastDeepClone(state.tileColorOverrides) : {},
     activeBrushColorIndex: state.activeBrushColorIndex !== undefined ? state.activeBrushColorIndex : 1,
+    flatsketVerticalRows: state.flatsketVerticalRows !== undefined ? state.flatsketVerticalRows : 1,
+    flatsketHorizontalRows: state.flatsketHorizontalRows !== undefined ? state.flatsketHorizontalRows : 3,
+    basketWeaveMultiplier: state.basketWeaveMultiplier !== undefined ? state.basketWeaveMultiplier : 2,
+    isPicket: state.isPicket ?? false,
+    picketLength: state.picketLength ?? 8,
+    tileFinish: state.tileFinish || 'glossy',
+    purchasingSettings: state.purchasingSettings ? fastDeepClone(state.purchasingSettings) : {},
     linkedSubfloorProjectId: state.linkedSubfloorProjectId,
     before_splat_url: state.before_splat_url,
     after_splat_url: state.after_splat_url,
@@ -370,7 +377,9 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
       'roomDimensions', 'roomColors', 'layoutTransform', 'sceneObjects',
       'activeObjectId', 'floorY', 'backWallZ', 'leftWallX', 'rightWallX',
       'ceilingY', 'activeCustomPattern', 'uploadedSvgText', 'patternAccentColor',
-      'tileColorOverrides', 'activeBrushColorIndex', 'linkedSubfloorProjectId', 'integrationData'
+      'tileColorOverrides', 'activeBrushColorIndex', 'flatsketVerticalRows', 'flatsketHorizontalRows',
+      'basketWeaveMultiplier', 'isPicket', 'picketLength', 'tileFinish', 'purchasingSettings',
+      'linkedSubfloorProjectId', 'integrationData'
     ];
 
     const updates: any = {
@@ -482,6 +491,13 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
       activeCustomPattern: s.activeCustomPattern,
       tileColorOverrides: s.tileColorOverrides,
       activeBrushColorIndex: s.activeBrushColorIndex,
+      flatsketVerticalRows: s.flatsketVerticalRows,
+      flatsketHorizontalRows: s.flatsketHorizontalRows,
+      basketWeaveMultiplier: s.basketWeaveMultiplier,
+      isPicket: s.isPicket,
+      picketLength: s.picketLength,
+      tileFinish: s.tileFinish,
+      purchasingSettings: s.purchasingSettings,
       linkedSubfloorProjectId: s.linkedSubfloorProjectId,
       integrationData: s.integrationData,
       publicShowQuantities: s.publicShowQuantities ?? false,
@@ -576,6 +592,10 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
     if (data.tileHeight !== undefined) updates.tileHeight = data.tileHeight;
     if (data.pattern !== undefined) updates.pattern = data.pattern;
     if (data.basketWeaveMultiplier !== undefined) updates.basketWeaveMultiplier = data.basketWeaveMultiplier;
+    if (data.flatsketVerticalRows !== undefined) updates.flatsketVerticalRows = data.flatsketVerticalRows;
+    if (data.flatsketHorizontalRows !== undefined) updates.flatsketHorizontalRows = data.flatsketHorizontalRows;
+    if (data.isPicket !== undefined) updates.isPicket = data.isPicket;
+    if (data.picketLength !== undefined) updates.picketLength = data.picketLength;
     if (data.groutWidth !== undefined) updates.groutWidth = data.groutWidth;
     if (data.angle !== undefined) updates.angle = data.angle;
     if (data.tileName !== undefined) updates.tileName = data.tileName;
@@ -736,7 +756,11 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
       tileWidth: 6,
       tileHeight: 3,
       pattern: 'running_50',
-      basketWeaveMultiplier: 1,
+      basketWeaveMultiplier: 2,
+      flatsketVerticalRows: 1,
+      flatsketHorizontalRows: 3,
+      isPicket: false,
+      picketLength: 8,
       groutWidth: 0.125,
       angle: 0,
       tileName: 'White Gloss Ceramic Subway',

@@ -75,6 +75,12 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
     uploadedSvgText, setUploadedSvgText,
     patternAccentColor, setPatternAccentColor,
     tileColorOverrides, activeBrushColorIndex,
+    flatsketVerticalRows, setFlatsketVerticalRows,
+    flatsketHorizontalRows, setFlatsketHorizontalRows,
+    basketWeaveMultiplier, setBasketWeaveMultiplier,
+    isPicket, setIsPicket,
+    picketLength, setPicketLength,
+    tileFinish, setTileFinish,
     linkedSubfloorProjectId, integrationData,
   } = useAppStore();
 
@@ -105,6 +111,12 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
       activeCustomPattern,
       colorVariation,
       groutColor,
+      tileFinish,
+      flatsketVerticalRows,
+      flatsketHorizontalRows,
+      basketWeaveMultiplier,
+      isPicket,
+      picketLength,
       uploadedSvgText,
       patternAccentColor,
       viewSettings,
@@ -258,6 +270,12 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
         }
         if (data.colorVariation !== undefined) setColorVariation(data.colorVariation);
         if (data.groutColor !== undefined) setGroutColor(data.groutColor);
+        if (data.tileFinish !== undefined) setTileFinish(data.tileFinish);
+        if (data.flatsketVerticalRows !== undefined) setFlatsketVerticalRows(Number(data.flatsketVerticalRows) || 1);
+        if (data.flatsketHorizontalRows !== undefined) setFlatsketHorizontalRows(Number(data.flatsketHorizontalRows) || 3);
+        if (data.basketWeaveMultiplier !== undefined) setBasketWeaveMultiplier(Number(data.basketWeaveMultiplier) || 2);
+        if (data.isPicket !== undefined) setIsPicket(Boolean(data.isPicket));
+        if (data.picketLength !== undefined) setPicketLength(Number(data.picketLength) || 8);
         if (data.uploadedSvgText !== undefined) setUploadedSvgText(data.uploadedSvgText);
         if (data.patternAccentColor !== undefined) setPatternAccentColor(data.patternAccentColor || '#000000');
         const resolvedViewSettings = data.viewSettings ? {
@@ -401,6 +419,12 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
           activeCustomPattern: data.activeCustomPattern !== undefined ? data.activeCustomPattern : null,
           compositeColors: data.compositeColors || (data.tileDotColor ? { secondary: data.tileDotColor } : (compositeColors || { secondary: '#334155' })),
           colorVariation: data.colorVariation || colorVariation,
+          tileFinish: data.tileFinish || tileFinish,
+          flatsketVerticalRows: data.flatsketVerticalRows !== undefined ? Number(data.flatsketVerticalRows) : flatsketVerticalRows,
+          flatsketHorizontalRows: data.flatsketHorizontalRows !== undefined ? Number(data.flatsketHorizontalRows) : flatsketHorizontalRows,
+          basketWeaveMultiplier: data.basketWeaveMultiplier !== undefined ? Number(data.basketWeaveMultiplier) : basketWeaveMultiplier,
+          isPicket: data.isPicket !== undefined ? Boolean(data.isPicket) : isPicket,
+          picketLength: data.picketLength !== undefined ? Number(data.picketLength) : picketLength,
           groutColor: data.groutColor || groutColor,
           viewSettings: resolvedViewSettings,
           offsetX: data.offsetX !== undefined ? Number(data.offsetX) : offsetX,
@@ -537,6 +561,12 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
     }
     if (data.colorVariation !== undefined) setColorVariation(data.colorVariation);
     if (data.groutColor !== undefined) setGroutColor(data.groutColor);
+    if (data.tileFinish !== undefined) setTileFinish(data.tileFinish);
+    if (data.flatsketVerticalRows !== undefined) setFlatsketVerticalRows(Number(data.flatsketVerticalRows) || 1);
+    if (data.flatsketHorizontalRows !== undefined) setFlatsketHorizontalRows(Number(data.flatsketHorizontalRows) || 3);
+    if (data.basketWeaveMultiplier !== undefined) setBasketWeaveMultiplier(Number(data.basketWeaveMultiplier) || 2);
+    if (data.isPicket !== undefined) setIsPicket(Boolean(data.isPicket));
+    if (data.picketLength !== undefined) setPicketLength(Number(data.picketLength) || 8);
     if (data.uploadedSvgText !== undefined) setUploadedSvgText(data.uploadedSvgText);
     if (data.patternAccentColor !== undefined) setPatternAccentColor(data.patternAccentColor || '#000000');
     const resolvedViewSettings = data.viewSettings ? {
@@ -644,6 +674,12 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
       tileDotColor: data.tileDotColor || tileDotColor,
       activeCustomPattern: data.activeCustomPattern !== undefined ? data.activeCustomPattern : null,
       colorVariation: data.colorVariation || colorVariation,
+      tileFinish: data.tileFinish || tileFinish,
+      flatsketVerticalRows: data.flatsketVerticalRows !== undefined ? Number(data.flatsketVerticalRows) : flatsketVerticalRows,
+      flatsketHorizontalRows: data.flatsketHorizontalRows !== undefined ? Number(data.flatsketHorizontalRows) : flatsketHorizontalRows,
+      basketWeaveMultiplier: data.basketWeaveMultiplier !== undefined ? Number(data.basketWeaveMultiplier) : basketWeaveMultiplier,
+      isPicket: data.isPicket !== undefined ? Boolean(data.isPicket) : isPicket,
+      picketLength: data.picketLength !== undefined ? Number(data.picketLength) : picketLength,
       groutColor: data.groutColor || groutColor,
       viewSettings: resolvedViewSettings,
       offsetX: data.offsetX !== undefined ? Number(data.offsetX) : offsetX,
@@ -729,6 +765,12 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
     setTileWidth(6);
     setTileHeight(3);
     setPattern('running_50');
+    setBasketWeaveMultiplier(2);
+    setFlatsketVerticalRows(1);
+    setFlatsketHorizontalRows(3);
+    setIsPicket(false);
+    setPicketLength(8);
+    setTileFinish('glossy');
     setGroutWidth(0.125);
     setAngle(0);
     setTileName('White Gloss Ceramic Subway');
@@ -801,6 +843,12 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
       tileWidth: 6,
       tileHeight: 3,
       pattern: 'running_50' as const,
+      basketWeaveMultiplier: 2,
+      flatsketVerticalRows: 1,
+      flatsketHorizontalRows: 3,
+      isPicket: false,
+      picketLength: 8,
+      tileFinish: 'glossy' as const,
       groutWidth: 0.125,
       angle: 0,
       tileName: 'White Gloss Ceramic Subway',
