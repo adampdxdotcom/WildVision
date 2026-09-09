@@ -227,7 +227,7 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
       {/* Accent Tile Name */}
       {!integrationData?.variant_id && (
         <div className="space-y-2">
-          {savedProfiles.length > 0 && (
+          {(savedProfiles.length > 0 || !!activeSa.linkedMaterialId) && (
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455 mb-1">
                 Apply Saved Tile Profile
@@ -244,7 +244,7 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
                 <option value="">-- Custom / Independent --</option>
                 {savedProfiles.map((sa) => (
                   <option key={sa.id} value={sa.id}>
-                    {sa.tileName || 'Unnamed Tile'}
+                    {sa.tileName || sa.name || 'Unnamed Profile'}
                   </option>
                 ))}
               </select>
@@ -626,11 +626,35 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
       )}
 
       {/* Linked Material Banner */}
-      {!!activeSa.linkedMaterialId && (
-        <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600">
-          Material settings are linked to the parent tile profile.
-        </div>
-      )}
+      {!!activeSa.linkedMaterialId && (() => {
+        const parent = subAreas.find((s) => s.id === activeSa.linkedMaterialId);
+        const parentName = parent ? (parent.tileName || parent.name || 'Master Profile') : 'Master Profile';
+        return (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-900 space-y-1.5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-bold flex items-center gap-1.5">
+                <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                Linked to Reusable Tile Profile
+              </span>
+              <span className="px-2 py-0.5 bg-amber-200/70 text-amber-950 rounded text-[11px] font-semibold truncate max-w-[150px]" title={parentName}>
+                {parentName}
+              </span>
+            </div>
+            <p className="text-[11px] text-amber-800 leading-relaxed">
+              Tile shape, dimensions, colors, pattern, finish, and grout are actively synced with <span className="font-semibold text-amber-950">{parentName}</span>. Any changes made to the master profile automatically update this accent area.
+            </p>
+            <div className="pt-0.5">
+              <button
+                type="button"
+                onClick={() => updateActiveSubArea({ linkedMaterialId: undefined })}
+                className="text-[11px] font-semibold text-amber-900 underline hover:text-amber-950 cursor-pointer"
+              >
+                Detach & edit independently
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 3. Options & Add-ons Sub Panel */}
       {(resolvedType !== 'slab' || true) && (

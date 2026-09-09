@@ -3,6 +3,47 @@ import { SubArea, TileShape, MeasurementUnit, WallExtension, RectanglePattern } 
 import { Plus, Trash2, Lock, Unlock, GripVertical, Eye, EyeOff, HelpCircle, Copy } from 'lucide-react';
 import { getCombinedWallBounds, getTrueArea } from '../../utils/geometry';
 import { ActiveAccentEditor } from './ActiveAccentEditor';
+import { useAppStore } from '../../store/useAppStore';
+
+const AESTHETIC_KEYS: (keyof SubArea | string)[] = [
+  'shape',
+  'tileWidth',
+  'tileHeight',
+  'pattern',
+  'tileColors',
+  'tileColor',
+  'colorPattern',
+  'tilesPerStripe',
+  'groutColor',
+  'groutWidth',
+  'shapeSettings',
+  'tileSpecular',
+  'tileFinish',
+  'materialTexture',
+  'colorVariation',
+  'tileDotColor',
+  'isStencil',
+  'soldAsMosaic',
+  'mosaicWidth',
+  'mosaicHeight',
+  'isPicket',
+  'picketLength',
+  'flatsketVerticalRows',
+  'flatsketHorizontalRows',
+  'customPatternPayload',
+  'surfaceUrl',
+  'tileName',
+  'border',
+  'pricingMode',
+  'meshMountedPrice',
+  'meshMountedWaste',
+  'disableColorWithTexture',
+  'textureOpacity',
+  'textureScale',
+  'textureScaleRandom',
+  'textureRotationMode',
+  'textureRotationAngle',
+];
 
 interface FeaturesPanelProps {
   subAreas: SubArea[];
@@ -81,14 +122,32 @@ export const FeaturesPanel: React.FC<FeaturesPanelProps> = ({
 
   const handleDeleteSubArea = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setSubAreas((prev) => prev.filter((sa) => sa.id !== id));
+    setSubAreas((prev) =>
+      prev
+        .filter((sa) => sa.id !== id)
+        .map((sa) => (sa.linkedMaterialId === id ? { ...sa, linkedMaterialId: undefined } : sa))
+    );
     if (activeSubAreaId === id) {
       setActiveSubAreaId(null);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('wildvision:forceCanvasRedraw'));
+      useAppStore.getState().setIsCanvasDirty?.(true);
     }
   };
 
   const updateActiveSubArea = (fields: Partial<SubArea>) => {
     if (!activeSubAreaId) return;
+
+    // Trigger canvas redraw & dirty flags if aesthetic or profile properties changed
+    const hasAestheticUpdates = Object.keys(fields).some(
+      (key) => (AESTHETIC_KEYS as string[]).includes(key) || key === 'linkedMaterialId' || key === 'isMaterialParent'
+    );
+    if (typeof window !== 'undefined' && hasAestheticUpdates) {
+      window.dispatchEvent(new CustomEvent('wildvision:forceCanvasRedraw'));
+      useAppStore.getState().setIsCanvasDirty?.(true);
+    }
+
     setSubAreas((prev) => {
       const activeSa = prev.find((s) => s.id === activeSubAreaId);
       if (!activeSa) return prev;
@@ -109,6 +168,7 @@ export const FeaturesPanel: React.FC<FeaturesPanelProps> = ({
 
       let finalFields = { ...fields };
 
+      // 1. If user re-linked clone family
       if (fields.isLinked === true && activeSa.linkedToId) {
         const master = prev.find((s) => s.id === activeSa.linkedToId);
         if (master) {
@@ -122,24 +182,69 @@ export const FeaturesPanel: React.FC<FeaturesPanelProps> = ({
         }
       }
 
+      // 2. If user selected or switched a Reusable Tile Profile
+      if (fields.linkedMaterialId !== undefined) {
+        if (fields.linkedMaterialId) {
+          const profileMaster = prev.find((s) => s.id === fields.linkedMaterialId);
+          if (profileMaster) {
+            const profileProps: any = {};
+            AESTHETIC_KEYS.forEach((key) => {
+              if ((profileMaster as any)[key] !== undefined) {
+                profileProps[key] = JSON.parse(JSON.stringify((profileMaster as any)[key]));
+              }
+            });
+            // Children inherit aesthetic profile and should not be their own parent
+            finalFields = { ...profileProps, ...finalFields, isMaterialParent: false };
+
+            // Synchronize purchasing settings if master has them
+            const store = useAppStore.getState();
+            if (store.purchasingSettings && store.purchasingSettings[profileMaster.id]) {
+              store.updatePurchasingSetting?.(activeSubAreaId, store.purchasingSettings[profileMaster.id]);
+            }
+          }
+        }
+      }
+
+      const mergedActive = { ...activeSa, ...finalFields };
+      if (mergedActive.shape === 'rectangle' && mergedActive.pattern === 'basket_weave') {
+        mergedActive.tileHeight = mergedActive.tileWidth * 2;
+      }
+
       const activeMasterId = activeSa.isLinked ? activeSa.linkedToId : activeSa.id;
       const isCurrentlyLinked = finalFields.isLinked !== undefined ? finalFields.isLinked : activeSa.isLinked;
-      const shouldSync = isCurrentlyLinked || activeSa.id === activeMasterId;
+      const shouldSyncCloneFamily = isCurrentlyLinked || activeSa.id === activeMasterId;
+
+      // If activeSa was unchecked as a material parent, unlink any child profiles
+      const shouldUnlinkChildren = fields.isMaterialParent === false;
 
       return prev.map((sa) => {
         if (sa.id === activeSubAreaId) {
-          const merged = { ...sa, ...finalFields };
-          if (merged.shape === 'rectangle' && merged.pattern === 'basket_weave') {
-            merged.tileHeight = merged.tileWidth * 2;
-          }
-          return merged;
+          return mergedActive;
         }
 
-        const belongsToFamily =
+        // Case A: This sub-area is linked to activeSubArea as its Reusable Tile Profile
+        if (sa.linkedMaterialId === activeSubAreaId) {
+          if (shouldUnlinkChildren) {
+            return { ...sa, linkedMaterialId: undefined };
+          }
+          const syncedChild = { ...sa };
+          AESTHETIC_KEYS.forEach((key) => {
+            if ((mergedActive as any)[key] !== undefined) {
+              (syncedChild as any)[key] = JSON.parse(JSON.stringify((mergedActive as any)[key]));
+            }
+          });
+          if (syncedChild.shape === 'rectangle' && syncedChild.pattern === 'basket_weave') {
+            syncedChild.tileHeight = syncedChild.tileWidth * 2;
+          }
+          return syncedChild;
+        }
+
+        // Case B: This sub-area belongs to the active sub-area's Clone Family
+        const belongsToCloneFamily =
           (sa.linkedToId === activeMasterId && sa.isLinked === true) ||
           sa.id === activeMasterId;
 
-        if (belongsToFamily && shouldSync) {
+        if (belongsToCloneFamily && shouldSyncCloneFamily) {
           const syncFields: any = {};
           Object.keys(fields).forEach((key) => {
             if (!EXCLUDED_KEYS.includes(key)) {
@@ -174,6 +279,8 @@ export const FeaturesPanel: React.FC<FeaturesPanelProps> = ({
         : undefined,
       linkedToId: originalSa.linkedToId || originalSa.id,
       isLinked: true,
+      isMaterialParent: false,
+      linkedMaterialId: originalSa.isMaterialParent ? originalSa.id : originalSa.linkedMaterialId,
     };
 
     if ((originalSa as any).compositeColors) {

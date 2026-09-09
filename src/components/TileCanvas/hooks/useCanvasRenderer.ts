@@ -167,6 +167,11 @@ export function useCanvasRenderer({
   const viewSettings = useAppStore(state => state.viewSettings);
   const materialTexture = useAppStore(state => state.materialTexture);
   const disableColorWithTexture = useAppStore(state => state.disableColorWithTexture);
+  const textureOpacity = useAppStore(state => state.textureOpacity);
+  const textureScale = useAppStore(state => state.textureScale);
+  const textureScaleRandom = useAppStore(state => state.textureScaleRandom);
+  const textureRotationMode = useAppStore(state => state.textureRotationMode);
+  const textureRotationAngle = useAppStore(state => state.textureRotationAngle);
   const isDrafting = useAppStore(state => state.isDrafting);
   const activeCustomPattern = useAppStore(state => state.activeCustomPattern);
   const flatsketVerticalRows = useAppStore(state => state.flatsketVerticalRows);
@@ -398,7 +403,8 @@ export function useCanvasRenderer({
           tilesPerStripe,
           wallVertices,
           false,
-          visibility.showTextures ? materialImage : null
+          visibility.showTextures ? materialImage : null,
+          dimensions
         );
         ctx.restore();
       } else if (!isDrafting) {
@@ -707,6 +713,11 @@ export function useCanvasRenderer({
     accentTexturesLoadedKey,
     tileColorOverrides,
     disableColorWithTexture,
+    textureOpacity,
+    textureScale,
+    textureScaleRandom,
+    textureRotationMode,
+    textureRotationAngle,
     sceneObjects,
     isDrafting,
     subAreaTileMap

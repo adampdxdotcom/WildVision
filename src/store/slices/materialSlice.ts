@@ -174,9 +174,57 @@ export interface MaterialSlice {
   removeSurface: (id: string) => void;
   disableColorWithTexture: boolean;
   setDisableColorWithTexture: (val: boolean | ((prev: boolean) => boolean)) => void;
+  textureOpacity: number;
+  setTextureOpacity: (val: number | ((prev: number) => number)) => void;
+  textureScale: number;
+  setTextureScale: (val: number | ((prev: number) => number)) => void;
+  textureScaleRandom: boolean;
+  setTextureScaleRandom: (val: boolean | ((prev: boolean) => boolean)) => void;
+  textureRotationMode: 'random' | 'fixed';
+  setTextureRotationMode: (val: 'random' | 'fixed' | ((prev: 'random' | 'fixed') => 'random' | 'fixed')) => void;
+  textureRotationAngle: number;
+  setTextureRotationAngle: (val: number | ((prev: number) => number)) => void;
 }
 
-const AESTHETIC_KEYS = ['shape', 'tileWidth', 'tileHeight', 'pattern', 'tileColors', 'tileColor', 'colorPattern', 'tilesPerStripe', 'groutColor', 'groutWidth', 'shapeSettings', 'tileSpecular', 'tileFinish', 'materialTexture', 'colorVariation', 'tileDotColor', 'soldAsMosaic', 'mosaicWidth', 'mosaicHeight', 'isPicket', 'picketLength', 'flatsketVerticalRows', 'flatsketHorizontalRows', 'customPatternPayload', 'surfaceUrl', 'tileName', 'border'];
+const AESTHETIC_KEYS = [
+  'shape',
+  'tileWidth',
+  'tileHeight',
+  'pattern',
+  'tileColors',
+  'tileColor',
+  'colorPattern',
+  'tilesPerStripe',
+  'groutColor',
+  'groutWidth',
+  'shapeSettings',
+  'tileSpecular',
+  'tileFinish',
+  'materialTexture',
+  'colorVariation',
+  'tileDotColor',
+  'isStencil',
+  'soldAsMosaic',
+  'mosaicWidth',
+  'mosaicHeight',
+  'isPicket',
+  'picketLength',
+  'flatsketVerticalRows',
+  'flatsketHorizontalRows',
+  'customPatternPayload',
+  'surfaceUrl',
+  'tileName',
+  'border',
+  'pricingMode',
+  'meshMountedPrice',
+  'meshMountedWaste',
+  'disableColorWithTexture',
+  'textureOpacity',
+  'textureScale',
+  'textureScaleRandom',
+  'textureRotationMode',
+  'textureRotationAngle',
+];
 
 export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (set) => ({
   shape: 'rectangle',
@@ -351,18 +399,24 @@ export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (se
     nextSubAreas = nextSubAreas.map((item: SubArea) => {
       if (item.linkedMaterialId) {
         const parent = nextSubAreas.find((p: SubArea) => p.id === item.linkedMaterialId);
-        if (parent) {
+        if (parent && parent.isMaterialParent !== false) {
           const syncedChild = { ...item };
-          AESTHETIC_KEYS.forEach(key => {
+          AESTHETIC_KEYS.forEach((key) => {
             if ((parent as any)[key] !== undefined) {
               // Deep clone to prevent reference collisions
               (syncedChild as any)[key] = JSON.parse(JSON.stringify((parent as any)[key]));
             }
           });
+          if (syncedChild.shape === 'rectangle' && syncedChild.pattern === 'basket_weave') {
+            syncedChild.tileHeight = syncedChild.tileWidth * 2;
+          }
           if (state.purchasingSettings[parent.id]) {
             nextPurchasingSettings[item.id] = { ...state.purchasingSettings[parent.id] };
           }
           return syncedChild;
+        } else {
+          // Parent no longer exists or is no longer a material parent; unlink child
+          return { ...item, linkedMaterialId: undefined };
         }
       }
       return item;
@@ -626,5 +680,25 @@ export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (se
   disableColorWithTexture: true,
   setDisableColorWithTexture: (updater) => set((state: any) => ({
     disableColorWithTexture: typeof updater === 'function' ? updater(state.disableColorWithTexture) : updater
+  })),
+  textureOpacity: 0.8,
+  setTextureOpacity: (updater) => set((state: any) => ({
+    textureOpacity: typeof updater === 'function' ? updater(state.textureOpacity) : updater
+  })),
+  textureScale: 1.0,
+  setTextureScale: (updater) => set((state: any) => ({
+    textureScale: typeof updater === 'function' ? updater(state.textureScale) : updater
+  })),
+  textureScaleRandom: false,
+  setTextureScaleRandom: (updater) => set((state: any) => ({
+    textureScaleRandom: typeof updater === 'function' ? updater(state.textureScaleRandom) : updater
+  })),
+  textureRotationMode: 'random',
+  setTextureRotationMode: (updater) => set((state: any) => ({
+    textureRotationMode: typeof updater === 'function' ? updater(state.textureRotationMode) : updater
+  })),
+  textureRotationAngle: 0,
+  setTextureRotationAngle: (updater) => set((state: any) => ({
+    textureRotationAngle: typeof updater === 'function' ? updater(state.textureRotationAngle) : updater
   })),
 });

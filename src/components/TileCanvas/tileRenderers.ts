@@ -1,5 +1,6 @@
 import { pseudoRandom2D, getVariedColor } from '../../utils/geometry';
 import { availableMaterialTextures } from '../../store/useAppStore';
+import { MaterialTextureConfig } from '../../types';
 
 function applyMaterialPattern(
   ctx: CanvasRenderingContext2D,
@@ -8,7 +9,8 @@ function applyMaterialPattern(
   tileWidthPx: number,
   tileHeightPx: number,
   physicalCenter: { x: number; y: number } | undefined,
-  pCenter: { x: number; y: number }
+  pCenter: { x: number; y: number },
+  textureConfig?: MaterialTextureConfig
 ) {
   let realWorldWidth = 24;
   if (materialImage.src) {
@@ -29,22 +31,7 @@ function applyMaterialPattern(
   const imgW = materialImage.naturalWidth || materialImage.width || 256;
   const imgH = materialImage.naturalHeight || materialImage.height || 256;
 
-  // 1. Retrieve calculated finalScale
-  const baseScale = (realWorldWidth * viewportScale) / imgW;
-  const scaleX = tileWidthPx / (imgW * baseScale);
-  const scaleY = tileHeightPx / (imgH * baseScale);
-  const finalScale = baseScale * Math.max(scaleX, scaleY, 1.0);
-
-  // 2. Calculate the scaled image size
-  const scaledImgW = imgW * finalScale;
-  const scaledImgH = imgH * finalScale;
-
-  // 3. Tile bounds and diagonal in pixels
-  const tileW_px = tileWidthPx;
-  const tileH_px = tileHeightPx;
-  const tileDiag = Math.sqrt(tileW_px ** 2 + tileH_px ** 2);
-
-  // 4. Generate stable coordinate-seeded random values
+  // 1. Stable deterministic coordinate-seeded random values
   const rxVal = physicalCenter ? physicalCenter.x : pCenter.x;
   const ryVal = physicalCenter ? physicalCenter.y : pCenter.y;
   const seedX = Math.round(rxVal * 1000);
@@ -56,43 +43,67 @@ function applyMaterialPattern(
   const randX = seededRandomVal(seedX, seedY);
   const randY = seededRandomVal(seedX + 57, seedY + 97);
   const randRot = seededRandomVal(seedX + 123, seedY + 456);
+  const randScale = seededRandomVal(seedX + 234, seedY + 567);
 
-  let randomAngleDegrees = 0;
-  let maxShiftX = 0;
-  let maxShiftY = 0;
+  // 2. Texture scale calculation with user config and optional per-tile random variation
+  const baseScale = (realWorldWidth * viewportScale) / imgW;
+  const scaleX = tileWidthPx / (imgW * baseScale);
+  const scaleY = tileHeightPx / (imgH * baseScale);
 
-  if (scaledImgW > tileDiag && scaledImgH > tileDiag) {
-    // Free Rotation Mode
-    randomAngleDegrees = randRot * 360;
-    maxShiftX = Math.max(0, (scaledImgW - tileDiag) / 2);
-    maxShiftY = Math.max(0, (scaledImgH - tileDiag) / 2);
+  const userScale = (textureConfig && typeof textureConfig.scale === 'number') ? textureConfig.scale : 1.0;
+  // If random scaling is enabled: vary between 75% and 100% of userScale (never exceeding userScale)
+  const scaleFactor = textureConfig?.scaleRandom ? (0.75 + 0.25 * randScale) : 1.0;
+  const effectiveUserScale = userScale * scaleFactor;
+
+  const finalScale = baseScale * Math.max(scaleX, scaleY, 1.0) * effectiveUserScale;
+
+  // 3. Calculate scaled image dimensions
+  const scaledImgW = imgW * finalScale;
+  const scaledImgH = imgH * finalScale;
+  const tileDiag = Math.sqrt(tileWidthPx ** 2 + tileHeightPx ** 2);
+
+  // 4. Rotation: Fixed angle vs Random rotation
+  let angleDegrees = 0;
+  if (textureConfig?.rotationMode === 'fixed') {
+    angleDegrees = textureConfig.rotationAngle ?? 0;
   } else {
-    // Orthogonal Rotation Mode
-    const step = Math.floor(randRot * 4); // 0, 1, 2, 3
-    randomAngleDegrees = step * 90; // 0, 90, 180, 270
-    if (randomAngleDegrees === 90 || randomAngleDegrees === 270) {
-      maxShiftX = Math.max(0, (scaledImgW - tileH_px) / 2);
-      maxShiftY = Math.max(0, (scaledImgH - tileW_px) / 2);
+    // Random rotation mode
+    if (scaledImgW > tileDiag && scaledImgH > tileDiag) {
+      angleDegrees = randRot * 360;
     } else {
-      maxShiftX = Math.max(0, (scaledImgW - tileW_px) / 2);
-      maxShiftY = Math.max(0, (scaledImgH - tileH_px) / 2);
+      const step = Math.floor(randRot * 4); // 0, 1, 2, 3
+      angleDegrees = step * 90;
     }
   }
 
-  // 5. Multiply deterministic random factors (-1.0 to 1.0) by safe limits
+  // 5. Deterministic shift offset to sample organic offsets across tiles
+  let maxShiftX = 0;
+  let maxShiftY = 0;
+  if (scaledImgW > tileDiag && scaledImgH > tileDiag) {
+    maxShiftX = Math.max(0, (scaledImgW - tileDiag) / 2);
+    maxShiftY = Math.max(0, (scaledImgH - tileDiag) / 2);
+  } else {
+    maxShiftX = scaledImgW > 0 ? (randX * scaledImgW) : 0;
+    maxShiftY = scaledImgH > 0 ? (randY * scaledImgH) : 0;
+  }
+
   const factorX = randX * 2 - 1;
   const factorY = randY * 2 - 1;
-
   const randomOffsetX = factorX * maxShiftX;
   const randomOffsetY = factorY * maxShiftY;
 
+  // 6. Fill with repeating pattern
   const pattern = ctx.createPattern(materialImage, 'repeat');
   if (pattern) {
+    ctx.save();
+    if (textureConfig && typeof textureConfig.opacity === 'number') {
+      ctx.globalAlpha = textureConfig.opacity;
+    }
     try {
       if (typeof DOMMatrix !== 'undefined') {
         const matrix = new DOMMatrix();
         matrix.translateSelf(pCenter.x, pCenter.y);
-        matrix.rotateSelf(randomAngleDegrees);
+        matrix.rotateSelf(angleDegrees);
         matrix.translateSelf(randomOffsetX, randomOffsetY);
         matrix.scaleSelf(finalScale, finalScale);
         matrix.translateSelf(-imgW / 2, -imgH / 2);
@@ -111,6 +122,7 @@ function applyMaterialPattern(
     }
     ctx.fillStyle = pattern;
     ctx.fill();
+    ctx.restore();
   }
 }
 
@@ -155,14 +167,25 @@ export function drawRoundTile(
   patternAngleRad: number = 0,
   viewportScale: number = 1.0,
   printImg?: HTMLImageElement | null,
-  printOpacity: number = 1.0
+  printOpacity: number = 1.0,
+  textureConfig?: MaterialTextureConfig
 ) {
   ctx.beginPath();
   ctx.arc(pCenter.x, pCenter.y, radius, 0, Math.PI * 2);
   ctx.closePath();
 
-  ctx.save();
-  ctx.clip();
+  const needsClip = Boolean(
+    (printImg && printImg.complete && printImg.naturalWidth > 0) ||
+    (patternImg && patternImg.complete && patternImg.naturalWidth > 0) ||
+    isBumpMapMode ||
+    materialImage
+  );
+
+  if (needsClip) {
+    ctx.save();
+    ctx.clip();
+  }
+
   ctx.fillStyle = isBumpMapMode ? '#ffffff' : tileColor;
   ctx.fill();
 
@@ -191,9 +214,12 @@ export function drawRoundTile(
 
   if (materialImage) {
     ctx.globalCompositeOperation = 'multiply';
-    applyMaterialPattern(ctx, materialImage, viewportScale, radius * 2, radius * 2, physicalCenter, pCenter);
+    applyMaterialPattern(ctx, materialImage, viewportScale, radius * 2, radius * 2, physicalCenter, pCenter, textureConfig);
   }
-  ctx.restore();
+
+  if (needsClip) {
+    ctx.restore();
+  }
 
   if (!isBumpMapMode) {
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
@@ -206,9 +232,8 @@ export function drawRoundTile(
 
     if (tileSpecular) {
       ctx.save();
-      ctx.filter = 'blur(3px)';
       ctx.beginPath();
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.20)';
       ctx.ellipse(
         pCenter.x - radius * 0.25,
         pCenter.y - radius * 0.25,
@@ -238,7 +263,8 @@ export function drawScallopTile(
   patternAngleRad: number = 0,
   viewportScale: number = 1.0,
   printImg?: HTMLImageElement | null,
-  printOpacity: number = 1.0
+  printOpacity: number = 1.0,
+  textureConfig?: MaterialTextureConfig
 ) {
   ctx.save();
   ctx.translate(pCenter.x, pCenter.y);
@@ -252,8 +278,18 @@ export function drawScallopTile(
   ctx.arc(-radius, radius, radius, 0, Math.PI * 1.5, true);
   ctx.closePath();
 
-  ctx.save();
-  ctx.clip();
+  const needsClip = Boolean(
+    (printImg && printImg.complete && printImg.naturalWidth > 0) ||
+    (patternImg && patternImg.complete && patternImg.naturalWidth > 0) ||
+    isBumpMapMode ||
+    materialImage
+  );
+
+  if (needsClip) {
+    ctx.save();
+    ctx.clip();
+  }
+
   ctx.fillStyle = isBumpMapMode ? '#ffffff' : tileColor;
   ctx.fill();
 
@@ -283,9 +319,12 @@ export function drawScallopTile(
 
   if (materialImage) {
     ctx.globalCompositeOperation = 'multiply';
-    applyMaterialPattern(ctx, materialImage, viewportScale, radius * 2, radius * 2, physicalCenter, pCenter);
+    applyMaterialPattern(ctx, materialImage, viewportScale, radius * 2, radius * 2, physicalCenter, pCenter, textureConfig);
   }
-  ctx.restore();
+
+  if (needsClip) {
+    ctx.restore();
+  }
 
   if (!isBumpMapMode) {
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
@@ -298,9 +337,8 @@ export function drawScallopTile(
 
     if (tileSpecular) {
       ctx.save();
-      ctx.filter = 'blur(3px)';
       ctx.beginPath();
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.20)';
       ctx.ellipse(
         -radius * 0.25,
         -radius * 0.25,
@@ -331,7 +369,8 @@ export function drawHexagonTileDirect(
   patternAngleRad: number = 0,
   viewportScale: number = 1.0,
   printImg?: HTMLImageElement | null,
-  printOpacity: number = 1.0
+  printOpacity: number = 1.0,
+  textureConfig?: MaterialTextureConfig
 ) {
   const hVertices = [];
   for (let i = 0; i < 6; i++) {
@@ -341,14 +380,24 @@ export function drawHexagonTileDirect(
     hVertices.push({ x: hx, y: hy });
   }
 
-  ctx.save();
+  const needsClip = Boolean(
+    (printImg && printImg.complete && printImg.naturalWidth > 0) ||
+    (patternImg && patternImg.complete && patternImg.naturalWidth > 0) ||
+    isBumpMapMode ||
+    materialImage
+  );
+
   ctx.beginPath();
   ctx.moveTo(hVertices[0].x, hVertices[0].y);
   for (let i = 1; i < 6; i++) {
     ctx.lineTo(hVertices[i].x, hVertices[i].y);
   }
   ctx.closePath();
-  ctx.clip();
+
+  if (needsClip) {
+    ctx.save();
+    ctx.clip();
+  }
 
   ctx.fillStyle = isBumpMapMode ? '#ffffff' : tileColor;
   ctx.fill();
@@ -382,9 +431,12 @@ export function drawHexagonTileDirect(
     const ys = hVertices.map(v => v.y);
     const tileWidthPx = Math.max(...xs) - Math.min(...xs);
     const tileHeightPx = Math.max(...ys) - Math.min(...ys);
-    applyMaterialPattern(ctx, materialImage, viewportScale, tileWidthPx, tileHeightPx, physicalCenter, pCenter);
+    applyMaterialPattern(ctx, materialImage, viewportScale, tileWidthPx, tileHeightPx, physicalCenter, pCenter, textureConfig);
   }
-  ctx.restore();
+
+  if (needsClip) {
+    ctx.restore();
+  }
 
   if (!isBumpMapMode) {
     // Modern 3D bevel borders for Hexagons
@@ -415,7 +467,6 @@ export function drawHexagonTileDirect(
       const v4 = hVertices[4];
       
       ctx.save();
-      ctx.filter = 'blur(3px)';
       ctx.fillStyle = 'rgba(255, 255, 255, 0.20)';
       ctx.beginPath();
       ctx.moveTo(v3.x, v3.y);
@@ -453,7 +504,9 @@ export function drawPolygonTile(
   patternAngleRad: number = 0,
   viewportScale: number = 1.0,
   printImg?: HTMLImageElement | null,
-  printOpacity: number = 1.0
+  printOpacity: number = 1.0,
+  skipBevel: boolean = false,
+  textureConfig?: MaterialTextureConfig
 ) {
   if (canvasVertices.length === 0) return;
   ctx.beginPath();
@@ -463,8 +516,18 @@ export function drawPolygonTile(
   }
   ctx.closePath();
 
-  ctx.save();
-  ctx.clip();
+  const needsClip = Boolean(
+    (printImg && printImg.complete && printImg.naturalWidth > 0) ||
+    (patternImg && patternImg.complete && patternImg.naturalWidth > 0) ||
+    isBumpMapMode ||
+    materialImage
+  );
+
+  if (needsClip) {
+    ctx.save();
+    ctx.clip();
+  }
+
   ctx.fillStyle = isBumpMapMode ? '#ffffff' : tileColor;
   ctx.fill();
 
@@ -538,11 +601,14 @@ export function drawPolygonTile(
     }
     const tileWidthPx = maxX - minX;
     const tileHeightPx = maxY - minY;
-    applyMaterialPattern(ctx, materialImage, viewportScale, tileWidthPx, tileHeightPx, physicalCenter, pCenter);
+    applyMaterialPattern(ctx, materialImage, viewportScale, tileWidthPx, tileHeightPx, physicalCenter, pCenter, textureConfig);
   }
-  ctx.restore();
 
-  if (!isBumpMapMode) {
+  if (needsClip) {
+    ctx.restore();
+  }
+
+  if (!isBumpMapMode && !skipBevel) {
     if (canvasVertices.length === 6) {
       // Modern 3D bevel borders for Hexagons and Pickets
       // Highlight (light) border: index 2 -> 3 -> 4 -> 5
@@ -657,9 +723,8 @@ export function drawPolygonTile(
 
     if (tileSpecular) {
       ctx.save();
-      ctx.filter = 'blur(3px)';
       if (canvasVertices.length === 4) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.20)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
         ctx.beginPath();
         ctx.moveTo(canvasVertices[0].x, canvasVertices[0].y);
         ctx.lineTo((canvasVertices[0].x + canvasVertices[1].x) / 2 + (canvasVertices[3].x - canvasVertices[0].x) * 0.1, (canvasVertices[0].y + canvasVertices[1].y) / 2 + (canvasVertices[3].y - canvasVertices[0].y) * 0.1);
@@ -672,7 +737,7 @@ export function drawPolygonTile(
         const v2 = canvasVertices[2];
         const v4 = canvasVertices[4];
         
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.20)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
         ctx.beginPath();
         ctx.moveTo(v3.x, v3.y);
         
@@ -696,7 +761,7 @@ export function drawPolygonTile(
         const v6 = canvasVertices[6];
         const v0 = canvasVertices[0];
         
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.20)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
         ctx.beginPath();
         ctx.moveTo(v7.x, v7.y);
         
@@ -716,7 +781,7 @@ export function drawPolygonTile(
         ctx.fill();
       } else if (canvasVertices.length === 3) {
         const isDown = canvasVertices[0].y > (canvasVertices[1].y + canvasVertices[2].y) / 2;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.20)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
         ctx.beginPath();
         if (!isDown) {
           // Specular near top apex (v0)
@@ -778,7 +843,8 @@ export function drawPebbleTile(
   patternAngleRad: number = 0,
   viewportScale: number = 1.0,
   printImg?: HTMLImageElement | null,
-  printOpacity: number = 1.0
+  printOpacity: number = 1.0,
+  textureConfig?: MaterialTextureConfig
 ) {
   const xs = canvasVertices.map((v) => v.x);
   const ys = canvasVertices.map((v) => v.y);
@@ -894,7 +960,7 @@ export function drawPebbleTile(
       const pebbleHeightPx = ry * 2;
       const pebbleCenter = { x: cx + jX, y: cy + jY };
       const physCenter = physicalCenter ? { x: physicalCenter.x + dx, y: physicalCenter.y + dy } : undefined;
-      applyMaterialPattern(ctx, materialImage, viewportScale, pebbleWidthPx, pebbleHeightPx, physCenter, pebbleCenter);
+      applyMaterialPattern(ctx, materialImage, viewportScale, pebbleWidthPx, pebbleHeightPx, physCenter, pebbleCenter, textureConfig);
     }
     ctx.restore();
     

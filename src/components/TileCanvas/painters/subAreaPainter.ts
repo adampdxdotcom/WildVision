@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { MeasurementUnit, SubArea, WallExtension, ColorCard, ColorPattern } from '../../../types';
+import { MeasurementUnit, SubArea, WallExtension, ColorCard, ColorPattern, MaterialTextureConfig } from '../../../types';
 import { TileInstance, generateTiles } from '../../../utils/generator';
 import { drawRoundTile, drawHexagonTileDirect, drawPolygonTile, drawScallopTile, drawPebbleTile } from '../tileRenderers';
-import { Viewport, mapToCanvas } from '../canvasUtils';
+import { Viewport, mapToCanvas, mapFromCanvas } from '../canvasUtils';
 import { defineCombinedWallPath } from '../wallPainter';
 import { useAppStore, getLoadedTextureImage, getLoadedSurfaceImage } from '../../../store/useAppStore';
 import { getPatternImage, ensureColorCard, getCardPatternImageAndBlob } from '../../../utils/svgPatternManager';
@@ -445,9 +445,28 @@ export function drawSubAreas(
     const tileColorOverrides = state.tileColorOverrides || {};
     const uploadedSvgText = state.uploadedSvgText;
     const patternAccentColor = state.patternAccentColor || '#000000';
+    const disableColorWithTexture = state.disableColorWithTexture;
+    const textureConfig: MaterialTextureConfig = {
+      opacity: disableColorWithTexture ? 1.0 : (state.textureOpacity ?? 0.8),
+      scale: state.textureScale ?? 1.0,
+      scaleRandom: state.textureScaleRandom ?? false,
+      rotationMode: state.textureRotationMode ?? 'random',
+      rotationAngle: state.textureRotationAngle ?? 0,
+    };
     const onImageLoaded = () => {
       useAppStore.getState().setIsCanvasDirty(true);
     };
+
+    const canvasW = ctx.canvas?.width || 3000;
+    const canvasH = ctx.canvas?.height || 3000;
+    const marginPx = 40;
+    const pTopLeft = mapFromCanvas(-marginPx, -marginPx, viewport);
+    const pBottomRight = mapFromCanvas(canvasW + marginPx, canvasH + marginPx, viewport);
+    const viewMinX = Math.min(pTopLeft.x, pBottomRight.x);
+    const viewMaxX = Math.max(pTopLeft.x, pBottomRight.x);
+    const viewMinY = Math.min(pTopLeft.y, pBottomRight.y);
+    const viewMaxY = Math.max(pTopLeft.y, pBottomRight.y);
+    const skipSaBevel = (Math.min(sa.tileWidth, sa.tileHeight) * viewport.scale) < 5;
 
     for (const tile of finalSaTiles) {
       let xMin = Infinity;
@@ -462,6 +481,9 @@ export function drawSubAreas(
         if (vy < yMin) yMin = vy;
         if (vy > yMax) yMax = vy;
       }
+
+      // Viewport culling
+      if (xMax < viewMinX || xMin > viewMaxX || yMax < viewMinY || yMin > viewMaxY) continue;
 
       const overlapsX = xMin < sa.x + sa.width && xMax > sa.x;
       const overlapsY = yMin < sa.y + sa.height && yMax > sa.y;
@@ -523,22 +545,22 @@ export function drawSubAreas(
 
       if (tile.shape === 'round') {
         const radius = (saActualTileW / 2) * viewport.scale;
-        drawRoundTile(ctx, pCenter, radius, resolvedSaTileColor, useSpecular, isBumpMapMode, resolvedSaMaterialImage, tile.center, patternImg, saAngleRad, viewport.scale, printImg, printOpacity);
+        drawRoundTile(ctx, pCenter, radius, resolvedSaTileColor, useSpecular, isBumpMapMode, resolvedSaMaterialImage, tile.center, patternImg, saAngleRad, viewport.scale, printImg, printOpacity, textureConfig);
       } else if (tile.shape === 'scallop') {
         const radius = (saActualTileW / 2) * viewport.scale;
-        drawScallopTile(ctx, pCenter, radius, resolvedSaTileColor, useSpecular, saAngleRad, isBumpMapMode, resolvedSaMaterialImage, tile.center, patternImg, saAngleRad, viewport.scale, printImg, printOpacity);
+        drawScallopTile(ctx, pCenter, radius, resolvedSaTileColor, useSpecular, saAngleRad, isBumpMapMode, resolvedSaMaterialImage, tile.center, patternImg, saAngleRad, viewport.scale, printImg, printOpacity, textureConfig);
       } else if (tile.shape === 'hexagon' && !sa.isPicket) {
         const drawRadius = (saActualTileW / Math.sqrt(3)) * viewport.scale;
-        drawHexagonTileDirect(ctx, pCenter, drawRadius, resolvedSaTileColor, useSpecular, isBumpMapMode, resolvedSaMaterialImage, tile.center, patternImg, saAngleRad, viewport.scale, printImg, printOpacity);
+        drawHexagonTileDirect(ctx, pCenter, drawRadius, resolvedSaTileColor, useSpecular, isBumpMapMode, resolvedSaMaterialImage, tile.center, patternImg, saAngleRad, viewport.scale, printImg, printOpacity, textureConfig);
       } else if (tile.shape === 'pebble') {
         const saColors = disableTileColorOnPdf 
           ? ['#ffffff'] 
           : (sa.tileColors || [sa.tileColor || '#f1f5f9']).map(c => typeof c === 'string' ? c : c.hex);
         const saPattern = disableTileColorOnPdf ? 'single' : (sa.colorPattern || 'single');
         const saVar = disableTileColorOnPdf ? 'V1' : (sa.colorVariation || 'V1');
-        drawPebbleTile(ctx, canvasVertices, pCenter, resolvedSaTileColor, useSpecular, saColors, saPattern, saVar, tile.center, isBumpMapMode, resolvedSaMaterialImage, patternImg, saAngleRad, viewport.scale, printImg, printOpacity);
+        drawPebbleTile(ctx, canvasVertices, pCenter, resolvedSaTileColor, useSpecular, saColors, saPattern, saVar, tile.center, isBumpMapMode, resolvedSaMaterialImage, patternImg, saAngleRad, viewport.scale, printImg, printOpacity, textureConfig);
       } else {
-        drawPolygonTile(ctx, canvasVertices, pCenter, resolvedSaTileColor, useSpecular, tile.shape, isBumpMapMode, resolvedSaMaterialImage, tile.center, patternImg, saAngleRad, viewport.scale, printImg, printOpacity);
+        drawPolygonTile(ctx, canvasVertices, pCenter, resolvedSaTileColor, useSpecular, tile.shape, isBumpMapMode, resolvedSaMaterialImage, tile.center, patternImg, saAngleRad, viewport.scale, printImg, printOpacity, skipSaBevel, textureConfig);
       }
       ctx.restore();
     } // closes tile loop

@@ -108,6 +108,23 @@ export const UniversalColorPalette: React.FC<UniversalColorPaletteProps> = ({
             
   const disableColorWithTexture = useAppStore(state => state.disableColorWithTexture);
   const setDisableColorWithTexture = useAppStore(state => state.setDisableColorWithTexture);
+  const textureOpacity = useAppStore(state => state.textureOpacity);
+  const setTextureOpacity = useAppStore(state => state.setTextureOpacity);
+  const textureScale = useAppStore(state => state.textureScale);
+  const setTextureScale = useAppStore(state => state.setTextureScale);
+  const textureScaleRandom = useAppStore(state => state.textureScaleRandom);
+  const setTextureScaleRandom = useAppStore(state => state.setTextureScaleRandom);
+  const textureRotationMode = useAppStore(state => state.textureRotationMode);
+  const setTextureRotationMode = useAppStore(state => state.setTextureRotationMode);
+  const textureRotationAngle = useAppStore(state => state.textureRotationAngle);
+  const setTextureRotationAngle = useAppStore(state => state.setTextureRotationAngle);
+
+  const triggerCanvasRedraw = () => {
+    useAppStore.getState().setIsCanvasDirty(true);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('wildvision:forceCanvasRedraw'));
+    }
+  };
 
   const [expandedCardIndex, setExpandedCardIndex] = React.useState<number | null>(null);
   const [uploadingCardIndex, setUploadingCardIndex] = React.useState<number | null>(null);
@@ -358,23 +375,177 @@ export const UniversalColorPalette: React.FC<UniversalColorPaletteProps> = ({
             </select>
 
             {materialTexture && materialTexture !== 'none' && (
-              <div className="flex items-center gap-2 mt-2 bg-slate-50 border border-slate-200 rounded p-2">
-                <input
-                  id="disable-tile-color-checkbox"
-                  type="checkbox"
-                  checked={disableColorWithTexture}
-                  onChange={(e) => {
-                    setDisableColorWithTexture(e.target.checked);
-                    useAppStore.getState().setIsCanvasDirty(true);
-                    if (typeof window !== 'undefined') {
-                      window.dispatchEvent(new CustomEvent('wildvision:forceCanvasRedraw'));
-                    }
-                  }}
-                  className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                />
-                <label htmlFor="disable-tile-color-checkbox" className="text-[10px] font-bold uppercase tracking-wider text-slate-600 cursor-pointer select-none">
-                  Disable Tile Color
-                </label>
+              <div className="mt-2 bg-slate-50 border border-slate-200 rounded p-2.5 space-y-3">
+                {/* Disable Tile Color Toggle */}
+                <div className="flex items-center gap-2">
+                  <input
+                    id="disable-tile-color-checkbox"
+                    type="checkbox"
+                    checked={disableColorWithTexture}
+                    onChange={(e) => {
+                      setDisableColorWithTexture(e.target.checked);
+                      triggerCanvasRedraw();
+                    }}
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                  />
+                  <label htmlFor="disable-tile-color-checkbox" className="text-[10px] font-bold uppercase tracking-wider text-slate-700 cursor-pointer select-none">
+                    Disable Tile Color
+                  </label>
+                </div>
+
+                {/* Opacity Slider (Only visible when Disable Tile Color is unchecked) */}
+                {!disableColorWithTexture && (
+                  <div className="space-y-1 pt-1.5 border-t border-slate-200">
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="texture-opacity-slider" className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        Texture Opacity
+                      </label>
+                      <span className="text-[10px] font-semibold text-slate-700 bg-white border border-slate-200 px-1.5 py-0.5 rounded shadow-2xs">
+                        {Math.round(textureOpacity * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      id="texture-opacity-slider"
+                      type="range"
+                      min="10"
+                      max="100"
+                      step="5"
+                      value={Math.round(textureOpacity * 100)}
+                      onChange={(e) => {
+                        setTextureOpacity(Number(e.target.value) / 100);
+                        triggerCanvasRedraw();
+                      }}
+                      className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    />
+                  </div>
+                )}
+
+                {/* Texture Size & Random Sizing */}
+                <div className="space-y-1.5 pt-1.5 border-t border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="texture-scale-slider" className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Texture Size
+                    </label>
+                    <span className="text-[10px] font-semibold text-slate-700 bg-white border border-slate-200 px-1.5 py-0.5 rounded shadow-2xs">
+                      {Math.round(textureScale * 100)}%
+                    </span>
+                  </div>
+                  <input
+                    id="texture-scale-slider"
+                    type="range"
+                    min="25"
+                    max="200"
+                    step="5"
+                    value={Math.round(textureScale * 100)}
+                    onChange={(e) => {
+                      setTextureScale(Number(e.target.value) / 100);
+                      triggerCanvasRedraw();
+                    }}
+                    className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                  />
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <input
+                      id="texture-random-scale-checkbox"
+                      type="checkbox"
+                      checked={textureScaleRandom}
+                      onChange={(e) => {
+                        setTextureScaleRandom(e.target.checked);
+                        triggerCanvasRedraw();
+                      }}
+                      className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                    />
+                    <label htmlFor="texture-random-scale-checkbox" className="text-[10px] font-medium text-slate-600 cursor-pointer select-none">
+                      Randomize size per tile (up to {Math.round(textureScale * 100)}%)
+                    </label>
+                  </div>
+                </div>
+
+                {/* Texture Rotation */}
+                <div className="space-y-1.5 pt-1.5 border-t border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Texture Rotation
+                    </label>
+                    {textureRotationMode === 'fixed' && (
+                      <span className="text-[10px] font-semibold text-slate-700 bg-white border border-slate-200 px-1.5 py-0.5 rounded shadow-2xs">
+                        {textureRotationAngle}°
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Mode Switcher */}
+                  <div className="grid grid-cols-2 gap-1 bg-slate-200/70 p-0.5 rounded text-xs font-semibold">
+                    <button
+                      id="texture-rot-random-btn"
+                      type="button"
+                      onClick={() => {
+                        setTextureRotationMode('random');
+                        triggerCanvasRedraw();
+                      }}
+                      className={`py-1 rounded text-center transition-all cursor-pointer ${
+                        textureRotationMode === 'random'
+                          ? 'bg-white text-indigo-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-800'
+                      }`}
+                    >
+                      Random
+                    </button>
+                    <button
+                      id="texture-rot-fixed-btn"
+                      type="button"
+                      onClick={() => {
+                        setTextureRotationMode('fixed');
+                        triggerCanvasRedraw();
+                      }}
+                      className={`py-1 rounded text-center transition-all cursor-pointer ${
+                        textureRotationMode === 'fixed'
+                          ? 'bg-white text-indigo-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-800'
+                      }`}
+                    >
+                      Fixed Angle
+                    </button>
+                  </div>
+
+                  {/* Fixed Rotation Slider & Quick Snaps */}
+                  {textureRotationMode === 'fixed' && (
+                    <div className="space-y-1.5 pt-1">
+                      <input
+                        id="texture-angle-slider"
+                        type="range"
+                        min="0"
+                        max="360"
+                        step="1"
+                        value={textureRotationAngle}
+                        onChange={(e) => {
+                          setTextureRotationAngle(Number(e.target.value));
+                          triggerCanvasRedraw();
+                        }}
+                        className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                      />
+                      <div className="flex items-center justify-between gap-1">
+                        {[0, 45, 90, 180, 270].map((deg) => (
+                          <button
+                            key={deg}
+                            id={`texture-angle-snap-${deg}`}
+                            type="button"
+                            onClick={() => {
+                              setTextureRotationAngle(deg);
+                              triggerCanvasRedraw();
+                            }}
+                            className={`flex-1 py-0.5 text-[10px] font-semibold rounded border transition-all cursor-pointer ${
+                              textureRotationAngle === deg
+                                ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
+                                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            {deg}°
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { TileShape, ColorVariation, ColorPattern, ColorCard, SubArea, WallExtension } from '../../../types';
+import { TileShape, ColorVariation, ColorPattern, ColorCard, SubArea, WallExtension, MaterialTextureConfig } from '../../../types';
 import { TileInstance } from '../../../utils/generator';
 import { getTessellatedPath, getVariedColor } from '../../../utils/geometry';
 import { drawRoundTile, drawHexagonTileDirect, drawPolygonTile, drawScallopTile, drawPebbleTile } from '../tileRenderers';
-import { Viewport, mapToCanvas } from '../canvasUtils';
+import { Viewport, mapToCanvas, mapFromCanvas } from '../canvasUtils';
 import { useAppStore } from '../../../store/useAppStore';
 import { getPatternImage, ensureColorCard, getCardPatternImageAndBlob } from '../../../utils/svgPatternManager';
 import { getPrintForLocation } from '../../../utils/printSetManager';
@@ -37,7 +37,9 @@ export function drawMainTiles(
   tilesPerStripe: number = 1,
   wallVertices?: {x: number, y: number}[],
   isBumpMapMode: boolean = false,
-  materialImage?: HTMLImageElement | null
+  materialImage?: HTMLImageElement | null,
+  canvasDimensions?: { width: number; height: number },
+  customTextureConfig?: MaterialTextureConfig
 ) {
   const actualTileW = shape === 'hexagon' ? tileWidth : tileWidth;
 
@@ -56,6 +58,20 @@ export function drawMainTiles(
       });
   }
 
+  // Precompute viewport bounding box in wall space with safety margin for high-performance culling
+  const canvasW = canvasDimensions?.width || ctx.canvas?.width || 3000;
+  const canvasH = canvasDimensions?.height || ctx.canvas?.height || 3000;
+  const marginPx = 40;
+  const pTopLeft = mapFromCanvas(-marginPx, -marginPx, viewport);
+  const pBottomRight = mapFromCanvas(canvasW + marginPx, canvasH + marginPx, viewport);
+  const viewMinX = Math.min(pTopLeft.x, pBottomRight.x);
+  const viewMaxX = Math.max(pTopLeft.x, pBottomRight.x);
+  const viewMinY = Math.min(pTopLeft.y, pBottomRight.y);
+  const viewMaxY = Math.max(pTopLeft.y, pBottomRight.y);
+
+  // When zoomed out, tiles below 5px screen height skip bevel/shadow strokes to save huge GPU overhead
+  const skipBevel = (Math.min(tileWidth, tileHeight) * viewport.scale) < 5;
+
   const state = useAppStore.getState();
   const tileColorOverrides = state.tileColorOverrides || {};
   const compositeColors = state.compositeColors || {};
@@ -64,19 +80,41 @@ export function drawMainTiles(
   const angleDeg = state.angle || 0;
   const angleRad = (angleDeg * Math.PI) / 180;
 
+  const disableColorWithTexture = state.disableColorWithTexture;
+  const textureConfig: MaterialTextureConfig = customTextureConfig || {
+    opacity: disableColorWithTexture ? 1.0 : (state.textureOpacity ?? 0.8),
+    scale: state.textureScale ?? 1.0,
+    scaleRandom: state.textureScaleRandom ?? false,
+    rotationMode: state.textureRotationMode ?? 'random',
+    rotationAngle: state.textureRotationAngle ?? 0,
+  };
+
   const onImageLoaded = () => {
     useAppStore.getState().setIsCanvasDirty(true);
   };
 
   for (const tile of tiles) {
-    const xs = tile.vertices.map((v) => v.x);
-    const ys = tile.vertices.map((v) => v.y);
-    const xMin = Math.min(...xs);
-    const xMax = Math.max(...xs);
-    const yMin = Math.min(...ys);
-    const yMax = Math.max(...ys);
+    const vLen = tile.vertices.length;
+    let xMin = Infinity;
+    let xMax = -Infinity;
+    let yMin = Infinity;
+    let yMax = -Infinity;
 
-    // Filter off-screen candidates (merged wall & extensions)
+    for (let i = 0; i < vLen; i++) {
+      const vx = tile.vertices[i].x;
+      const vy = tile.vertices[i].y;
+      if (vx < xMin) xMin = vx;
+      if (vx > xMax) xMax = vx;
+      if (vy < yMin) yMin = vy;
+      if (vy > yMax) yMax = vy;
+    }
+
+    // 1. Viewport Culling: Skip tiles completely outside the visible screen viewport
+    if (xMax < viewMinX || xMin > viewMaxX || yMax < viewMinY || yMin > viewMaxY) {
+      continue;
+    }
+
+    // 2. Filter wall & extensions bounds
     let overlapsActiveShape = (xMin < wallMaxX && xMax > wallMinX && yMin < wallMaxY && yMax > wallMinY);
     if (!overlapsActiveShape && extensions && extensions.length > 0) {
       for (const ext of extensions) {
@@ -154,19 +192,19 @@ export function drawMainTiles(
 
     if (tile.shape === 'round') {
       const radius = (actualTileW / 2) * viewport.scale;
-      drawRoundTile(ctx, pCenter, radius, resolvedTileColor, resolvedSpecular, isBumpMapMode, materialImage, tile.center, patternImg, angleRad, viewport.scale, printImg, printOpacity);
+      drawRoundTile(ctx, pCenter, radius, resolvedTileColor, resolvedSpecular, isBumpMapMode, materialImage, tile.center, patternImg, angleRad, viewport.scale, printImg, printOpacity, textureConfig);
     } else if (tile.shape === 'scallop') {
       const radius = (actualTileW / 2) * viewport.scale;
-      drawScallopTile(ctx, pCenter, radius, resolvedTileColor, resolvedSpecular, angleRad, isBumpMapMode, materialImage, tile.center, patternImg, angleRad, viewport.scale, printImg, printOpacity);
+      drawScallopTile(ctx, pCenter, radius, resolvedTileColor, resolvedSpecular, angleRad, isBumpMapMode, materialImage, tile.center, patternImg, angleRad, viewport.scale, printImg, printOpacity, textureConfig);
     } else if (tile.shape === 'pebble') {
       const pTileColors = disableTileColorOnPdf 
         ? ['#ffffff'] 
         : tileColors.map(c => typeof c === 'string' ? c : c.hex);
       const pColorPattern = disableTileColorOnPdf ? 'single' : colorPattern;
       const pColorVar = disableTileColorOnPdf ? 'V1' : colorVariation;
-      drawPebbleTile(ctx, canvasVertices, pCenter, resolvedTileColor, resolvedSpecular, pTileColors, pColorPattern, pColorVar, tile.center, isBumpMapMode, materialImage, patternImg, angleRad, viewport.scale, printImg, printOpacity);
+      drawPebbleTile(ctx, canvasVertices, pCenter, resolvedTileColor, resolvedSpecular, pTileColors, pColorPattern, pColorVar, tile.center, isBumpMapMode, materialImage, patternImg, angleRad, viewport.scale, printImg, printOpacity, textureConfig);
     } else {
-      drawPolygonTile(ctx, canvasVertices, pCenter, resolvedTileColor, resolvedSpecular, tile.shape, isBumpMapMode, materialImage, tile.center, patternImg, angleRad, viewport.scale, printImg, printOpacity);
+      drawPolygonTile(ctx, canvasVertices, pCenter, resolvedTileColor, resolvedSpecular, tile.shape, isBumpMapMode, materialImage, tile.center, patternImg, angleRad, viewport.scale, printImg, printOpacity, skipBevel, textureConfig);
     }
 
     ctx.restore();

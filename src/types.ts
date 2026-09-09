@@ -42,6 +42,16 @@ export type ColorVariation = 'V1' | 'V2' | 'V3' | 'V4';
 
 export type TileFinish = 'matte' | 'satin' | 'glossy';
 
+export type TextureRotationMode = 'random' | 'fixed';
+
+export interface MaterialTextureConfig {
+  opacity?: number;
+  scale?: number;
+  scaleRandom?: boolean;
+  rotationMode?: TextureRotationMode;
+  rotationAngle?: number;
+}
+
 export type ColorPattern = 'single' | 'random' | 'random_pieces' | 'checkerboard' | 'horizontal_stripes' | 'vertical_stripes' | '3d_cube_3_colors' | 'paint';
 
 export interface WallDimensions {

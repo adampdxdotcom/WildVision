@@ -682,6 +682,12 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
     if (data.anchoredRegionCenter !== undefined) updates.anchoredRegionCenter = data.anchoredRegionCenter;
     if (data.enableRealisticDepth !== undefined) updates.enableRealisticDepth = data.enableRealisticDepth;
     if (data.materialTexture !== undefined) updates.materialTexture = data.materialTexture;
+    if (data.disableColorWithTexture !== undefined) updates.disableColorWithTexture = data.disableColorWithTexture;
+    if (data.textureOpacity !== undefined) updates.textureOpacity = data.textureOpacity;
+    if (data.textureScale !== undefined) updates.textureScale = data.textureScale;
+    if (data.textureScaleRandom !== undefined) updates.textureScaleRandom = data.textureScaleRandom;
+    if (data.textureRotationMode !== undefined) updates.textureRotationMode = data.textureRotationMode;
+    if (data.textureRotationAngle !== undefined) updates.textureRotationAngle = data.textureRotationAngle;
 
     if (data.activeCustomPattern !== undefined) {
       updates.activeCustomPattern = data.activeCustomPattern;
@@ -852,6 +858,12 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
       anchoredRegionCenter: null,
       enableRealisticDepth: false,
       materialTexture: 'none',
+      disableColorWithTexture: true,
+      textureOpacity: 0.8,
+      textureScale: 1.0,
+      textureScaleRandom: false,
+      textureRotationMode: 'random',
+      textureRotationAngle: 0,
       isWildVisionOpen: false,
       generatedRenders: [],
       linkedSubfloorProjectId: null,
