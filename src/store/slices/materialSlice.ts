@@ -399,7 +399,7 @@ export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (se
     nextSubAreas = nextSubAreas.map((item: SubArea) => {
       if (item.linkedMaterialId) {
         const parent = nextSubAreas.find((p: SubArea) => p.id === item.linkedMaterialId);
-        if (parent && parent.isMaterialParent !== false) {
+        if (parent && parent.isMaterialParent === true) {
           const syncedChild = { ...item };
           AESTHETIC_KEYS.forEach((key) => {
             if ((parent as any)[key] !== undefined) {

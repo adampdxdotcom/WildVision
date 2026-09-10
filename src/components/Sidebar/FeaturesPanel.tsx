@@ -210,11 +210,8 @@ export const FeaturesPanel: React.FC<FeaturesPanelProps> = ({
         mergedActive.tileHeight = mergedActive.tileWidth * 2;
       }
 
-      const activeMasterId = activeSa.isLinked ? activeSa.linkedToId : activeSa.id;
-      const isCurrentlyLinked = finalFields.isLinked !== undefined ? finalFields.isLinked : activeSa.isLinked;
-      const shouldSyncCloneFamily = isCurrentlyLinked || activeSa.id === activeMasterId;
-
-      // If activeSa was unchecked as a material parent, unlink any child profiles
+      // Only saved profiles (isMaterialParent) synchronize to children areas
+      const isParent = activeSa.isMaterialParent === true;
       const shouldUnlinkChildren = fields.isMaterialParent === false;
 
       return prev.map((sa) => {
@@ -222,40 +219,23 @@ export const FeaturesPanel: React.FC<FeaturesPanelProps> = ({
           return mergedActive;
         }
 
-        // Case A: This sub-area is linked to activeSubArea as its Reusable Tile Profile
+        // Only sync children if activeSa was/is a saved tile profile
         if (sa.linkedMaterialId === activeSubAreaId) {
           if (shouldUnlinkChildren) {
             return { ...sa, linkedMaterialId: undefined };
           }
-          const syncedChild = { ...sa };
-          AESTHETIC_KEYS.forEach((key) => {
-            if ((mergedActive as any)[key] !== undefined) {
-              (syncedChild as any)[key] = JSON.parse(JSON.stringify((mergedActive as any)[key]));
+          if (isParent) {
+            const syncedChild = { ...sa };
+            AESTHETIC_KEYS.forEach((key) => {
+              if ((mergedActive as any)[key] !== undefined) {
+                (syncedChild as any)[key] = JSON.parse(JSON.stringify((mergedActive as any)[key]));
+              }
+            });
+            if (syncedChild.shape === 'rectangle' && syncedChild.pattern === 'basket_weave') {
+              syncedChild.tileHeight = syncedChild.tileWidth * 2;
             }
-          });
-          if (syncedChild.shape === 'rectangle' && syncedChild.pattern === 'basket_weave') {
-            syncedChild.tileHeight = syncedChild.tileWidth * 2;
+            return syncedChild;
           }
-          return syncedChild;
-        }
-
-        // Case B: This sub-area belongs to the active sub-area's Clone Family
-        const belongsToCloneFamily =
-          (sa.linkedToId === activeMasterId && sa.isLinked === true) ||
-          sa.id === activeMasterId;
-
-        if (belongsToCloneFamily && shouldSyncCloneFamily) {
-          const syncFields: any = {};
-          Object.keys(fields).forEach((key) => {
-            if (!EXCLUDED_KEYS.includes(key)) {
-              syncFields[key] = (fields as any)[key];
-            }
-          });
-          const merged = { ...sa, ...syncFields };
-          if (merged.shape === 'rectangle' && merged.pattern === 'basket_weave') {
-            merged.tileHeight = merged.tileWidth * 2;
-          }
-          return merged;
         }
 
         return sa;
@@ -277,8 +257,6 @@ export const FeaturesPanel: React.FC<FeaturesPanelProps> = ({
       vertices: originalSa.vertices
         ? originalSa.vertices.map((v) => ({ ...v, x: v.x + offset, y: v.y + offset }))
         : undefined,
-      linkedToId: originalSa.linkedToId || originalSa.id,
-      isLinked: true,
       isMaterialParent: false,
       linkedMaterialId: originalSa.isMaterialParent ? originalSa.id : originalSa.linkedMaterialId,
     };
@@ -437,16 +415,14 @@ export const FeaturesPanel: React.FC<FeaturesPanelProps> = ({
                   >
                     {sa.locked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
                   </button>
-                  {!sa.linkedToId && (
-                    <button
-                      type="button"
-                      onClick={(e) => handleCloneSubArea(sa, e)}
-                      className="p-1 rounded border transition cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
-                      title="Clone accent area"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => handleCloneSubArea(sa, e)}
+                    className="p-1 rounded border transition cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+                    title="Clone accent area"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
                   <button
                     type="button"
                     onClick={(e) => handleDeleteSubArea(sa.id, e)}

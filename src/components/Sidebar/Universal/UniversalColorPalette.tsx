@@ -36,6 +36,18 @@ export interface UniversalColorPaletteProps {
   onChangeGroutColor?: (color: string) => void;
   unit?: MeasurementUnit;
   isLockedForPainting?: boolean;
+  disableColorWithTexture?: boolean;
+  onChangeDisableColorWithTexture?: (val: boolean) => void;
+  textureOpacity?: number;
+  onChangeTextureOpacity?: (val: number) => void;
+  textureScale?: number;
+  onChangeTextureScale?: (val: number) => void;
+  textureScaleRandom?: boolean;
+  onChangeTextureScaleRandom?: (val: boolean) => void;
+  textureRotationMode?: 'random' | 'fixed';
+  onChangeTextureRotationMode?: (val: 'random' | 'fixed') => void;
+  textureRotationAngle?: number;
+  onChangeTextureRotationAngle?: (val: number) => void;
 }
 
 
@@ -92,6 +104,18 @@ export const UniversalColorPalette: React.FC<UniversalColorPaletteProps> = ({
   onChangeGroutColor,
   unit = 'in',
   isLockedForPainting = false,
+  disableColorWithTexture: propDisableColorWithTexture,
+  onChangeDisableColorWithTexture,
+  textureOpacity: propTextureOpacity,
+  onChangeTextureOpacity,
+  textureScale: propTextureScale,
+  onChangeTextureScale,
+  textureScaleRandom: propTextureScaleRandom,
+  onChangeTextureScaleRandom,
+  textureRotationMode: propTextureRotationMode,
+  onChangeTextureRotationMode,
+  textureRotationAngle: propTextureRotationAngle,
+  onChangeTextureRotationAngle,
 }) => {
   const handleFractionGrout = (denom: number) => {
     if (!onChangeGroutWidth) return;
@@ -104,20 +128,55 @@ export const UniversalColorPalette: React.FC<UniversalColorPaletteProps> = ({
   };
                 
           
-  // Paint Mode Selectors
-            
-  const disableColorWithTexture = useAppStore(state => state.disableColorWithTexture);
-  const setDisableColorWithTexture = useAppStore(state => state.setDisableColorWithTexture);
-  const textureOpacity = useAppStore(state => state.textureOpacity);
-  const setTextureOpacity = useAppStore(state => state.setTextureOpacity);
-  const textureScale = useAppStore(state => state.textureScale);
-  const setTextureScale = useAppStore(state => state.setTextureScale);
-  const textureScaleRandom = useAppStore(state => state.textureScaleRandom);
-  const setTextureScaleRandom = useAppStore(state => state.setTextureScaleRandom);
-  const textureRotationMode = useAppStore(state => state.textureRotationMode);
-  const setTextureRotationMode = useAppStore(state => state.setTextureRotationMode);
-  const textureRotationAngle = useAppStore(state => state.textureRotationAngle);
-  const setTextureRotationAngle = useAppStore(state => state.setTextureRotationAngle);
+  // Texture Controls (uses props if provided for SubAreas, else falls back to main store)
+  const storeDisableColorWithTexture = useAppStore(state => state.disableColorWithTexture);
+  const storeSetDisableColorWithTexture = useAppStore(state => state.setDisableColorWithTexture);
+  const storeTextureOpacity = useAppStore(state => state.textureOpacity);
+  const storeSetTextureOpacity = useAppStore(state => state.setTextureOpacity);
+  const storeTextureScale = useAppStore(state => state.textureScale);
+  const storeSetTextureScale = useAppStore(state => state.setTextureScale);
+  const storeTextureScaleRandom = useAppStore(state => state.textureScaleRandom);
+  const storeSetTextureScaleRandom = useAppStore(state => state.setTextureScaleRandom);
+  const storeTextureRotationMode = useAppStore(state => state.textureRotationMode);
+  const storeSetTextureRotationMode = useAppStore(state => state.setTextureRotationMode);
+  const storeTextureRotationAngle = useAppStore(state => state.textureRotationAngle);
+  const storeSetTextureRotationAngle = useAppStore(state => state.setTextureRotationAngle);
+
+  const disableColorWithTexture = propDisableColorWithTexture !== undefined ? propDisableColorWithTexture : storeDisableColorWithTexture;
+  const setDisableColorWithTexture = (val: boolean) => {
+    if (onChangeDisableColorWithTexture) onChangeDisableColorWithTexture(val);
+    else storeSetDisableColorWithTexture(val);
+  };
+
+  const textureOpacity = propTextureOpacity !== undefined ? propTextureOpacity : storeTextureOpacity;
+  const setTextureOpacity = (val: number) => {
+    if (onChangeTextureOpacity) onChangeTextureOpacity(val);
+    else storeSetTextureOpacity(val);
+  };
+
+  const textureScale = propTextureScale !== undefined ? propTextureScale : storeTextureScale;
+  const setTextureScale = (val: number) => {
+    if (onChangeTextureScale) onChangeTextureScale(val);
+    else storeSetTextureScale(val);
+  };
+
+  const textureScaleRandom = propTextureScaleRandom !== undefined ? propTextureScaleRandom : storeTextureScaleRandom;
+  const setTextureScaleRandom = (val: boolean) => {
+    if (onChangeTextureScaleRandom) onChangeTextureScaleRandom(val);
+    else storeSetTextureScaleRandom(val);
+  };
+
+  const textureRotationMode = propTextureRotationMode !== undefined ? propTextureRotationMode : storeTextureRotationMode;
+  const setTextureRotationMode = (val: 'random' | 'fixed') => {
+    if (onChangeTextureRotationMode) onChangeTextureRotationMode(val);
+    else storeSetTextureRotationMode(val);
+  };
+
+  const textureRotationAngle = propTextureRotationAngle !== undefined ? propTextureRotationAngle : storeTextureRotationAngle;
+  const setTextureRotationAngle = (val: number) => {
+    if (onChangeTextureRotationAngle) onChangeTextureRotationAngle(val);
+    else storeSetTextureRotationAngle(val);
+  };
 
   const triggerCanvasRedraw = () => {
     useAppStore.getState().setIsCanvasDirty(true);

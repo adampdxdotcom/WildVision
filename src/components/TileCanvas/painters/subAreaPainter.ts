@@ -445,13 +445,13 @@ export function drawSubAreas(
     const tileColorOverrides = state.tileColorOverrides || {};
     const uploadedSvgText = state.uploadedSvgText;
     const patternAccentColor = state.patternAccentColor || '#000000';
-    const disableColorWithTexture = state.disableColorWithTexture;
+    const disableColorWithTexture = sa.disableColorWithTexture !== undefined ? sa.disableColorWithTexture : (state.disableColorWithTexture ?? false);
     const textureConfig: MaterialTextureConfig = {
-      opacity: disableColorWithTexture ? 1.0 : (state.textureOpacity ?? 0.8),
-      scale: state.textureScale ?? 1.0,
-      scaleRandom: state.textureScaleRandom ?? false,
-      rotationMode: state.textureRotationMode ?? 'random',
-      rotationAngle: state.textureRotationAngle ?? 0,
+      opacity: disableColorWithTexture ? 1.0 : (sa.textureOpacity !== undefined ? sa.textureOpacity : (state.textureOpacity ?? 0.8)),
+      scale: sa.textureScale !== undefined ? sa.textureScale : (state.textureScale ?? 1.0),
+      scaleRandom: sa.textureScaleRandom !== undefined ? sa.textureScaleRandom : (state.textureScaleRandom ?? false),
+      rotationMode: sa.textureRotationMode !== undefined ? sa.textureRotationMode : (state.textureRotationMode ?? 'random'),
+      rotationAngle: sa.textureRotationAngle !== undefined ? sa.textureRotationAngle : (state.textureRotationAngle ?? 0),
     };
     const onImageLoaded = () => {
       useAppStore.getState().setIsCanvasDirty(true);

@@ -31,7 +31,7 @@ export const useAssetPreloader = (
   // Determine if all textures are loaded
   let isReady = true;
 
-  if (materialTexture !== 'none' && (!materialImage || materialImage.src.indexOf(materialTexture) === -1)) {
+  if (materialTexture !== 'none' && !materialImage) {
     isReady = false;
   }
 

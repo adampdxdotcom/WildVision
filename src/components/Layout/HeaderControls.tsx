@@ -399,7 +399,7 @@ export const HeaderControls: React.FC<HeaderControlsProps> = ({
               <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight text-nowrap font-curwen leading-none">WildVision</h1>
               <span className="absolute -top-1 -right-4 -rotate-12 border-[1.5px] border-red-600 text-red-600 font-mono text-[0.55rem] font-black tracking-widest px-1 rounded-sm opacity-80 mix-blend-multiply pointer-events-none uppercase">ALPHA</span>
             </div>
-            <span className="ml-2 text-xs font-bold text-slate-400">v5.5</span>
+            <span className="ml-2 text-xs font-bold text-slate-400">v6.0</span>
           </div>
         </div>
 

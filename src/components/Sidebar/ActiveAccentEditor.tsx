@@ -190,27 +190,6 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
         </button>
       </div>
 
-      {/* Mirror Settings to Original Toggle for Linked Clones */}
-      {activeSa.linkedToId && (
-        <div className="p-3 bg-white border border-slate-200 rounded flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-[11px] font-bold text-slate-700">Mirror Settings to Original</span>
-            <span className="text-[9px] text-slate-500 font-medium leading-normal">
-              When mirrored, tile and grout changes apply to all linked copies.
-            </span>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer select-none ml-2 shrink-0">
-            <input
-              type="checkbox"
-              checked={activeSa.isLinked || false}
-              onChange={(e) => updateActiveSubArea({ isLinked: e.target.checked })}
-              className="sr-only peer"
-            />
-            <div className="w-8 h-4.5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-focus:ring-2 peer-focus:ring-indigo-100 peer-checked:after:translate-x-3.5 peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-indigo-600 animate-transition"></div>
-          </label>
-        </div>
-      )}
-
       {/* Name Rename */}
       <div>
         <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455 mb-1">
@@ -609,6 +588,18 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
             }}
             materialTexture={activeSa.materialTexture || 'none'}
             onChangeMaterialTexture={(val) => updateActiveSubArea({ materialTexture: val })}
+            disableColorWithTexture={activeSa.disableColorWithTexture ?? false}
+            onChangeDisableColorWithTexture={(val) => updateActiveSubArea({ disableColorWithTexture: val })}
+            textureOpacity={activeSa.textureOpacity ?? 0.8}
+            onChangeTextureOpacity={(val) => updateActiveSubArea({ textureOpacity: val })}
+            textureScale={activeSa.textureScale ?? 1.0}
+            onChangeTextureScale={(val) => updateActiveSubArea({ textureScale: val })}
+            textureScaleRandom={activeSa.textureScaleRandom ?? false}
+            onChangeTextureScaleRandom={(val) => updateActiveSubArea({ textureScaleRandom: val })}
+            textureRotationMode={activeSa.textureRotationMode || 'random'}
+            onChangeTextureRotationMode={(val) => updateActiveSubArea({ textureRotationMode: val })}
+            textureRotationAngle={activeSa.textureRotationAngle ?? 0}
+            onChangeTextureRotationAngle={(val) => updateActiveSubArea({ textureRotationAngle: val })}
             soldAsMosaic={activeSa.soldAsMosaic || false}
             activePattern={activeSa.pattern || 'stack'}
           />

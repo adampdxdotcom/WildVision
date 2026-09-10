@@ -219,6 +219,14 @@ export interface SubArea {
   isLinked?: boolean;
   linkedMaterialId?: string;
   isMaterialParent?: boolean;
+
+  // Texture controls
+  disableColorWithTexture?: boolean;
+  textureOpacity?: number;
+  textureScale?: number;
+  textureScaleRandom?: boolean;
+  textureRotationMode?: 'random' | 'fixed';
+  textureRotationAngle?: number;
 }
 
 export interface SubAreaReport {

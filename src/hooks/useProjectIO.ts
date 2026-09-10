@@ -176,6 +176,14 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
       activeBrushColorIndex,
       linkedSubfloorProjectId,
       integrationData,
+      materialTexture: useAppStore.getState().materialTexture || 'none',
+      disableColorWithTexture: useAppStore.getState().disableColorWithTexture ?? false,
+      textureOpacity: useAppStore.getState().textureOpacity ?? 0.8,
+      textureScale: useAppStore.getState().textureScale ?? 1.0,
+      textureScaleRandom: useAppStore.getState().textureScaleRandom ?? false,
+      textureRotationMode: useAppStore.getState().textureRotationMode || 'random',
+      textureRotationAngle: useAppStore.getState().textureRotationAngle ?? 0,
+      tileSpecular: viewSettings?.render?.enableReflection ?? false,
     };
 
     const jsonString = JSON.stringify(projectData, null, 2);
@@ -271,6 +279,13 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
         if (data.colorVariation !== undefined) setColorVariation(data.colorVariation);
         if (data.groutColor !== undefined) setGroutColor(data.groutColor);
         if (data.tileFinish !== undefined) setTileFinish(data.tileFinish);
+        if (data.materialTexture !== undefined) useAppStore.getState().setMaterialTexture?.(data.materialTexture);
+        if (data.disableColorWithTexture !== undefined) useAppStore.getState().setDisableColorWithTexture?.(Boolean(data.disableColorWithTexture));
+        if (data.textureOpacity !== undefined) useAppStore.getState().setTextureOpacity?.(Number(data.textureOpacity));
+        if (data.textureScale !== undefined) useAppStore.getState().setTextureScale?.(Number(data.textureScale));
+        if (data.textureScaleRandom !== undefined) useAppStore.getState().setTextureScaleRandom?.(Boolean(data.textureScaleRandom));
+        if (data.textureRotationMode !== undefined) useAppStore.getState().setTextureRotationMode?.(data.textureRotationMode);
+        if (data.textureRotationAngle !== undefined) useAppStore.getState().setTextureRotationAngle?.(Number(data.textureRotationAngle));
         if (data.flatsketVerticalRows !== undefined) setFlatsketVerticalRows(Number(data.flatsketVerticalRows) || 1);
         if (data.flatsketHorizontalRows !== undefined) setFlatsketHorizontalRows(Number(data.flatsketHorizontalRows) || 3);
         if (data.basketWeaveMultiplier !== undefined) setBasketWeaveMultiplier(Number(data.basketWeaveMultiplier) || 2);
@@ -485,6 +500,14 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
           zoom: 1.0,
           tileColorOverrides: data.tileColorOverrides || {},
           activeBrushColorIndex: data.activeBrushColorIndex !== undefined ? data.activeBrushColorIndex : 1,
+          materialTexture: data.materialTexture !== undefined ? data.materialTexture : useAppStore.getState().materialTexture,
+          disableColorWithTexture: data.disableColorWithTexture !== undefined ? Boolean(data.disableColorWithTexture) : useAppStore.getState().disableColorWithTexture,
+          textureOpacity: data.textureOpacity !== undefined ? Number(data.textureOpacity) : useAppStore.getState().textureOpacity,
+          textureScale: data.textureScale !== undefined ? Number(data.textureScale) : useAppStore.getState().textureScale,
+          textureScaleRandom: data.textureScaleRandom !== undefined ? Boolean(data.textureScaleRandom) : useAppStore.getState().textureScaleRandom,
+          textureRotationMode: data.textureRotationMode !== undefined ? data.textureRotationMode : useAppStore.getState().textureRotationMode,
+          textureRotationAngle: data.textureRotationAngle !== undefined ? Number(data.textureRotationAngle) : useAppStore.getState().textureRotationAngle,
+          tileSpecular: data.tileSpecular !== undefined ? Boolean(data.tileSpecular) : (resolvedViewSettings.render.enableReflection ?? false),
           linkedSubfloorProjectId: data.linkedSubfloorProjectId,
           integrationData: data.integrationData,
         };
@@ -562,6 +585,13 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
     if (data.colorVariation !== undefined) setColorVariation(data.colorVariation);
     if (data.groutColor !== undefined) setGroutColor(data.groutColor);
     if (data.tileFinish !== undefined) setTileFinish(data.tileFinish);
+    if (data.materialTexture !== undefined) useAppStore.getState().setMaterialTexture?.(data.materialTexture);
+    if (data.disableColorWithTexture !== undefined) useAppStore.getState().setDisableColorWithTexture?.(Boolean(data.disableColorWithTexture));
+    if (data.textureOpacity !== undefined) useAppStore.getState().setTextureOpacity?.(Number(data.textureOpacity));
+    if (data.textureScale !== undefined) useAppStore.getState().setTextureScale?.(Number(data.textureScale));
+    if (data.textureScaleRandom !== undefined) useAppStore.getState().setTextureScaleRandom?.(Boolean(data.textureScaleRandom));
+    if (data.textureRotationMode !== undefined) useAppStore.getState().setTextureRotationMode?.(data.textureRotationMode);
+    if (data.textureRotationAngle !== undefined) useAppStore.getState().setTextureRotationAngle?.(Number(data.textureRotationAngle));
     if (data.flatsketVerticalRows !== undefined) setFlatsketVerticalRows(Number(data.flatsketVerticalRows) || 1);
     if (data.flatsketHorizontalRows !== undefined) setFlatsketHorizontalRows(Number(data.flatsketHorizontalRows) || 3);
     if (data.basketWeaveMultiplier !== undefined) setBasketWeaveMultiplier(Number(data.basketWeaveMultiplier) || 2);
@@ -739,6 +769,14 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
       zoom: 1.0,
       tileColorOverrides: {},
       activeBrushColorIndex: 1,
+      materialTexture: data.materialTexture !== undefined ? data.materialTexture : useAppStore.getState().materialTexture,
+      disableColorWithTexture: data.disableColorWithTexture !== undefined ? Boolean(data.disableColorWithTexture) : useAppStore.getState().disableColorWithTexture,
+      textureOpacity: data.textureOpacity !== undefined ? Number(data.textureOpacity) : useAppStore.getState().textureOpacity,
+      textureScale: data.textureScale !== undefined ? Number(data.textureScale) : useAppStore.getState().textureScale,
+      textureScaleRandom: data.textureScaleRandom !== undefined ? Boolean(data.textureScaleRandom) : useAppStore.getState().textureScaleRandom,
+      textureRotationMode: data.textureRotationMode !== undefined ? data.textureRotationMode : useAppStore.getState().textureRotationMode,
+      textureRotationAngle: data.textureRotationAngle !== undefined ? Number(data.textureRotationAngle) : useAppStore.getState().textureRotationAngle,
+      tileSpecular: data.tileSpecular !== undefined ? Boolean(data.tileSpecular) : (resolvedViewSettings.render.enableReflection ?? false),
       linkedSubfloorProjectId: null,
       integrationData: null,
     };

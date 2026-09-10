@@ -134,6 +134,14 @@ export const getSnapshot = (state: any) => {
     before_splat_url: state.before_splat_url,
     after_splat_url: state.after_splat_url,
     integrationData: state.integrationData ? fastDeepClone(state.integrationData) : null,
+    materialTexture: state.materialTexture || 'none',
+    disableColorWithTexture: state.disableColorWithTexture ?? false,
+    textureOpacity: state.textureOpacity ?? 0.8,
+    textureScale: state.textureScale ?? 1.0,
+    textureScaleRandom: state.textureScaleRandom ?? false,
+    textureRotationMode: state.textureRotationMode || 'random',
+    textureRotationAngle: state.textureRotationAngle ?? 0,
+    tileSpecular: state.viewSettings?.render?.enableReflection ?? false,
   };
 };
 
@@ -379,7 +387,9 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
       'ceilingY', 'activeCustomPattern', 'uploadedSvgText', 'patternAccentColor',
       'tileColorOverrides', 'activeBrushColorIndex', 'flatsketVerticalRows', 'flatsketHorizontalRows',
       'basketWeaveMultiplier', 'isPicket', 'picketLength', 'tileFinish', 'purchasingSettings',
-      'linkedSubfloorProjectId', 'integrationData'
+      'linkedSubfloorProjectId', 'integrationData',
+      'materialTexture', 'disableColorWithTexture', 'textureOpacity', 'textureScale',
+      'textureScaleRandom', 'textureRotationMode', 'textureRotationAngle'
     ];
 
     const updates: any = {
@@ -502,6 +512,14 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
       integrationData: s.integrationData,
       publicShowQuantities: s.publicShowQuantities ?? false,
       publicShowPricing: s.publicShowPricing ?? false,
+      materialTexture: s.materialTexture || 'none',
+      disableColorWithTexture: s.disableColorWithTexture ?? false,
+      textureOpacity: s.textureOpacity ?? 0.8,
+      textureScale: s.textureScale ?? 1.0,
+      textureScaleRandom: s.textureScaleRandom ?? false,
+      textureRotationMode: s.textureRotationMode || 'random',
+      textureRotationAngle: s.textureRotationAngle ?? 0,
+      tileSpecular: s.viewSettings?.render?.enableReflection ?? false,
     };
 
     try {
@@ -688,6 +706,15 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
     if (data.textureScaleRandom !== undefined) updates.textureScaleRandom = data.textureScaleRandom;
     if (data.textureRotationMode !== undefined) updates.textureRotationMode = data.textureRotationMode;
     if (data.textureRotationAngle !== undefined) updates.textureRotationAngle = data.textureRotationAngle;
+    if (data.tileSpecular !== undefined) {
+      updates.viewSettings = {
+        ...(updates.viewSettings || state.viewSettings),
+        render: {
+          ...((updates.viewSettings || state.viewSettings)?.render || {}),
+          enableReflection: Boolean(data.tileSpecular),
+        },
+      };
+    }
 
     if (data.activeCustomPattern !== undefined) {
       updates.activeCustomPattern = data.activeCustomPattern;
