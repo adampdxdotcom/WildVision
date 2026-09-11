@@ -453,14 +453,27 @@ export default function App() {
   };
 
   const handleExportPDF = () => {
+    if (useAppStore.getState().viewMode !== '2d') {
+      useAppStore.getState().setViewMode('2d');
+    }
     setActiveSidebarTab(7);
   };
 
   const handleGeneratePDF = (outputMode: 'download' | 'base64' = 'download'): Promise<string | void> => {
+    const currentViewMode = useAppStore.getState().viewMode;
+    const needsViewModeSwitch = currentViewMode !== '2d';
+
+    // Ensure we switch to 2D view so TileCanvas renders the 2D architectural diagram
+    if (needsViewModeSwitch) {
+      useAppStore.getState().setViewMode('2d');
+    }
+
     // Deselect any active accents or extension selections before exporting so highlight visuals aren't shown
     setActiveSubAreaId(null);
     setActiveWallExtensionId(null);
     setIsPdfExporting(true);
+
+    const delayMs = needsViewModeSwitch ? 320 : 80;
 
     return new Promise<string | void>((resolve, reject) => {
       setTimeout(async () => {
@@ -541,13 +554,19 @@ export default function App() {
           });
           setTimeout(() => {
             setIsPdfExporting(false);
+            if (needsViewModeSwitch) {
+              useAppStore.getState().setViewMode(currentViewMode);
+            }
             resolve(res);
           }, 450);
         } catch (err) {
           setIsPdfExporting(false);
+          if (needsViewModeSwitch) {
+            useAppStore.getState().setViewMode(currentViewMode);
+          }
           reject(err);
         }
-      }, 60);
+      }, delayMs);
     });
   };
 
@@ -849,6 +868,15 @@ export default function App() {
             tileColors: payload.tileColors,
             groutColor: payload.groutColor,
             groutWidth: payload.groutWidth,
+            tileFinish: payload.tileFinish,
+            materialTexture: payload.materialTexture || 'none',
+            disableColorWithTexture: payload.disableColorWithTexture ?? false,
+            textureOpacity: payload.textureOpacity ?? 0.8,
+            textureScale: payload.textureScale ?? 1.0,
+            textureScaleRandom: payload.textureScaleRandom ?? false,
+            textureRotationMode: payload.textureRotationMode || 'random',
+            textureRotationAngle: payload.textureRotationAngle ?? 0,
+            purchasingSettings: payload.purchasingSettings || {},
           };
 
           useAppStore.getState().addSceneObject({

@@ -14,7 +14,8 @@ import {
   ViewSettingsState, 
   AngleDisplayMode, 
   BorderConfig,
-  ColorCard
+  ColorCard,
+  PurchasingSetting
 } from '../../types';
 
 export interface MaterialSlice {
@@ -121,34 +122,9 @@ export interface MaterialSlice {
   setPicketLength: (val: number | ((prev: number) => number)) => void;
   isCanvasDirty: boolean;
   setIsCanvasDirty: (val: boolean | ((prev: boolean) => boolean)) => void;
-  purchasingSettings: Record<string, {
-    purchaseType: 'carton' | 'sheet' | 'piece';
-    sqFtPerCarton: number | '';
-    pricePerSqFt: number;
-    pricePerSheet: number;
-  }>;
-  setPurchasingSettings: (val: Record<string, {
-    purchaseType: 'carton' | 'sheet' | 'piece';
-    sqFtPerCarton: number | '';
-    pricePerSqFt: number;
-    pricePerSheet: number;
-  }> | ((prev: Record<string, {
-    purchaseType: 'carton' | 'sheet' | 'piece';
-    sqFtPerCarton: number | '';
-    pricePerSqFt: number;
-    pricePerSheet: number;
-  }>) => Record<string, {
-    purchaseType: 'carton' | 'sheet' | 'piece';
-    sqFtPerCarton: number | '';
-    pricePerSqFt: number;
-    pricePerSheet: number;
-  }>)) => void;
-  updatePurchasingSetting: (areaId: string, settings: Partial<{
-    purchaseType: 'carton' | 'sheet' | 'piece';
-    sqFtPerCarton: number | '';
-    pricePerSqFt: number;
-    pricePerSheet: number;
-  }>) => void;
+  purchasingSettings: Record<string, PurchasingSetting>;
+  setPurchasingSettings: (val: Record<string, PurchasingSetting> | ((prev: Record<string, PurchasingSetting>) => Record<string, PurchasingSetting>)) => void;
+  updatePurchasingSetting: (areaId: string, settings: Partial<PurchasingSetting>) => void;
   customPatternsList: any[];
   activeCustomPattern: any;
   setCustomPatternsList: (patterns: any[]) => void;
@@ -226,6 +202,44 @@ const AESTHETIC_KEYS = [
   'textureRotationAngle',
 ];
 
+export const syncSubAreasLinkedToMain = (
+  subAreas: SubArea[] | undefined,
+  mainSliceState: any,
+  overrides?: Record<string, any>
+): SubArea[] => {
+  if (!subAreas || !subAreas.some((sa) => sa.linkedMaterialId === 'main')) return subAreas || [];
+  const mergedState = { ...mainSliceState, ...(overrides || {}) };
+  return subAreas.map((sa) => {
+    if (sa.linkedMaterialId !== 'main') return sa;
+    const synced = { ...sa };
+    AESTHETIC_KEYS.forEach((key) => {
+      if (overrides && overrides[key] !== undefined) {
+        (synced as any)[key] = JSON.parse(JSON.stringify(overrides[key]));
+      } else if (mergedState[key] !== undefined) {
+        (synced as any)[key] = JSON.parse(JSON.stringify(mergedState[key]));
+      }
+    });
+    synced.tileName = mergedState.tileName || 'Main Wall Tile';
+    if (synced.shape === 'rectangle' && synced.pattern === 'basket_weave') {
+      synced.tileHeight = synced.tileWidth * 2;
+    }
+    return synced;
+  });
+};
+
+const withMainSync = (state: any, updates: Record<string, any>) => {
+  if (state.subAreas?.some((sa: SubArea) => sa.linkedMaterialId === 'main')) {
+    const updatedSubAreas = syncSubAreasLinkedToMain(state.subAreas, state, updates);
+    if (!state.isReceivingRemoteUpdate) broadcastStateSync('setSubAreas', updatedSubAreas);
+    return {
+      ...updates,
+      subAreas: updatedSubAreas,
+      isCanvasDirty: true,
+    };
+  }
+  return updates;
+};
+
 export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (set) => ({
   shape: 'rectangle',
   setShape: (updater) => set((state: any) => {
@@ -240,7 +254,7 @@ export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (se
       }
     }
     const activeCustomPattern = nextShape === 'octagon_dot' ? state.activeCustomPattern : null;
-    return { shape: nextShape, tileHeight: nextHeight, activeCustomPattern };
+    return withMainSync(state, { shape: nextShape, tileHeight: nextHeight, activeCustomPattern });
   }),
   tileWidth: 6,
   setTileWidth: (updater) => set((state: any) => {
@@ -255,7 +269,7 @@ export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (se
       }
     }
     if (!state.isReceivingRemoteUpdate) broadcastStateSync('setTileWidth', nextWidth);
-    return { tileWidth: nextWidth, tileHeight: nextHeight };
+    return withMainSync(state, { tileWidth: nextWidth, tileHeight: nextHeight });
   }),
   tileHeight: 3,
   setTileHeight: (updater) => set((state: any) => {
@@ -270,7 +284,7 @@ export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (se
       }
     }
     if (!state.isReceivingRemoteUpdate) broadcastStateSync('setTileHeight', finalHeight);
-    return { tileHeight: finalHeight };
+    return withMainSync(state, { tileHeight: finalHeight });
   }),
   pattern: 'running_50',
   setPattern: (updater) => set((state: any) => {
@@ -285,20 +299,20 @@ export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (se
       }
     }
     if (!state.isReceivingRemoteUpdate) broadcastStateSync('setPattern', nextPattern);
-    return { pattern: nextPattern, tileHeight: nextHeight };
+    return withMainSync(state, { pattern: nextPattern, tileHeight: nextHeight });
   }),
   basketWeaveMultiplier: 2,
   setBasketWeaveMultiplier: (updater) => set((state: any) => {
     const nextMultiplier = typeof updater === 'function' ? updater(state.basketWeaveMultiplier) : updater;
     const shouldLock = state.shape === 'rectangle' && state.pattern === 'basket_weave';
     const nextHeight = shouldLock ? state.tileWidth * nextMultiplier : state.tileHeight;
-    return { basketWeaveMultiplier: nextMultiplier, tileHeight: nextHeight };
+    return withMainSync(state, { basketWeaveMultiplier: nextMultiplier, tileHeight: nextHeight });
   }),
   groutWidth: 0.125,
   setGroutWidth: (updater) => set((state: any) => {
     const nextVal = typeof updater === 'function' ? updater(state.groutWidth) : updater;
     if (!state.isReceivingRemoteUpdate) broadcastStateSync('setGroutWidth', nextVal);
-    return { groutWidth: nextVal };
+    return withMainSync(state, { groutWidth: nextVal });
   }),
   angle: 0,
   setAngle: (updater) => set((state: any) => ({ angle: typeof updater === 'function' ? updater(state.angle) : updater })),
@@ -306,7 +320,7 @@ export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (se
   setTileName: (updater) => set((state: any) => {
     const nextVal = typeof updater === 'function' ? updater(state.tileName) : updater;
     if (!state.isReceivingRemoteUpdate) broadcastStateSync('setTileName', nextVal);
-    return { tileName: nextVal };
+    return withMainSync(state, { tileName: nextVal });
   }),
   hasNotes: false,
   setHasNotes: (updater) => set((state: any) => ({ hasNotes: typeof updater === 'function' ? updater(state.hasNotes) : updater })),
@@ -316,12 +330,18 @@ export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (se
   setTileColors: (updater) => set((state: any) => {
     const nextVal = typeof updater === 'function' ? updater(state.tileColors) : updater;
     if (!state.isReceivingRemoteUpdate) broadcastStateSync('setTileColors', nextVal);
-    return { tileColors: nextVal };
+    return withMainSync(state, { tileColors: nextVal });
   }),
   colorPattern: 'single',
-  setColorPattern: (updater) => set((state: any) => ({ colorPattern: typeof updater === 'function' ? updater(state.colorPattern) : updater })),
+  setColorPattern: (updater) => set((state: any) => {
+    const nextVal = typeof updater === 'function' ? updater(state.colorPattern) : updater;
+    return withMainSync(state, { colorPattern: nextVal });
+  }),
   tilesPerStripe: 1,
-  setTilesPerStripe: (updater) => set((state: any) => ({ tilesPerStripe: typeof updater === 'function' ? updater(state.tilesPerStripe) : updater })),
+  setTilesPerStripe: (updater) => set((state: any) => {
+    const nextVal = typeof updater === 'function' ? updater(state.tilesPerStripe) : updater;
+    return withMainSync(state, { tilesPerStripe: nextVal });
+  }),
   compositeColors: {},
   setCompositeColor: (role, color) => set((state: any) => {
     const nextColors = {
@@ -332,14 +352,20 @@ export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (se
   }),
   setCompositeColors: (colors) => set({ compositeColors: colors }),
   colorVariation: 'V1',
-  setColorVariation: (updater) => set((state: any) => ({ colorVariation: typeof updater === 'function' ? (updater as any)(state.colorVariation) : updater })),
+  setColorVariation: (updater) => set((state: any) => {
+    const nextVal = typeof updater === 'function' ? (updater as any)(state.colorVariation) : updater;
+    return withMainSync(state, { colorVariation: nextVal });
+  }),
   tileFinish: 'satin',
-  setTileFinish: (updater) => set((state: any) => ({ tileFinish: typeof updater === 'function' ? updater(state.tileFinish) : updater })),
+  setTileFinish: (updater) => set((state: any) => {
+    const nextVal = typeof updater === 'function' ? updater(state.tileFinish) : updater;
+    return withMainSync(state, { tileFinish: nextVal });
+  }),
   groutColor: '#64748b',
   setGroutColor: (updater) => set((state: any) => {
     const nextVal = typeof updater === 'function' ? updater(state.groutColor) : updater;
     if (!state.isReceivingRemoteUpdate) broadcastStateSync('setGroutColor', nextVal);
-    return { groutColor: nextVal };
+    return withMainSync(state, { groutColor: nextVal });
   }),
   uploadedSvgText: null,
   setUploadedSvgText: (updater) => set((state: any) => ({ uploadedSvgText: typeof updater === 'function' ? updater(state.uploadedSvgText) : updater })),
@@ -398,25 +424,42 @@ export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (se
     // Sweep the entire array. If an area is a child, force it to exactly mirror its parent.
     nextSubAreas = nextSubAreas.map((item: SubArea) => {
       if (item.linkedMaterialId) {
-        const parent = nextSubAreas.find((p: SubArea) => p.id === item.linkedMaterialId);
-        if (parent && parent.isMaterialParent === true) {
+        if (item.linkedMaterialId === 'main') {
           const syncedChild = { ...item };
           AESTHETIC_KEYS.forEach((key) => {
-            if ((parent as any)[key] !== undefined) {
-              // Deep clone to prevent reference collisions
-              (syncedChild as any)[key] = JSON.parse(JSON.stringify((parent as any)[key]));
+            if ((state as any)[key] !== undefined) {
+              (syncedChild as any)[key] = JSON.parse(JSON.stringify((state as any)[key]));
             }
           });
+          syncedChild.tileName = state.tileName || 'Main Wall Tile';
           if (syncedChild.shape === 'rectangle' && syncedChild.pattern === 'basket_weave') {
             syncedChild.tileHeight = syncedChild.tileWidth * 2;
           }
-          if (state.purchasingSettings[parent.id]) {
-            nextPurchasingSettings[item.id] = { ...state.purchasingSettings[parent.id] };
+          if (state.purchasingSettings && state.purchasingSettings['main']) {
+            nextPurchasingSettings[item.id] = { ...state.purchasingSettings['main'] };
           }
           return syncedChild;
         } else {
-          // Parent no longer exists or is no longer a material parent; unlink child
-          return { ...item, linkedMaterialId: undefined };
+          const parent = nextSubAreas.find((p: SubArea) => p.id === item.linkedMaterialId);
+          if (parent && parent.isMaterialParent === true) {
+            const syncedChild = { ...item };
+            AESTHETIC_KEYS.forEach((key) => {
+              if ((parent as any)[key] !== undefined) {
+                // Deep clone to prevent reference collisions
+                (syncedChild as any)[key] = JSON.parse(JSON.stringify((parent as any)[key]));
+              }
+            });
+            if (syncedChild.shape === 'rectangle' && syncedChild.pattern === 'basket_weave') {
+              syncedChild.tileHeight = syncedChild.tileWidth * 2;
+            }
+            if (state.purchasingSettings[parent.id]) {
+              nextPurchasingSettings[item.id] = { ...state.purchasingSettings[parent.id] };
+            }
+            return syncedChild;
+          } else {
+            // Parent no longer exists or is no longer a material parent; unlink child
+            return { ...item, linkedMaterialId: undefined };
+          }
         }
       }
       return item;
@@ -459,15 +502,27 @@ export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (se
   activePresetId: 'subway-backsplash',
   setActivePresetId: (updater) => set((state: any) => ({ activePresetId: typeof updater === 'function' ? updater(state.activePresetId) : updater })),
   soldAsMosaic: false,
-  setSoldAsMosaic: (updater) => set((state: any) => ({ soldAsMosaic: typeof updater === 'function' ? updater(state.soldAsMosaic) : updater })),
+  setSoldAsMosaic: (updater) => set((state: any) => {
+    const nextVal = typeof updater === 'function' ? updater(state.soldAsMosaic) : updater;
+    return withMainSync(state, { soldAsMosaic: nextVal });
+  }),
   mosaicWidth: 12,
-  setMosaicWidth: (updater) => set((state: any) => ({ mosaicWidth: typeof updater === 'function' ? updater(state.mosaicWidth) : updater })),
+  setMosaicWidth: (updater) => set((state: any) => {
+    const nextVal = typeof updater === 'function' ? updater(state.mosaicWidth) : updater;
+    return withMainSync(state, { mosaicWidth: nextVal });
+  }),
   mosaicHeight: 12,
-  setMosaicHeight: (updater) => set((state: any) => ({ mosaicHeight: typeof updater === 'function' ? updater(state.mosaicHeight) : updater })),
+  setMosaicHeight: (updater) => set((state: any) => {
+    const nextVal = typeof updater === 'function' ? updater(state.mosaicHeight) : updater;
+    return withMainSync(state, { mosaicHeight: nextVal });
+  }),
   overage: 10,
   setOverage: (updater) => set((state: any) => ({ overage: typeof updater === 'function' ? updater(state.overage) : updater })),
   reuseCuts: false,
-  setReuseCuts: (updater) => set((state: any) => ({ reuseCuts: typeof updater === 'function' ? updater(state.reuseCuts) : updater })),
+  setReuseCuts: (updater) => set((state: any) => ({
+    reuseCuts: typeof updater === 'function' ? updater(state.reuseCuts) : updater,
+    isCanvasDirty: true,
+  })),
   angleDisplayMode: 'all',
   setAngleDisplayMode: (updater) => set((state: any) => ({ angleDisplayMode: typeof updater === 'function' ? updater(state.angleDisplayMode) : updater })),
   showAccentDistances: false,
@@ -498,9 +553,15 @@ export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (se
   mainShapeSettings: {},
   setMainShapeSettings: (updater) => set((state: any) => ({ mainShapeSettings: typeof updater === 'function' ? updater(state.mainShapeSettings) : updater })),
   isPicket: false,
-  setIsPicket: (updater) => set((state: any) => ({ isPicket: typeof updater === 'function' ? updater(state.isPicket) : updater })),
+  setIsPicket: (updater) => set((state: any) => {
+    const nextVal = typeof updater === 'function' ? updater(state.isPicket) : updater;
+    return withMainSync(state, { isPicket: nextVal });
+  }),
   picketLength: 8,
-  setPicketLength: (updater) => set((state: any) => ({ picketLength: typeof updater === 'function' ? updater(state.picketLength) : updater })),
+  setPicketLength: (updater) => set((state: any) => {
+    const nextVal = typeof updater === 'function' ? updater(state.picketLength) : updater;
+    return withMainSync(state, { picketLength: nextVal });
+  }),
   isCanvasDirty: false,
   setIsCanvasDirty: (updater) => set((state: any) => ({ isCanvasDirty: typeof updater === 'function' ? updater(state.isCanvasDirty) : updater })),
   purchasingSettings: {},
@@ -511,28 +572,77 @@ export const createMaterialSlice: StateCreator<any, [], [], MaterialSlice> = (se
       sqFtPerCarton: '',
       pricePerSqFt: 0,
       pricePerSheet: 0,
+      sheetInputMode: 'dimensions',
+      sheetWidth: 12,
+      sheetHeight: 12,
+      sqFtPerSheet: '',
     };
-    const updated = { ...prev, ...settings };
-    const nextPurchasingSettings = {
+    const updated: PurchasingSetting = { ...prev, ...settings };
+    const nextPurchasingSettings: Record<string, PurchasingSetting> = {
       ...state.purchasingSettings,
       [areaId]: updated,
     };
 
-    if (state.subAreas) {
-      state.subAreas.forEach((sa: SubArea) => {
+    let nextSubAreas = state.subAreas;
+    let nextSoldAsMosaic = state.soldAsMosaic;
+    let nextMosaicWidth = state.mosaicWidth;
+    let nextMosaicHeight = state.mosaicHeight;
+
+    if (areaId === 'main') {
+      if (settings.purchaseType !== undefined) {
+        nextSoldAsMosaic = settings.purchaseType === 'sheet';
+      }
+      if (settings.sheetWidth !== undefined && settings.sheetWidth !== '') {
+        nextMosaicWidth = Number(settings.sheetWidth);
+      }
+      if (settings.sheetHeight !== undefined && settings.sheetHeight !== '') {
+        nextMosaicHeight = Number(settings.sheetHeight);
+      }
+    } else if (state.subAreas) {
+      nextSubAreas = state.subAreas.map((sa: SubArea) => {
+        if (sa.id === areaId) {
+          const saUpdates: Partial<SubArea> = {};
+          if (settings.purchaseType !== undefined) {
+            saUpdates.soldAsMosaic = settings.purchaseType === 'sheet';
+          }
+          if (settings.sheetWidth !== undefined && settings.sheetWidth !== '') {
+            saUpdates.mosaicWidth = Number(settings.sheetWidth);
+          }
+          if (settings.sheetHeight !== undefined && settings.sheetHeight !== '') {
+            saUpdates.mosaicHeight = Number(settings.sheetHeight);
+          }
+          return { ...sa, ...saUpdates };
+        }
+        return sa;
+      });
+    }
+
+    if (nextSubAreas) {
+      nextSubAreas.forEach((sa: SubArea) => {
         if (sa.linkedMaterialId === areaId) {
           const childPrev = nextPurchasingSettings[sa.id] || {
             purchaseType: 'carton',
             sqFtPerCarton: '',
             pricePerSqFt: 0,
             pricePerSheet: 0,
+            sheetInputMode: 'dimensions',
+            sheetWidth: 12,
+            sheetHeight: 12,
+            sqFtPerSheet: '',
           };
           nextPurchasingSettings[sa.id] = { ...childPrev, ...settings };
         }
       });
     }
 
-    return { purchasingSettings: nextPurchasingSettings };
+    return {
+      purchasingSettings: nextPurchasingSettings,
+      subAreas: nextSubAreas,
+      soldAsMosaic: nextSoldAsMosaic,
+      mosaicWidth: nextMosaicWidth,
+      mosaicHeight: nextMosaicHeight,
+      isCanvasDirty: true,
+    };
   }),
   customPatternsList: [],
   activeCustomPattern: null,

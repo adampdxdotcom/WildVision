@@ -632,7 +632,7 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
     if (data.offsetX !== undefined) updates.offsetX = data.offsetX;
     if (data.offsetY !== undefined) updates.offsetY = data.offsetY;
     if (data.subAreas !== undefined) updates.subAreas = data.subAreas;
-    if (data.purchasingSettings !== undefined) updates.purchasingSettings = data.purchasingSettings;
+    updates.purchasingSettings = data.purchasingSettings !== undefined ? data.purchasingSettings : {};
     if (data.activeSubAreaId !== undefined) updates.activeSubAreaId = data.activeSubAreaId;
     if (data.wallExtensions !== undefined) updates.wallExtensions = data.wallExtensions;
     if (data.activeWallExtensionId !== undefined) updates.activeWallExtensionId = data.activeWallExtensionId;
@@ -699,13 +699,13 @@ export const createProjectSlice: StateCreator<any, [], [], ProjectSlice> = (set,
     if (data.stitches !== undefined) updates.stitches = data.stitches;
     if (data.anchoredRegionCenter !== undefined) updates.anchoredRegionCenter = data.anchoredRegionCenter;
     if (data.enableRealisticDepth !== undefined) updates.enableRealisticDepth = data.enableRealisticDepth;
-    if (data.materialTexture !== undefined) updates.materialTexture = data.materialTexture;
-    if (data.disableColorWithTexture !== undefined) updates.disableColorWithTexture = data.disableColorWithTexture;
-    if (data.textureOpacity !== undefined) updates.textureOpacity = data.textureOpacity;
-    if (data.textureScale !== undefined) updates.textureScale = data.textureScale;
-    if (data.textureScaleRandom !== undefined) updates.textureScaleRandom = data.textureScaleRandom;
-    if (data.textureRotationMode !== undefined) updates.textureRotationMode = data.textureRotationMode;
-    if (data.textureRotationAngle !== undefined) updates.textureRotationAngle = data.textureRotationAngle;
+    updates.materialTexture = data.materialTexture !== undefined ? data.materialTexture : 'none';
+    updates.disableColorWithTexture = data.disableColorWithTexture !== undefined ? data.disableColorWithTexture : false;
+    updates.textureOpacity = data.textureOpacity !== undefined ? data.textureOpacity : 0.8;
+    updates.textureScale = data.textureScale !== undefined ? data.textureScale : 1.0;
+    updates.textureScaleRandom = data.textureScaleRandom !== undefined ? data.textureScaleRandom : false;
+    updates.textureRotationMode = data.textureRotationMode !== undefined ? data.textureRotationMode : 'random';
+    updates.textureRotationAngle = data.textureRotationAngle !== undefined ? data.textureRotationAngle : 0;
     if (data.tileSpecular !== undefined) {
       updates.viewSettings = {
         ...(updates.viewSettings || state.viewSettings),

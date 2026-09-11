@@ -34,6 +34,14 @@ export const ImportedLayoutsPanel: React.FC = () => {
       groutColor: payload.groutColor,
       groutWidth: payload.groutWidth,
       tileFinish: payload.tileFinish,
+      materialTexture: payload.materialTexture || 'none',
+      disableColorWithTexture: payload.disableColorWithTexture ?? false,
+      textureOpacity: payload.textureOpacity ?? 0.8,
+      textureScale: payload.textureScale ?? 1.0,
+      textureScaleRandom: payload.textureScaleRandom ?? false,
+      textureRotationMode: payload.textureRotationMode || 'random',
+      textureRotationAngle: payload.textureRotationAngle ?? 0,
+      purchasingSettings: payload.purchasingSettings || {},
     };
 
     updateSceneObject(objectId, {

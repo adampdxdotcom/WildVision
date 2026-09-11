@@ -606,6 +606,8 @@ const CanvasInteractiveSurface: React.FC = () => {
 
           <canvas
             ref={canvasRef}
+            id="tile-canvas-2d"
+            data-canvas-type="2d"
             className="block w-full h-full relative"
             data-corner-x={cornerX}
             data-corner-y={cornerY}
@@ -615,6 +617,8 @@ const CanvasInteractiveSurface: React.FC = () => {
 
           <canvas
             ref={overlayCanvasRef}
+            id="tile-canvas-overlay"
+            data-canvas-type="overlay"
             className="absolute inset-0 block w-full h-full pointer-events-none z-10"
           />
         </div>

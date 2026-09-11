@@ -1,10 +1,11 @@
 import { jsPDF } from 'jspdf';
-import { MeasurementUnit, WallExtension, TileShape, RectanglePattern, SubArea, ColorVariation, ColorPattern, CanvasLabel, FoldLine, AngleDisplayMode } from '../types';
+import { MeasurementUnit, WallExtension, TileShape, RectanglePattern, SubArea, ColorVariation, ColorPattern, CanvasLabel, FoldLine, AngleDisplayMode, AreaReport } from '../types';
 import { generateTiles } from './generator';
 import { computeComprehensiveStatistics } from './analytics';
 import { getTrueArea, getCombinedWallBounds, getPolygonArea } from './geometry';
 import { logger } from './logger';
 import { useAppStore } from '../store/useAppStore';
+import { computeAreaQuantities, aggregateAreaReports } from './quantityEngine';
 
 export interface PDFExportParams {
   projectName: string;
@@ -192,7 +193,32 @@ export async function runExport(params: PDFExportParams, originalZoom: number): 
   const state = useAppStore.getState();
   const subAreas = (rawSubAreas || []).filter((sa) => sa.visible !== false);
 
-  const canvas = document.querySelector('canvas');
+  // Explicitly locate the 2D layout canvas to guarantee 3D WebGL or overlay canvases are never captured
+  let canvas = (document.getElementById('tile-canvas-2d') as HTMLCanvasElement) ||
+               (document.querySelector('canvas[data-canvas-type="2d"]') as HTMLCanvasElement);
+
+  if (!canvas || canvas.width === 0 || canvas.height === 0) {
+    // If the 2D canvas was just switched to active, wait a brief moment for render
+    await new Promise((r) => setTimeout(r, 150));
+    canvas = (document.getElementById('tile-canvas-2d') as HTMLCanvasElement) ||
+             (document.querySelector('canvas[data-canvas-type="2d"]') as HTMLCanvasElement) ||
+             canvas;
+  }
+
+  if (!canvas) {
+    const allCanvases = Array.from(document.querySelectorAll('canvas'));
+    canvas = (allCanvases.find((c) => c.id === 'tile-canvas-2d') ||
+              allCanvases.find((c) => {
+                if (c.id === 'tile-canvas-overlay' || c.getAttribute('data-canvas-type') === 'overlay') return false;
+                try {
+                  return c.getContext('2d') !== null && c.width > 50 && c.height > 50;
+                } catch {
+                  return false;
+                }
+              }) ||
+              allCanvases[0]) as HTMLCanvasElement;
+  }
+
   if (!canvas) {
     alert('Canvas element not found. Please paint the canvas first.');
     if (originalZoom > 1.0) setZoom(originalZoom);
@@ -450,6 +476,7 @@ function drawSpecificationsCard(
     mosaicWidth,
     mosaicHeight,
     overage = 10,
+    purchasingSettings = {},
   } = params;
 
   pdf.setFillColor(248, 250, 252);
@@ -539,17 +566,27 @@ function drawSpecificationsCard(
     }
 
     if (printQuantities !== false) {
-      let mainQtyWithOverage = 0;
-      if (soldAsMosaic) {
-        const conversionFactor = unit === 'in' ? 144 : 929.0304;
-        const sheetSqFt = ((mosaicWidth || 12) * (mosaicHeight || 12)) / conversionFactor;
-        const netAreaSqFt = (stats.mainReport.netArea || 0) / conversionFactor;
-        mainQtyWithOverage = Math.ceil((netAreaSqFt * (1 + overage / 100)) / (sheetSqFt || 1));
-      } else {
-        const mainTotalTiles = stats.mainReport.totalTilesUsed || 0;
-        mainQtyWithOverage = Math.ceil(mainTotalTiles * (1 + overage / 100));
-      }
-      pdf.text(`Est. Material: ${mainQtyWithOverage} ${soldAsMosaic ? 'sheets' : 'tiles'}`, col2X + 2, col2Y);
+      const defaultSetting = purchasingSettings?.['main'] || { purchaseType: soldAsMosaic ? 'sheet' : 'piece', pricePerSqFt: 0, pricePerSheet: 0, sqFtPerCarton: '' };
+      const mainChildren = subAreas.filter((s) => s.linkedMaterialId === 'main' && !s.isCutout && s.accentType !== 'cutout');
+      const mainChildReports = mainChildren.map((c) => stats.subAreaReports.find((r) => r.subAreaId === c.id)?.report).filter(Boolean);
+      const mainAggReport = aggregateAreaReports(stats.mainReport, mainChildReports);
+
+      const mainStats = computeAreaQuantities({
+        areaId: 'main',
+        report: mainAggReport,
+        settings: defaultSetting as any,
+        overage,
+        reuseCuts: params.reuseCuts ?? useAppStore.getState().reuseCuts,
+        unit,
+        mainSoldAsMosaic: !!soldAsMosaic,
+        mainTileWidth: tileWidth,
+        mainTileHeight: tileHeight,
+        mainMosaicWidth: mosaicWidth,
+        mainMosaicHeight: mosaicHeight,
+        subAreas,
+      });
+      const noteStr = mainChildren.length > 0 ? ` (incl. ${mainChildren.length} linked)` : '';
+      pdf.text(`Est. Material: ${mainStats.recQty} ${soldAsMosaic ? 'sheets' : 'tiles'}${noteStr}`, col2X + 2, col2Y);
     }
   }
 
@@ -562,62 +599,82 @@ function drawSpecificationsCard(
   pdf.text('Accents & Niches', col3X, col3Y);
   col3Y += 5;
 
-  if (!subAreas || subAreas.length === 0) {
+  const activeSubAreas = (subAreas || []).filter((s) => !s.isCutout && s.accentType !== 'cutout' && s.visible !== false);
+
+  if (activeSubAreas.length === 0) {
     pdf.setFont('helvetica', 'italic');
     pdf.setFontSize(8);
     pdf.setTextColor(148, 163, 184);
     pdf.text('No accents or niches in this layout.', col3X + 2, col3Y);
   } else {
-    const parentSubAreas = subAreas.filter((s) => !s.linkedMaterialId);
-    parentSubAreas.forEach((sa, idx) => {
+    const availableHeight = (y + height) - col3Y - 4;
+    const itemSpacing = Math.min(13, Math.max(8.5, availableHeight / activeSubAreas.length));
+    const isCompact = itemSpacing < 11;
+
+    activeSubAreas.forEach((sa, idx) => {
+      if (col3Y + itemSpacing > y + height) return;
+
       pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(8.5);
+      pdf.setFontSize(isCompact ? 7.5 : 8.5);
       pdf.setTextColor(15, 23, 42);
-      const childCount = subAreas.filter((s) => s.linkedMaterialId === sa.id).length;
+
       let saName = sa.name || `Sub-Area ${idx + 1}`;
-      if (childCount > 0) {
-        saName += ` (+${childCount})`;
+      if (sa.linkedMaterialId) {
+        const linkedParentName = sa.linkedMaterialId === 'main'
+          ? 'Main Wall'
+          : subAreas.find((s) => s.id === sa.linkedMaterialId)?.name || 'Parent Profile';
+        saName += ` (Shares ${linkedParentName})`;
       }
-      const splitSaName = pdf.splitTextToSize(saName, 52);
-      pdf.text(splitSaName, col3X + 2, col3Y);
-      col3Y += splitSaName.length * 4;
+
+      const splitSaName = pdf.splitTextToSize(saName, 54);
+      pdf.text(splitSaName[0], col3X + 2, col3Y);
+      const nameH = isCompact ? 3.4 : 3.8;
 
       pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(8);
+      pdf.setFontSize(isCompact ? 7 : 7.5);
       pdf.setTextColor(51, 65, 85);
 
-      const children = subAreas.filter((s) => s.linkedMaterialId === sa.id);
-      const parentNetArea = sa.width * sa.height;
-      const childrenNetArea = children.reduce((sum, c) => sum + c.width * c.height, 0);
-      const saNetArea = parentNetArea + childrenNetArea;
-
+      const saNetArea = sa.width * sa.height;
       const saAreaStr = unit === 'in' ? `${(saNetArea / 144).toFixed(2)} sq ft` : `${saNetArea.toFixed(1)} sq ${unit}`;
-      pdf.text(`Area: ${saAreaStr}`, col3X + 2, col3Y);
-      col3Y += 4.5;
 
+      let estMatStr = '';
       if (printQuantities !== false) {
-        const saReport = stats.subAreaReports.find((r) => r.subAreaId === sa.id);
+        const saReport = stats.subAreaReports.find((r) => r.subAreaId === sa.id)?.report || {
+          netArea: saNetArea,
+          fullTilesCount: 0,
+          cutTilesCount: 0,
+          totalTilesUsed: 0,
+        };
         const isSaMosaic = sa.soldAsMosaic !== undefined ? sa.soldAsMosaic : soldAsMosaic;
-        let saQtyWithOverage = 0;
-        if (isSaMosaic) {
-          const conversionFactor = unit === 'in' ? 144 : 929.0304;
-          const samW = sa.mosaicWidth || mosaicWidth || 12;
-          const samH = sa.mosaicHeight || mosaicHeight || 12;
-          const saSheetSqFt = (samW * samH) / conversionFactor;
-          const saNetSqFt = saNetArea / conversionFactor;
-          saQtyWithOverage = Math.ceil((saNetSqFt * (1 + overage / 100)) / (saSheetSqFt || 1));
-        } else {
-          let saTotalTiles = saReport?.report.totalTilesUsed || 0;
-          children.forEach((c) => {
-            const cRep = stats.subAreaReports.find((r) => r.subAreaId === c.id);
-            saTotalTiles += cRep?.report.totalTilesUsed || 0;
-          });
-          saQtyWithOverage = Math.ceil(saTotalTiles * (1 + overage / 100));
-        }
-        pdf.text(`Est. Material: ${saQtyWithOverage} ${isSaMosaic ? 'sheets' : 'tiles'}`, col3X + 2, col3Y);
-        col3Y += 4.5;
+        const saSettings = (sa.linkedMaterialId === 'main'
+          ? purchasingSettings?.['main']
+          : (sa.linkedMaterialId ? purchasingSettings?.[sa.linkedMaterialId] : purchasingSettings?.[sa.id])) || {
+          purchaseType: isSaMosaic ? 'sheet' : 'piece',
+          pricePerSqFt: 0,
+          pricePerSheet: 0,
+          sqFtPerCarton: '',
+        };
+
+        const saQuantities = computeAreaQuantities({
+          areaId: sa.id,
+          report: saReport,
+          settings: saSettings as any,
+          overage,
+          reuseCuts: params.reuseCuts ?? useAppStore.getState().reuseCuts,
+          unit,
+          mainSoldAsMosaic: !!soldAsMosaic,
+          subArea: sa,
+          mainTileWidth: tileWidth,
+          mainTileHeight: tileHeight,
+          mainMosaicWidth: mosaicWidth,
+          mainMosaicHeight: mosaicHeight,
+          subAreas,
+        });
+        estMatStr = ` | Est: ${saQuantities.recQty} ${isSaMosaic ? 'sheets' : 'tiles'}`;
       }
-      col3Y += 2;
+
+      pdf.text(`Area: ${saAreaStr}${estMatStr}`, col3X + 2, col3Y + nameH);
+      col3Y += itemSpacing;
     });
   }
 }
@@ -666,160 +723,167 @@ function drawPricingCard(
   pdf.setTextColor(100, 116, 139);
   pdf.text('DESIGN AREA', estCardX + 6, headerY);
   pdf.text('MATERIAL', estCardX + 44, headerY);
-  pdf.text('SUGGESTED ORDER', estCardX + 104, headerY);
-  pdf.text('UNIT COST', estCardX + 144, headerY);
+  pdf.text('USAGE / ORDER', estCardX + 102, headerY);
+  pdf.text('UNIT COST', estCardX + 142, headerY);
   pdf.text('TOTAL EST.', estCardX + 174, headerY, { align: 'right' });
   pdf.line(estCardX, headerY + 2, estCardX + estCardWidth, headerY + 2);
-
-  const rows: Array<{
-    areaName: string;
-    materialType: string;
-    suggestedOrderText: string;
-    unitCostText: string;
-    totalCost: number;
-  }> = [];
 
   const stats = computeComprehensiveStatistics({
     ...params,
     reuseCuts: params.reuseCuts ?? useAppStore.getState().reuseCuts,
   });
 
-  const getAreaEstimates = (areaId: string) => {
-    let areaName = '';
-    let materialName = '';
-    let settings = purchasingSettings[areaId];
-    if (!settings && areaId === 'main') settings = purchasingSettings.main;
-    if (!settings) return null;
+  const activeSubAreas = (subAreas || []).filter((sa) => !sa.isCutout && sa.accentType !== 'cutout' && sa.visible !== false);
 
-    let totalRawTiles = 0;
-    let netAreaSqIn = 0;
-    let saObj: SubArea | undefined;
+  interface TableRowItem {
+    type: 'standalone' | 'sub_area_item' | 'subtotal';
+    areaName: string;
+    materialType: string;
+    suggestedOrderText: string;
+    unitCostText: string;
+    totalCost: number;
+  }
 
-    if (areaId === 'main') {
-      if (isBlankCanvasMode) return null;
-      areaName = 'Main Wall Area';
-      materialName = tileName || 'Main Wall Tile';
-      totalRawTiles = stats.mainReport.totalTilesUsed || 0;
-      netAreaSqIn = stats.mainReport.netArea || 0;
+  const rows: TableRowItem[] = [];
 
-      const linkedChildren = subAreas.filter((s) => s.linkedMaterialId === 'main');
-      if (linkedChildren.length > 0) {
-        areaName += ` (+${linkedChildren.length})`;
-        linkedChildren.forEach((child) => {
-          const childReport = stats.subAreaReports.find((r) => r.subAreaId === child.id)?.report;
-          totalRawTiles += childReport?.totalTilesUsed || 0;
-          netAreaSqIn += childReport?.netArea || child.width * child.height;
-        });
-      }
-    } else {
-      saObj = subAreas.find((s) => s.id === areaId);
-      if (!saObj) return null;
-      areaName = saObj.name || 'Sub-Area';
-      materialName = saObj.tileName || 'Accent Tile';
+  interface AreaDef {
+    id: string;
+    name: string;
+    isParent: boolean;
+    subArea?: SubArea;
+    report: AreaReport;
+  }
 
-      const parentReport = stats.subAreaReports.find((r) => r.subAreaId === areaId)?.report;
-      totalRawTiles = parentReport?.totalTilesUsed || 0;
-      netAreaSqIn = parentReport?.netArea || saObj.width * saObj.height;
+  interface MaterialGroup {
+    id: string;
+    materialName: string;
+    settings: any;
+    isMosaic: boolean;
+    parentSubArea?: SubArea;
+    areas: AreaDef[];
+  }
 
-      const linkedChildren = subAreas.filter((s) => s.linkedMaterialId === areaId);
-      if (linkedChildren.length > 0) {
-        areaName += ` (+${linkedChildren.length})`;
-        linkedChildren.forEach((child) => {
-          const childReport = stats.subAreaReports.find((r) => r.subAreaId === child.id)?.report;
-          totalRawTiles += childReport?.totalTilesUsed || 0;
-          netAreaSqIn += childReport?.netArea || child.width * child.height;
-        });
-      }
-    }
+  function processMaterialGroup(group: MaterialGroup) {
+    const childReports = group.areas.filter((a) => !a.isParent).map((a) => a.report);
+    const combinedReport = aggregateAreaReports(group.areas[0].report, childReports);
 
-    const isImperial = unit === 'in';
-    const conversionFactor = isImperial ? 144 : 929.0304;
+    const combinedStats = computeAreaQuantities({
+      areaId: group.id,
+      report: combinedReport,
+      settings: group.settings,
+      overage,
+      reuseCuts: params.reuseCuts ?? useAppStore.getState().reuseCuts,
+      unit,
+      mainSoldAsMosaic: !!soldAsMosaic,
+      subArea: group.parentSubArea,
+      mainTileWidth: tileWidth,
+      mainTileHeight: tileHeight,
+      mainMosaicWidth: mosaicWidth,
+      mainMosaicHeight: mosaicHeight,
+      colorPattern: params.colorPattern,
+      subAreas,
+    });
 
-    const isMosaic = areaId === 'main' ? (soldAsMosaic || false) : (saObj?.soldAsMosaic !== undefined ? saObj.soldAsMosaic : (soldAsMosaic || false));
-    const mW = areaId === 'main' ? mosaicWidth : (saObj?.mosaicWidth || mosaicWidth);
-    const mH = areaId === 'main' ? mosaicHeight : (saObj?.mosaicHeight || mosaicHeight);
-    const tW = areaId === 'main' ? tileWidth : (saObj?.tileWidth || tileWidth);
-    const tH = areaId === 'main' ? tileHeight : (saObj?.tileHeight || tileHeight);
-
-    const sheetSqIn = isMosaic ? ((mW || 12) * (mH || 12)) : ((tW || 6) * (tH || 6));
-    const sheetSqFt = sheetSqIn / conversionFactor;
-
-    let totalRequiredSqFt = 0;
-    let suggestedOrderText = '';
     let unitCostText = '';
-    let totalCost = 0;
-
-    if (isMosaic) {
-      const netAreaSqFt = netAreaSqIn / conversionFactor;
-      totalRequiredSqFt = netAreaSqFt * (1 + overage / 100);
-      const sheetsNeeded = Math.ceil(totalRequiredSqFt / (sheetSqFt || 1));
-
-      if (settings.purchaseType === 'carton') {
-        const sqFtPerCarton = Number(settings.sqFtPerCarton) || 0;
-        const pricePerSqFt = settings.pricePerSqFt || 0;
-        const cartonsNeeded = sqFtPerCarton > 0 ? Math.ceil(totalRequiredSqFt / sqFtPerCarton) : 0;
-        const purchasedSqFt = cartonsNeeded * sqFtPerCarton;
-        totalCost = purchasedSqFt * pricePerSqFt;
-        suggestedOrderText = `${cartonsNeeded} Cartons`;
-        unitCostText = `$${Number(pricePerSqFt || 0).toFixed(2)} / sq.ft`;
-      } else {
-        const pricePerSheet = settings.pricePerSheet || 0;
-        totalCost = sheetsNeeded * pricePerSheet;
-        suggestedOrderText = `${sheetsNeeded} Sheets (${(sheetsNeeded * sheetSqFt).toFixed(2)} sq ft)`;
-        unitCostText = `$${Number(pricePerSheet || 0).toFixed(2)} / sheet`;
-      }
+    if (group.settings.purchaseType === 'carton') {
+      unitCostText = `$${Number(group.settings.pricePerSqFt || 0).toFixed(2)} / sq.ft`;
+    } else if (group.settings.purchaseType === 'piece') {
+      unitCostText = `$${Number(group.settings.pricePerSheet || 0).toFixed(2)} / piece`;
     } else {
-      const physicalAreaSqIn = totalRawTiles * sheetSqIn;
-      const physicalAreaSqFt = physicalAreaSqIn / conversionFactor;
-      totalRequiredSqFt = physicalAreaSqFt * (1 + overage / 100);
-
-      if (settings.purchaseType === 'carton') {
-        const sqFtPerCarton = Number(settings.sqFtPerCarton) || 0;
-        const pricePerSqFt = settings.pricePerSqFt || 0;
-        const cartonsNeeded = sqFtPerCarton > 0 ? Math.ceil(totalRequiredSqFt / sqFtPerCarton) : 0;
-        const purchasedSqFt = cartonsNeeded * sqFtPerCarton;
-        totalCost = purchasedSqFt * pricePerSqFt;
-        suggestedOrderText = `${cartonsNeeded} Cartons`;
-        unitCostText = `$${Number(pricePerSqFt || 0).toFixed(2)} / sq.ft`;
-      } else if (settings.purchaseType === 'piece') {
-        const pricePerSheet = settings.pricePerSheet || 0;
-        const piecesNeeded = Math.ceil(totalRawTiles * (1 + overage / 100));
-        totalCost = piecesNeeded * pricePerSheet;
-        suggestedOrderText = `${piecesNeeded} Pieces`;
-        unitCostText = `$${Number(pricePerSheet || 0).toFixed(2)} / piece`;
-      } else {
-        const pricePerSheet = settings.pricePerSheet || 0;
-        const sheetsNeeded = sheetSqFt > 0 ? Math.ceil(totalRequiredSqFt / sheetSqFt) : 0;
-        totalCost = sheetsNeeded * pricePerSheet;
-        suggestedOrderText = `${sheetsNeeded} Sheets`;
-        unitCostText = `$${Number(pricePerSheet || 0).toFixed(2)} / sheet`;
-      }
+      unitCostText = `$${Number(group.settings.pricePerSheet || 0).toFixed(2)} / sheet`;
     }
 
-    return {
-      areaName,
-      materialType: materialName,
-      suggestedOrderText,
-      unitCostText,
-      totalCost,
-    };
-  };
+    if (group.areas.length === 1) {
+      // Standalone single area
+      rows.push({
+        type: 'standalone',
+        areaName: group.areas[0].name,
+        materialType: group.materialName,
+        suggestedOrderText: combinedStats.ordStr,
+        unitCostText,
+        totalCost: combinedStats.fCost,
+      });
+    } else {
+      // Multiple areas sharing this material: break down each area and present a subtotal
+      group.areas.forEach((area) => {
+        const aStats = computeAreaQuantities({
+          areaId: area.id,
+          report: area.report,
+          settings: group.settings,
+          overage,
+          reuseCuts: params.reuseCuts ?? useAppStore.getState().reuseCuts,
+          unit,
+          mainSoldAsMosaic: !!soldAsMosaic,
+          subArea: area.subArea || group.parentSubArea,
+          mainTileWidth: tileWidth,
+          mainTileHeight: tileHeight,
+          mainMosaicWidth: mosaicWidth,
+          mainMosaicHeight: mosaicHeight,
+          colorPattern: params.colorPattern,
+          subAreas,
+        });
+
+        let aUsageStr = '';
+        if (group.settings.purchaseType === 'carton') {
+          aUsageStr = `${aStats.surfaceAreaSqFt.toFixed(2)} sq ft usage`;
+        } else if (group.settings.purchaseType === 'piece') {
+          aUsageStr = `${aStats.recQty} Pieces (${aStats.surfaceAreaSqFt.toFixed(2)} sq ft)`;
+        } else {
+          aUsageStr = `${aStats.recQty} Sheets (${aStats.surfaceAreaSqFt.toFixed(2)} sq ft)`;
+        }
+
+        let aCost = 0;
+        if (group.settings.purchaseType === 'carton') {
+          const ratio = combinedStats.effectiveAreaSqFt > 0
+            ? (aStats.effectiveAreaSqFt / combinedStats.effectiveAreaSqFt)
+            : (1 / group.areas.length);
+          aCost = combinedStats.fCost * ratio;
+        } else {
+          aCost = aStats.fCost;
+        }
+
+        rows.push({
+          type: 'sub_area_item',
+          areaName: area.name,
+          materialType: group.materialName,
+          suggestedOrderText: aUsageStr,
+          unitCostText,
+          totalCost: aCost,
+        });
+      });
+
+      // Subtotal row for combined order
+      rows.push({
+        type: 'subtotal',
+        areaName: `Subtotal: ${group.materialName}`,
+        materialType: `Combined: ${combinedStats.surfaceAreaSqFt.toFixed(2)} sq ft (+${overage}% waste)`,
+        suggestedOrderText: combinedStats.ordStr,
+        unitCostText,
+        totalCost: combinedStats.fCost,
+      });
+    }
+  }
 
   const isPaint = params.colorPattern === 'paint' && stats.mainReport.colorGroups && stats.mainReport.colorGroups.length > 0;
 
-  if (isPaint) {
-    const mainSettings = purchasingSettings['main'];
-    if (mainSettings) {
+  // 1. Main Wall Group
+  if (!isBlankCanvasMode) {
+    const mainSettings = purchasingSettings['main'] || {
+      purchaseType: soldAsMosaic ? 'sheet' : 'piece',
+      pricePerSqFt: 0,
+      pricePerSheet: 0,
+      sqFtPerCarton: '',
+    };
+    const mainChildren = activeSubAreas.filter((sa) => sa.linkedMaterialId === 'main');
+
+    if (isPaint) {
       stats.mainReport.colorGroups!.forEach((g) => {
         const isImperial = unit === 'in';
         const conversionFactor = isImperial ? 144 : 929.0304;
-
         const groupRawTiles = g.count || 0;
         const isMosaic = soldAsMosaic || false;
         const sheetSqIn = isMosaic ? (mosaicWidth * mosaicHeight) : (tileWidth * tileHeight);
-
-        const physicalAreaSqIn = groupRawTiles * sheetSqIn;
-        const physicalAreaSqFt = physicalAreaSqIn / conversionFactor;
+        const physicalAreaSqFt = (groupRawTiles * sheetSqIn) / conversionFactor;
         const totalRequiredSqFt = physicalAreaSqFt * (1 + overage / 100);
 
         let suggestedOrderText = '';
@@ -830,8 +894,7 @@ function drawPricingCard(
           const sqFtPerCarton = Number(mainSettings.sqFtPerCarton) || 0;
           const pricePerSqFt = mainSettings.pricePerSqFt || 0;
           const cartonsNeeded = sqFtPerCarton > 0 ? Math.ceil(totalRequiredSqFt / sqFtPerCarton) : 0;
-          const purchasedSqFt = cartonsNeeded * sqFtPerCarton;
-          totalCost = purchasedSqFt * pricePerSqFt;
+          totalCost = cartonsNeeded * sqFtPerCarton * pricePerSqFt;
           suggestedOrderText = `${cartonsNeeded} Cartons`;
           unitCostText = `$${Number(pricePerSqFt || 0).toFixed(2)} / sq.ft`;
         } else if (mainSettings.purchaseType === 'piece') {
@@ -850,6 +913,7 @@ function drawPricingCard(
         }
 
         rows.push({
+          type: 'standalone',
           areaName: `Main Wall (${g.color})`,
           materialType: tileName || 'Main Wall Tile',
           suggestedOrderText,
@@ -857,49 +921,227 @@ function drawPricingCard(
           totalCost,
         });
       });
+
+      mainChildren.forEach((ca) => {
+        const caReport = stats.subAreaReports.find((r) => r.subAreaId === ca.id)?.report || {
+          netArea: ca.width * ca.height,
+          fullTilesCount: 0,
+          cutTilesCount: 0,
+          totalTilesUsed: 0,
+        };
+        const caStats = computeAreaQuantities({
+          areaId: ca.id,
+          report: caReport,
+          settings: mainSettings as any,
+          overage,
+          reuseCuts: params.reuseCuts ?? useAppStore.getState().reuseCuts,
+          unit,
+          mainSoldAsMosaic: !!soldAsMosaic,
+          subArea: ca,
+          mainTileWidth: tileWidth,
+          mainTileHeight: tileHeight,
+          mainMosaicWidth: mosaicWidth,
+          mainMosaicHeight: mosaicHeight,
+          colorPattern: params.colorPattern,
+          subAreas,
+        });
+        const unitCostText = mainSettings.purchaseType === 'carton'
+          ? `$${Number(mainSettings.pricePerSqFt || 0).toFixed(2)} / sq.ft`
+          : `$${Number(mainSettings.pricePerSheet || 0).toFixed(2)} / ${mainSettings.purchaseType === 'piece' ? 'piece' : 'sheet'}`;
+        rows.push({
+          type: 'standalone',
+          areaName: ca.name || 'Niche',
+          materialType: tileName || 'Main Wall Tile',
+          suggestedOrderText: caStats.ordStr,
+          unitCostText,
+          totalCost: caStats.fCost,
+        });
+      });
+    } else {
+      const mainAreas: AreaDef[] = [
+        {
+          id: 'main',
+          name: 'Main Wall Area',
+          isParent: true,
+          report: stats.mainReport,
+        },
+        ...mainChildren.map((ca) => ({
+          id: ca.id,
+          name: ca.name || 'Niche / Accent',
+          isParent: false,
+          subArea: ca,
+          report: stats.subAreaReports.find((r) => r.subAreaId === ca.id)?.report || {
+            netArea: ca.width * ca.height,
+            fullTilesCount: 0,
+            cutTilesCount: 0,
+            totalTilesUsed: 0,
+          },
+        })),
+      ];
+
+      processMaterialGroup({
+        id: 'main',
+        materialName: tileName || 'Main Wall Tile',
+        settings: mainSettings,
+        isMosaic: !!soldAsMosaic,
+        areas: mainAreas,
+      });
     }
-  } else {
-    const mainEst = getAreaEstimates('main');
-    if (mainEst) rows.push(mainEst);
   }
 
-  subAreas.filter((sa) => !sa.linkedMaterialId).forEach((sa) => {
-    const saEst = getAreaEstimates(sa.id);
-    if (saEst) rows.push(saEst);
+  // 2. Sub-Area Groups (Accents/Niches)
+  const parentSubAreas = activeSubAreas.filter(
+    (sa) => !sa.linkedMaterialId || (sa.linkedMaterialId !== 'main' && !activeSubAreas.some((p) => p.id === sa.linkedMaterialId))
+  );
+
+  parentSubAreas.forEach((sa) => {
+    const isSaMosaic = sa.soldAsMosaic !== undefined ? sa.soldAsMosaic : soldAsMosaic;
+    const saSettings = purchasingSettings[sa.id] || {
+      purchaseType: isSaMosaic ? 'sheet' : 'piece',
+      pricePerSqFt: 0,
+      pricePerSheet: 0,
+      sqFtPerCarton: '',
+    };
+    const saChildren = activeSubAreas.filter((c) => c.linkedMaterialId === sa.id);
+    const parentReport = stats.subAreaReports.find((r) => r.subAreaId === sa.id)?.report || {
+      netArea: sa.width * sa.height,
+      fullTilesCount: 0,
+      cutTilesCount: 0,
+      totalTilesUsed: 0,
+    };
+
+    const groupAreas: AreaDef[] = [
+      {
+        id: sa.id,
+        name: sa.name || 'Accent Area',
+        isParent: true,
+        subArea: sa,
+        report: parentReport,
+      },
+      ...saChildren.map((ca) => ({
+        id: ca.id,
+        name: ca.name || 'Accent Area',
+        isParent: false,
+        subArea: ca,
+        report: stats.subAreaReports.find((r) => r.subAreaId === ca.id)?.report || {
+          netArea: ca.width * ca.height,
+          fullTilesCount: 0,
+          cutTilesCount: 0,
+          totalTilesUsed: 0,
+        },
+      })),
+    ];
+
+    processMaterialGroup({
+      id: sa.id,
+      materialName: sa.tileName || 'Accent Tile',
+      settings: saSettings,
+      isMosaic: !!isSaMosaic,
+      parentSubArea: sa,
+      areas: groupAreas,
+    });
   });
 
-  let rowY = estCardY + 21;
-  let grandTotal = 0;
+  // Draw rows
+  const availableRowHeight = estCardHeight - 34;
+  const totalRows = rows.length;
+  const rowSpacing = Math.min(8.0, Math.max(5.5, availableRowHeight / Math.max(totalRows, 1)));
+  const fontSize = rowSpacing < 6.8 ? 7 : 7.5;
+
+  let rowY = estCardY + 20;
 
   rows.forEach((row, index) => {
-    if (index % 2 === 0) {
+    const isSubtotal = row.type === 'subtotal';
+    const isSubItem = row.type === 'sub_area_item';
+
+    if (isSubtotal) {
+      pdf.setFillColor(241, 245, 249);
+      pdf.rect(estCardX + 4, rowY - (rowSpacing * 0.65), estCardWidth - 8, rowSpacing, 'F');
+      pdf.setDrawColor(203, 213, 225);
+      pdf.setLineWidth(0.2);
+      pdf.line(estCardX + 4, rowY - (rowSpacing * 0.65), estCardX + estCardWidth - 4, rowY - (rowSpacing * 0.65));
+      pdf.line(estCardX + 4, rowY + (rowSpacing * 0.35), estCardX + estCardWidth - 4, rowY + (rowSpacing * 0.35));
+    } else if (!isSubItem && index % 2 === 0) {
       pdf.setFillColor(248, 250, 252);
-      pdf.rect(estCardX + 4, rowY - 5, estCardWidth - 8, 7.5, 'F');
+      pdf.rect(estCardX + 4, rowY - (rowSpacing * 0.65), estCardWidth - 8, rowSpacing, 'F');
     }
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(7.5);
-    pdf.setTextColor(15, 23, 42);
-    pdf.text(row.areaName, estCardX + 6, rowY);
 
+    // Column 1: DESIGN AREA
+    if (isSubtotal) {
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(fontSize);
+      pdf.setTextColor(15, 23, 42);
+    } else if (isSubItem) {
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(fontSize);
+      pdf.setTextColor(51, 65, 85);
+    } else {
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(fontSize);
+      pdf.setTextColor(15, 23, 42);
+    }
+    const displayName = isSubItem ? `  • ${row.areaName}` : row.areaName;
+    const splitName = pdf.splitTextToSize(displayName, 36);
+    pdf.text(splitName[0], isSubItem ? estCardX + 7 : estCardX + 6, rowY);
+
+    // Column 2: MATERIAL
+    if (isSubtotal) {
+      pdf.setFont('helvetica', 'italic');
+      pdf.setFontSize(fontSize - 0.5);
+      pdf.setTextColor(100, 116, 139);
+    } else {
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(fontSize);
+      pdf.setTextColor(71, 85, 105);
+    }
+    const splitMat = pdf.splitTextToSize(row.materialType, 54);
+    pdf.text(splitMat[0], estCardX + 44, rowY);
+
+    // Column 3: USAGE / ORDER
+    if (isSubtotal || !isSubItem) {
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(fontSize);
+      pdf.setTextColor(79, 70, 229);
+    } else {
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(fontSize);
+      pdf.setTextColor(71, 85, 105);
+    }
+    const splitOrder = pdf.splitTextToSize(row.suggestedOrderText, 38);
+    pdf.text(splitOrder[0], estCardX + 102, rowY);
+
+    // Column 4: UNIT COST
     pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(51, 65, 85);
-    const wrappedMatType = pdf.splitTextToSize(row.materialType, 56);
-    pdf.text(wrappedMatType, estCardX + 44, rowY);
-
-    pdf.setFont('helvetica', 'bold');
-    pdf.setTextColor(79, 70, 229);
-    pdf.text(row.suggestedOrderText, estCardX + 104, rowY);
-
-    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(fontSize);
     pdf.setTextColor(100, 116, 139);
-    pdf.text(row.unitCostText, estCardX + 144, rowY);
+    pdf.text(row.unitCostText, estCardX + 142, rowY);
 
-    pdf.setFont('helvetica', 'bold');
-    pdf.setTextColor(15, 23, 42);
-    pdf.text(`$${row.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, estCardX + 174, rowY, { align: 'right' });
+    // Column 5: TOTAL EST.
+    if (isSubtotal || !isSubItem) {
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(fontSize);
+      pdf.setTextColor(15, 23, 42);
+    } else {
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(fontSize);
+      pdf.setTextColor(71, 85, 105);
+    }
+    pdf.text(
+      `$${row.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      estCardX + 174,
+      rowY,
+      { align: 'right' }
+    );
 
-    grandTotal += row.totalCost;
-    rowY += 8.2;
+    rowY += rowSpacing;
+  });
+
+  // Calculate Grand Total from standalone rows and subtotal rows (no double-counting)
+  let grandTotal = 0;
+  rows.forEach((row) => {
+    if (row.type === 'standalone' || row.type === 'subtotal') {
+      grandTotal += row.totalCost;
+    }
   });
 
   const totalY = estCardY + estCardHeight - 12;
@@ -908,7 +1150,7 @@ function drawPricingCard(
   pdf.line(estCardX + 4, totalY - 2, estCardX + estCardWidth - 4, totalY - 2);
 
   pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(10);
+  pdf.setFontSize(9.5);
   pdf.setTextColor(79, 70, 229);
   const grandTotalText = `Grand Total Estimated Material Cost: $${grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   pdf.text(grandTotalText, estCardX + estCardWidth - 6, totalY + 4, { align: 'right' });

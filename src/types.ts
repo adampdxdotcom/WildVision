@@ -229,6 +229,17 @@ export interface SubArea {
   textureRotationAngle?: number;
 }
 
+export interface PurchasingSetting {
+  purchaseType: 'carton' | 'sheet' | 'piece';
+  sqFtPerCarton: number | '';
+  pricePerSqFt: number;
+  pricePerSheet: number;
+  sheetInputMode?: 'dimensions' | 'sqft';
+  sheetWidth?: number | '';
+  sheetHeight?: number | '';
+  sqFtPerSheet?: number | '';
+}
+
 export interface SubAreaReport {
   subAreaId: string;
   name: string;

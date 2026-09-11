@@ -71,6 +71,7 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
     ceilingY, setCeilingY,
     generatedRenders, setGeneratedRenders,
     purchasingSettings, setPurchasingSettings,
+    reuseCuts, setReuseCuts,
     activeCustomPattern, setActiveCustomPattern,
     uploadedSvgText, setUploadedSvgText,
     patternAccentColor, setPatternAccentColor,
@@ -135,6 +136,7 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
       mosaicWidth,
       mosaicHeight,
       overage,
+      reuseCuts,
       hasNotes,
       notes,
       angleDisplayMode,
@@ -280,12 +282,19 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
         if (data.groutColor !== undefined) setGroutColor(data.groutColor);
         if (data.tileFinish !== undefined) setTileFinish(data.tileFinish);
         if (data.materialTexture !== undefined) useAppStore.getState().setMaterialTexture?.(data.materialTexture);
+        else useAppStore.getState().setMaterialTexture?.('none');
         if (data.disableColorWithTexture !== undefined) useAppStore.getState().setDisableColorWithTexture?.(Boolean(data.disableColorWithTexture));
+        else useAppStore.getState().setDisableColorWithTexture?.(false);
         if (data.textureOpacity !== undefined) useAppStore.getState().setTextureOpacity?.(Number(data.textureOpacity));
+        else useAppStore.getState().setTextureOpacity?.(0.8);
         if (data.textureScale !== undefined) useAppStore.getState().setTextureScale?.(Number(data.textureScale));
+        else useAppStore.getState().setTextureScale?.(1.0);
         if (data.textureScaleRandom !== undefined) useAppStore.getState().setTextureScaleRandom?.(Boolean(data.textureScaleRandom));
+        else useAppStore.getState().setTextureScaleRandom?.(false);
         if (data.textureRotationMode !== undefined) useAppStore.getState().setTextureRotationMode?.(data.textureRotationMode);
+        else useAppStore.getState().setTextureRotationMode?.('random');
         if (data.textureRotationAngle !== undefined) useAppStore.getState().setTextureRotationAngle?.(Number(data.textureRotationAngle));
+        else useAppStore.getState().setTextureRotationAngle?.(0);
         if (data.flatsketVerticalRows !== undefined) setFlatsketVerticalRows(Number(data.flatsketVerticalRows) || 1);
         if (data.flatsketHorizontalRows !== undefined) setFlatsketHorizontalRows(Number(data.flatsketHorizontalRows) || 3);
         if (data.basketWeaveMultiplier !== undefined) setBasketWeaveMultiplier(Number(data.basketWeaveMultiplier) || 2);
@@ -329,6 +338,7 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
         if (data.offsetY !== undefined) setOffsetY(!isNaN(Number(data.offsetY)) ? Number(data.offsetY) : 0);
         if (data.subAreas !== undefined) setSubAreas(data.subAreas);
         if (data.purchasingSettings !== undefined) setPurchasingSettings(data.purchasingSettings);
+        else setPurchasingSettings({});
         if (data.activeSubAreaId !== undefined) setActiveSubAreaId(data.activeSubAreaId);
         if (data.wallExtensions !== undefined) setWallExtensions(data.wallExtensions);
         if (data.activeWallExtensionId !== undefined) setActiveWallExtensionId(data.activeWallExtensionId);
@@ -375,6 +385,8 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
         if (data.mosaicWidth !== undefined) setMosaicWidth(clampSafe(data.mosaicWidth, 12));
         if (data.mosaicHeight !== undefined) setMosaicHeight(clampSafe(data.mosaicHeight, 12));
         if (data.overage !== undefined) setOverage(Number(data.overage) || 10);
+        if (data.reuseCuts !== undefined) setReuseCuts(Boolean(data.reuseCuts));
+        else setReuseCuts(false);
         if (data.hasNotes !== undefined) setHasNotes(Boolean(data.hasNotes));
         if (data.notes !== undefined) setNotes(String(data.notes || ''));
         if (data.angleDisplayMode !== undefined) setAngleDisplayMode(data.angleDisplayMode);
@@ -500,14 +512,16 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
           zoom: 1.0,
           tileColorOverrides: data.tileColorOverrides || {},
           activeBrushColorIndex: data.activeBrushColorIndex !== undefined ? data.activeBrushColorIndex : 1,
-          materialTexture: data.materialTexture !== undefined ? data.materialTexture : useAppStore.getState().materialTexture,
-          disableColorWithTexture: data.disableColorWithTexture !== undefined ? Boolean(data.disableColorWithTexture) : useAppStore.getState().disableColorWithTexture,
-          textureOpacity: data.textureOpacity !== undefined ? Number(data.textureOpacity) : useAppStore.getState().textureOpacity,
-          textureScale: data.textureScale !== undefined ? Number(data.textureScale) : useAppStore.getState().textureScale,
-          textureScaleRandom: data.textureScaleRandom !== undefined ? Boolean(data.textureScaleRandom) : useAppStore.getState().textureScaleRandom,
-          textureRotationMode: data.textureRotationMode !== undefined ? data.textureRotationMode : useAppStore.getState().textureRotationMode,
-          textureRotationAngle: data.textureRotationAngle !== undefined ? Number(data.textureRotationAngle) : useAppStore.getState().textureRotationAngle,
+          materialTexture: data.materialTexture !== undefined ? data.materialTexture : 'none',
+          disableColorWithTexture: data.disableColorWithTexture !== undefined ? Boolean(data.disableColorWithTexture) : false,
+          textureOpacity: data.textureOpacity !== undefined ? Number(data.textureOpacity) : 0.8,
+          textureScale: data.textureScale !== undefined ? Number(data.textureScale) : 1.0,
+          textureScaleRandom: data.textureScaleRandom !== undefined ? Boolean(data.textureScaleRandom) : false,
+          textureRotationMode: data.textureRotationMode !== undefined ? data.textureRotationMode : 'random',
+          textureRotationAngle: data.textureRotationAngle !== undefined ? Number(data.textureRotationAngle) : 0,
           tileSpecular: data.tileSpecular !== undefined ? Boolean(data.tileSpecular) : (resolvedViewSettings.render.enableReflection ?? false),
+          purchasingSettings: data.purchasingSettings || {},
+          reuseCuts: data.reuseCuts !== undefined ? Boolean(data.reuseCuts) : false,
           linkedSubfloorProjectId: data.linkedSubfloorProjectId,
           integrationData: data.integrationData,
         };
@@ -586,12 +600,19 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
     if (data.groutColor !== undefined) setGroutColor(data.groutColor);
     if (data.tileFinish !== undefined) setTileFinish(data.tileFinish);
     if (data.materialTexture !== undefined) useAppStore.getState().setMaterialTexture?.(data.materialTexture);
+    else useAppStore.getState().setMaterialTexture?.('none');
     if (data.disableColorWithTexture !== undefined) useAppStore.getState().setDisableColorWithTexture?.(Boolean(data.disableColorWithTexture));
+    else useAppStore.getState().setDisableColorWithTexture?.(false);
     if (data.textureOpacity !== undefined) useAppStore.getState().setTextureOpacity?.(Number(data.textureOpacity));
+    else useAppStore.getState().setTextureOpacity?.(0.8);
     if (data.textureScale !== undefined) useAppStore.getState().setTextureScale?.(Number(data.textureScale));
+    else useAppStore.getState().setTextureScale?.(1.0);
     if (data.textureScaleRandom !== undefined) useAppStore.getState().setTextureScaleRandom?.(Boolean(data.textureScaleRandom));
+    else useAppStore.getState().setTextureScaleRandom?.(false);
     if (data.textureRotationMode !== undefined) useAppStore.getState().setTextureRotationMode?.(data.textureRotationMode);
+    else useAppStore.getState().setTextureRotationMode?.('random');
     if (data.textureRotationAngle !== undefined) useAppStore.getState().setTextureRotationAngle?.(Number(data.textureRotationAngle));
+    else useAppStore.getState().setTextureRotationAngle?.(0);
     if (data.flatsketVerticalRows !== undefined) setFlatsketVerticalRows(Number(data.flatsketVerticalRows) || 1);
     if (data.flatsketHorizontalRows !== undefined) setFlatsketHorizontalRows(Number(data.flatsketHorizontalRows) || 3);
     if (data.basketWeaveMultiplier !== undefined) setBasketWeaveMultiplier(Number(data.basketWeaveMultiplier) || 2);
@@ -634,6 +655,8 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
     if (data.offsetX !== undefined) setOffsetX(!isNaN(Number(data.offsetX)) ? Number(data.offsetX) : 0);
     if (data.offsetY !== undefined) setOffsetY(!isNaN(Number(data.offsetY)) ? Number(data.offsetY) : 0);
     if (data.subAreas !== undefined) setSubAreas(data.subAreas);
+    if (data.purchasingSettings !== undefined) setPurchasingSettings(data.purchasingSettings);
+    else setPurchasingSettings({});
     if (data.activeSubAreaId !== undefined) setActiveSubAreaId(data.activeSubAreaId);
     if (data.wallExtensions !== undefined) setWallExtensions(data.wallExtensions);
     if (data.activeWallExtensionId !== undefined) setActiveWallExtensionId(data.activeWallExtensionId);
@@ -657,6 +680,8 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
     if (data.mosaicWidth !== undefined) setMosaicWidth(clampSafe(data.mosaicWidth, 12));
     if (data.mosaicHeight !== undefined) setMosaicHeight(clampSafe(data.mosaicHeight, 12));
     if (data.overage !== undefined) setOverage(Number(data.overage) || 10);
+    if (data.reuseCuts !== undefined) setReuseCuts(Boolean(data.reuseCuts));
+    else setReuseCuts(false);
     if (data.hasNotes !== undefined) setHasNotes(Boolean(data.hasNotes));
     if (data.notes !== undefined) setNotes(String(data.notes || ''));
     if (data.angleDisplayMode !== undefined) setAngleDisplayMode(data.angleDisplayMode);
@@ -769,14 +794,16 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
       zoom: 1.0,
       tileColorOverrides: {},
       activeBrushColorIndex: 1,
-      materialTexture: data.materialTexture !== undefined ? data.materialTexture : useAppStore.getState().materialTexture,
-      disableColorWithTexture: data.disableColorWithTexture !== undefined ? Boolean(data.disableColorWithTexture) : useAppStore.getState().disableColorWithTexture,
-      textureOpacity: data.textureOpacity !== undefined ? Number(data.textureOpacity) : useAppStore.getState().textureOpacity,
-      textureScale: data.textureScale !== undefined ? Number(data.textureScale) : useAppStore.getState().textureScale,
-      textureScaleRandom: data.textureScaleRandom !== undefined ? Boolean(data.textureScaleRandom) : useAppStore.getState().textureScaleRandom,
-      textureRotationMode: data.textureRotationMode !== undefined ? data.textureRotationMode : useAppStore.getState().textureRotationMode,
-      textureRotationAngle: data.textureRotationAngle !== undefined ? Number(data.textureRotationAngle) : useAppStore.getState().textureRotationAngle,
+      materialTexture: data.materialTexture !== undefined ? data.materialTexture : 'none',
+      disableColorWithTexture: data.disableColorWithTexture !== undefined ? Boolean(data.disableColorWithTexture) : false,
+      textureOpacity: data.textureOpacity !== undefined ? Number(data.textureOpacity) : 0.8,
+      textureScale: data.textureScale !== undefined ? Number(data.textureScale) : 1.0,
+      textureScaleRandom: data.textureScaleRandom !== undefined ? Boolean(data.textureScaleRandom) : false,
+      textureRotationMode: data.textureRotationMode !== undefined ? data.textureRotationMode : 'random',
+      textureRotationAngle: data.textureRotationAngle !== undefined ? Number(data.textureRotationAngle) : 0,
       tileSpecular: data.tileSpecular !== undefined ? Boolean(data.tileSpecular) : (resolvedViewSettings.render.enableReflection ?? false),
+      purchasingSettings: data.purchasingSettings || {},
+      reuseCuts: data.reuseCuts !== undefined ? Boolean(data.reuseCuts) : false,
       linkedSubfloorProjectId: null,
       integrationData: null,
     };
@@ -850,6 +877,7 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
     setMosaicWidth(12);
     setMosaicHeight(12);
     setOverage(10);
+    setReuseCuts(false);
 
     if (backgroundImage && backgroundImage.startsWith('blob:')) {
       URL.revokeObjectURL(backgroundImage);
@@ -867,6 +895,14 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
     setWallArchHeight(0);
     
     useAppStore.getState().setLiveCamera(null, null);
+    useAppStore.getState().setMaterialTexture?.('none');
+    useAppStore.getState().setDisableColorWithTexture?.(false);
+    useAppStore.getState().setTextureOpacity?.(0.8);
+    useAppStore.getState().setTextureScale?.(1.0);
+    useAppStore.getState().setTextureScaleRandom?.(false);
+    useAppStore.getState().setTextureRotationMode?.('random');
+    useAppStore.getState().setTextureRotationAngle?.(0);
+    setPurchasingSettings({});
     
     const centered = calculateCenteredOffsets(96, 24, 'rectangle', 6, 3, 0.125, 'running_50');
     setOffsetX(centered.x);
@@ -968,6 +1004,15 @@ export const useProjectIO = (resetHistory: (snapshot: any) => void) => {
       activeObjectId: 'main-tile-layout',
       linkedSubfloorProjectId: null,
       integrationData: null,
+      materialTexture: 'none',
+      disableColorWithTexture: false,
+      textureOpacity: 0.8,
+      textureScale: 1.0,
+      textureScaleRandom: false,
+      textureRotationMode: 'random' as const,
+      textureRotationAngle: 0,
+      purchasingSettings: {},
+      reuseCuts: false,
     };
 
     useAppStore.setState({

@@ -1,6 +1,7 @@
 import React from 'react';
 import { ComprehensiveReport, MeasurementUnit } from '../types';
 import { getPolygonArea, getTrueArea } from '../utils/geometry';
+import { computeAreaQuantities, computeProjectTotals } from '../utils/quantityEngine';
 import { HelpCircle, Lock } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { useAuthStore } from '../store/useAuthStore';
@@ -43,17 +44,38 @@ export const QuantitiesPanel: React.FC<QuantitiesPanelProps> = ({
   const setReuseCuts = useAppStore(state => state.setReuseCuts);
   const [activeTab, setActiveTab] = React.useState<string>('totals');
 
+  const isCutoutAccent = (sa?: any): boolean => {
+    if (!sa) return false;
+    return sa.isCutout === true || sa.accentType === 'cutout';
+  };
+
+  React.useEffect(() => {
+    if (activeTab !== 'totals' && activeTab !== 'main') {
+      const sa = subAreas.find((s) => s.id === activeTab);
+      if (!sa || isCutoutAccent(sa)) {
+        setActiveTab('totals');
+      }
+    }
+  }, [activeTab, subAreas]);
+
   const activeSa = activeTab === 'main' || activeTab === 'totals'
     ? null
-    : subAreas.find((sa) => sa.id === activeTab);
+    : subAreas.find((sa) => sa.id === activeTab && !isCutoutAccent(sa));
 
-  const activeChildCount = activeSa ? subAreas.filter(s => s.linkedMaterialId === activeSa.id).length : 0;
+  const mainChildCount = subAreas.filter(s => s.linkedMaterialId === 'main' && s.visible !== false && !isCutoutAccent(s)).length;
+  const activeChildCount = activeTab === 'main'
+    ? mainChildCount
+    : (activeSa ? subAreas.filter(s => s.linkedMaterialId === activeSa.id && s.visible !== false && !isCutoutAccent(s)).length : 0);
 
   const settings = purchasingSettings[activeTab] || {
     purchaseType: 'carton',
     sqFtPerCarton: '',
     pricePerSqFt: 0,
     pricePerSheet: 0,
+    sheetInputMode: 'dimensions',
+    sheetWidth: 12,
+    sheetHeight: 12,
+    sqFtPerSheet: '',
   };
 
   const mainSoldAsMosaic = useAppStore(state => state.soldAsMosaic);
@@ -62,14 +84,14 @@ export const QuantitiesPanel: React.FC<QuantitiesPanelProps> = ({
   const mainTileWidth = useAppStore(state => state.tileWidth);
   const mainTileHeight = useAppStore(state => state.tileHeight);
   
-  const isMosaic = activeTab === 'main' ? mainSoldAsMosaic : activeSa?.soldAsMosaic === true;
+  const isMosaic = settings.purchaseType === 'sheet' || (activeTab === 'main' ? mainSoldAsMosaic : activeSa?.soldAsMosaic === true);
 
   const getAggregatedReport = (tabId: string) => {
     let report = tabId === 'main'
       ? mainReport
       : (subAreaReports.find((r) => r.subAreaId === tabId)?.report || mainReport);
 
-    const childIds = subAreas.filter(s => s.linkedMaterialId === tabId).map(s => s.id);
+    const childIds = subAreas.filter(s => s.linkedMaterialId === tabId && !isCutoutAccent(s)).map(s => s.id);
     if (childIds.length > 0) {
       const childReports = childIds
         .map(id => subAreaReports.find(r => r.subAreaId === id)?.report)
@@ -136,7 +158,7 @@ export const QuantitiesPanel: React.FC<QuantitiesPanelProps> = ({
 
   let activeReport = activeTab === 'totals' ? mainReport : getAggregatedReport(activeTab);
 
-  const getAreaStats = (areaId) => {
+  const getAreaStats = (areaId: string) => {
     const report = getAggregatedReport(areaId);
     const sa = areaId === 'main' ? null : subAreas.find(s => s.id === areaId);
     
@@ -145,144 +167,95 @@ export const QuantitiesPanel: React.FC<QuantitiesPanelProps> = ({
       sqFtPerCarton: '',
       pricePerSqFt: 0,
       pricePerSheet: 0,
+      sheetInputMode: 'dimensions',
+      sheetWidth: 12,
+      sheetHeight: 12,
+      sqFtPerSheet: '',
     };
 
-    const isMos = areaId === 'main' ? mainSoldAsMosaic : sa?.soldAsMosaic === true;
-    const currArea = report.netArea || 0;
-    const overageMult = 1 + overage / 100;
+    return computeAreaQuantities({
+      areaId,
+      report,
+      settings: set,
+      overage,
+      reuseCuts,
+      unit,
+      mainSoldAsMosaic,
+      subArea: sa,
+      mainTileWidth,
+      mainTileHeight,
+      mainMosaicWidth,
+      mainMosaicHeight,
+      colorPattern: useAppStore.getState().colorPattern,
+      subAreas,
+    });
+  };
+
+  const getGroupAreaBreakdown = (areaId: string) => {
     const conversionFactor = unit === 'in' ? 144 : 929.0304;
+    const overageMult = 1 + overage / 100;
 
-    let sW = 12;
-    let sH = 12;
-    let sheetSqIn = 144;
+    let parentName = '';
+    let parentNetArea = 0;
 
-    if (isMos) {
-       sW = areaId === 'main' ? (mainMosaicWidth || 12) : (sa?.mosaicWidth || 12);
-       sH = areaId === 'main' ? (mainMosaicHeight || 12) : (sa?.mosaicHeight || 12);
-       sheetSqIn = sW * sH;
+    if (areaId === 'main') {
+      parentName = 'Main Wall Area';
+      parentNetArea = mainReport.netArea || 0;
     } else {
-       sW = areaId === 'main' ? (mainTileWidth || 6) : (sa?.tileWidth || 6);
-       sH = areaId === 'main' ? (mainTileHeight || 6) : (sa?.tileHeight || 6);
-       sheetSqIn = sW * sH;
+      const sa = subAreas.find(s => s.id === areaId);
+      parentName = sa?.name || 'Accent Profile';
+      const saRep = subAreaReports.find(r => r.subAreaId === areaId)?.report;
+      parentNetArea = saRep?.netArea || 0;
     }
 
-    const sheetSqFt = sheetSqIn / conversionFactor;
-    const surfaceAreaSqFt = currArea / conversionFactor;
+    const parentNetSqFt = parentNetArea / conversionFactor;
 
-    let fullCount = 0;
-    let cutCount = 0;
-    let totalRawCount = 0;
-    let effectiveAreaSqFt = surfaceAreaSqFt;
-    let recQty = 0;
-    let qUnit = 'Tiles';
+    // Find all active children linked to this area
+    const linkedChildren = subAreas.filter(
+      s => s.linkedMaterialId === areaId && s.visible !== false && !isCutoutAccent(s)
+    );
 
-    if (isMos) {
-      // Mosaic Sheet Math based on Square Feet:
-      // sheetSqFt = (mosaicWidth * mosaicHeight) / conversionFactor
-      // fullCount (Perfect Sheets Used) = Math.floor(surfaceAreaSqFt / sheetSqFt)
-      // cutCount (Cut Sheets Needed) = remainder > 0 ? Math.ceil(remainder / sheetSqFt) : 0
-      // totalRawCount (Total Raw Sheets) = Math.ceil(surfaceAreaSqFt / sheetSqFt)
-      fullCount = Math.floor(surfaceAreaSqFt / (sheetSqFt || 1));
-      const remainingSqFt = Math.max(0, surfaceAreaSqFt - (fullCount * sheetSqFt));
-      cutCount = remainingSqFt > 0.0001 ? Math.ceil(remainingSqFt / (sheetSqFt || 1)) : 0;
-      totalRawCount = Math.ceil(surfaceAreaSqFt / (sheetSqFt || 1));
+    const childItems = linkedChildren.map(c => {
+      const cRep = subAreaReports.find(r => r.subAreaId === c.id)?.report;
+      const cNetArea = cRep?.netArea || 0;
+      const cNetSqFt = cNetArea / conversionFactor;
+      return {
+        id: c.id,
+        name: c.name || 'Child Accent',
+        isParent: false,
+        netAreaSqFt: cNetSqFt,
+        percentage: 0,
+      };
+    });
 
-      const recommendedSheets = Math.ceil((surfaceAreaSqFt * overageMult) / (sheetSqFt || 1));
-      recQty = recommendedSheets;
-      qUnit = 'Sheets';
-      effectiveAreaSqFt = recommendedSheets * sheetSqFt;
-    } else {
-      // Standard Tile Math
-      fullCount = report.fullTilesCount || 0;
-      cutCount = Math.ceil(reuseCuts ? (report.fractionalCutCount || 0) : (report.strictCutCount || report.cutTilesCount || 0));
-      const totalRawTiles = fullCount + cutCount;
-      totalRawCount = totalRawTiles;
+    const totalNetSqFt = parentNetSqFt + childItems.reduce((sum, item) => sum + item.netAreaSqFt, 0);
+    const totalWithWasteSqFt = totalNetSqFt * overageMult;
 
-      const physicalAreaSqIn = totalRawTiles * sheetSqIn; 
-      const physicalAreaSqFt = physicalAreaSqIn / conversionFactor;
-      
-      effectiveAreaSqFt = physicalAreaSqFt;
+    const parentItem = {
+      id: areaId,
+      name: parentName,
+      isParent: true,
+      netAreaSqFt: parentNetSqFt,
+      percentage: totalNetSqFt > 0 ? (parentNetSqFt / totalNetSqFt) * 100 : 100,
+    };
 
-      if (set.purchaseType === 'sheet') {
-        const recAreaSqIn = physicalAreaSqIn * overageMult;
-        recQty = sheetSqIn > 0 ? Math.ceil(recAreaSqIn / sheetSqIn) : 0;
-        qUnit = 'Sheets';
-      } else {
-        recQty = Math.ceil(totalRawTiles * overageMult);
-        qUnit = 'Pieces';
-      }
-    }
-
-    const isPaintPat = areaId === 'main' && useAppStore.getState().colorPattern === 'paint' && !!report.colorGroups;
-
-    const totColorCost = isPaintPat && report.colorGroups
-      ? report.colorGroups.reduce((sum, g) => {
-          const groupAreaSqFt = g.netArea / conversionFactor;
-          const groupAreaWithOverage = groupAreaSqFt * overageMult;
-
-          if (set.purchaseType === 'carton') {
-            const cartons = set.sqFtPerCarton ? Math.ceil(groupAreaWithOverage / Number(set.sqFtPerCarton)) : 0;
-            return sum + (cartons * Number(set.sqFtPerCarton) * set.pricePerSqFt);
-          } else if (set.purchaseType === 'piece') {
-            const pieces = Math.ceil(g.count * overageMult);
-            return sum + (pieces * set.pricePerSheet);
-          } else {
-            const sheets = sheetSqFt > 0 ? Math.ceil(groupAreaWithOverage / sheetSqFt) : 0;
-            return sum + (sheets * set.pricePerSheet);
-          }
-        }, 0)
-      : 0;
-
-    const normCost = set.purchaseType === 'carton'
-      ? (set.sqFtPerCarton ? Math.ceil((effectiveAreaSqFt * overageMult) / Number(set.sqFtPerCarton)) * Number(set.sqFtPerCarton) * set.pricePerSqFt : 0)
-      : recQty * set.pricePerSheet;
-
-    const fCost = isPaintPat ? totColorCost : normCost;
-
-    let ordStr = '';
-    if (isPaintPat) {
-      ordStr = 'Multi-color Order';
-    } else {
-      if (set.purchaseType === 'carton') {
-        const cartons = set.sqFtPerCarton ? Math.ceil((effectiveAreaSqFt * overageMult) / Number(set.sqFtPerCarton)) : 0;
-        ordStr = `${cartons} Cartons`;
-      } else {
-        ordStr = `${recQty} ${qUnit}`;
-      }
-    }
-    
-    const childCount = sa ? subAreas.filter(s => s.linkedMaterialId === sa.id).length : 0;
-    const name = areaId === 'main' ? 'Main Wall Area' : (sa?.name || 'Accent Area');
+    childItems.forEach(item => {
+      item.percentage = totalNetSqFt > 0 ? (item.netAreaSqFt / totalNetSqFt) * 100 : 0;
+    });
 
     return {
-      id: areaId,
-      report,
-      set,
-      isMos,
-      currArea,
-      surfaceAreaSqFt,
-      effectiveAreaSqFt,
-      overageMult,
-      sW,
-      sH,
-      sheetSqIn,
-      sheetSqFt,
-      fullCount,
-      cutCount,
-      totalRawCount,
-      recQty,
-      qUnit,
-      isPaintPat,
-      totColorCost,
-      normCost,
-      fCost,
-      ordStr,
-      name,
-      childCount
+      parentName,
+      items: [parentItem, ...childItems],
+      parentNetSqFt,
+      childItems,
+      totalNetSqFt,
+      totalWithWasteSqFt,
+      hasChildren: childItems.length > 0,
     };
   };
 
   const activeStats = activeTab === 'totals' ? null : getAreaStats(activeTab);
+  const activeGroupBreakdown = activeTab === 'totals' ? null : getGroupAreaBreakdown(activeTab);
   const currentArea = activeStats ? activeStats.currArea : 0;
   const currentEffectiveAreaSqFt = activeStats ? activeStats.effectiveAreaSqFt : 0;
   const areaLabel = unit === 'in' ? 'sq in' : 'sq cm';
@@ -290,14 +263,18 @@ export const QuantitiesPanel: React.FC<QuantitiesPanelProps> = ({
   const sheetAreaSqIn = activeStats ? activeStats.sheetSqIn : 144;
   const recommendedQty = activeStats ? activeStats.recQty : 0;
   const qtyUnit = activeStats ? activeStats.qUnit : 'Pieces';
-  const overflowToGrid = subAreaReports.length > 3;
+  
+  const validSubAreaReports = subAreaReports.filter(report =>
+    subAreas.some(sa => sa.id === report.subAreaId && !sa.linkedMaterialId && !isCutoutAccent(sa))
+  );
+  const overflowToGrid = validSubAreaReports.length > 3;
   const isPaintPattern = activeStats ? activeStats.isPaintPat : false;
   const totalColorGroupCost = activeStats ? activeStats.totColorCost : 0;
   const normalCost = activeStats ? activeStats.normCost : 0;
   
   const allAreas = [];
   if (!isBlankCanvasMode) allAreas.push('main');
-  subAreaReports.filter(report => subAreas.some(sa => sa.id === report.subAreaId && !sa.linkedMaterialId)).forEach(r => allAreas.push(r.subAreaId));
+  validSubAreaReports.forEach(r => allAreas.push(r.subAreaId));
   const totalsCards = allAreas.map(getAreaStats);
   const totalCostCombined = totalsCards.reduce((sum, c) => sum + (c.fCost || 0), 0);
   
@@ -419,21 +396,28 @@ export const QuantitiesPanel: React.FC<QuantitiesPanelProps> = ({
                     : 'bg-slate-50 border-slate-100 hover:bg-slate-100/70 text-slate-600'
                 }`}
               >
-                <span>Main Wall Area</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded ${activeTab === 'main' ? 'bg-indigo-100 text-indigo-800 font-bold' : 'bg-slate-200/60 text-slate-500'}`}>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="truncate">Main Wall Area</span>
+                  {mainChildCount > 0 && (
+                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded font-mono shrink-0">
+                      +{mainChildCount}
+                    </span>
+                  )}
+                </div>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${activeTab === 'main' ? 'bg-indigo-100 text-indigo-800 font-bold' : 'bg-slate-200/60 text-slate-500'}`}>
                   Base
                 </span>
               </button>
             )}
 
             {/* Grid or Flex wrap depending on count of sub-area reports */}
-            {subAreaReports.length > 0 && (
+            {validSubAreaReports.length > 0 && (
               <div className={overflowToGrid ? "grid grid-cols-2 gap-1.5" : "flex flex-wrap gap-1.5"}>
-                {subAreaReports.filter(report => subAreas.some(sa => sa.id === report.subAreaId && !sa.linkedMaterialId)).map((saReport) => {
+                {validSubAreaReports.map((saReport) => {
                   const isSelected = activeTab === saReport.subAreaId;
                   const sa = subAreas.find((s) => s.id === saReport.subAreaId);
                   const isSaMosaic = sa?.soldAsMosaic === true;
-                  const childCount = subAreas.filter(s => s.linkedMaterialId === sa?.id).length;
+                  const childCount = subAreas.filter(s => s.linkedMaterialId === sa?.id && s.visible !== false && !isCutoutAccent(s)).length;
                   return (
                     <button
                       key={saReport.subAreaId}
@@ -460,22 +444,65 @@ export const QuantitiesPanel: React.FC<QuantitiesPanelProps> = ({
       
       {activeTab === 'totals' ? (
         <div className="space-y-3 relative mt-2 text-xs">
-          {totalsCards.map((c) => (
-             <div key={c.id} className="p-3 bg-white border border-slate-150 rounded-lg shadow-sm hover:border-indigo-200 transition-colors cursor-pointer" onClick={() => setActiveTab(c.id)}>
-               <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-100">
-                 <span className="font-bold text-slate-700 text-sm">{c.name} {c.childCount > 0 ? ` (+${c.childCount})` : ''}</span>
-                 <span className="font-mono text-indigo-700 font-bold">${(c.fCost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          {totalsCards.map((c) => {
+             const b = getGroupAreaBreakdown(c.id);
+             return (
+               <div
+                 key={c.id}
+                 className="p-3 bg-white border border-slate-200 rounded-lg shadow-xs hover:border-indigo-200 transition-colors cursor-pointer"
+                 onClick={() => setActiveTab(c.id)}
+               >
+                 <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-100">
+                   <div className="flex items-center gap-1.5 min-w-0">
+                     <span className="font-bold text-slate-700 text-sm truncate">{c.name}</span>
+                     {c.childCount > 0 && (
+                       <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded font-mono shrink-0">
+                         +{c.childCount} linked
+                       </span>
+                     )}
+                   </div>
+                   <span className="font-mono text-indigo-700 font-bold shrink-0">
+                     ${(c.fCost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                   </span>
+                 </div>
+
+                 {b.hasChildren ? (
+                   <div className="space-y-1.5 mb-2.5 bg-slate-50/80 p-2.5 rounded border border-slate-150 text-[11px]">
+                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono flex justify-between pb-1 border-b border-slate-200/60">
+                       <span>Group Area Breakdown</span>
+                       <span>Net Area</span>
+                     </div>
+                     {b.items.map((item) => (
+                       <div key={item.id} className="flex justify-between items-center text-slate-600">
+                         <span className={`truncate max-w-[170px] ${item.isParent ? 'font-semibold text-slate-800' : 'pl-2 text-slate-600'}`}>
+                           {item.isParent ? `${item.name} (Parent)` : `↳ ${item.name}`}
+                         </span>
+                         <span className="font-mono font-medium text-slate-700">
+                           {item.netAreaSqFt.toFixed(2)} sq ft
+                         </span>
+                       </div>
+                     ))}
+                     <div className="flex justify-between items-center pt-1.5 border-t border-slate-200/60 font-bold text-slate-800">
+                       <span>Combined Net Total</span>
+                       <span className="font-mono text-indigo-700">{b.totalNetSqFt.toFixed(2)} sq ft</span>
+                     </div>
+                   </div>
+                 ) : (
+                   <div className="flex justify-between items-center">
+                     <span className="text-slate-500 font-medium">Area</span>
+                     <span className="font-bold text-slate-800">{((c.effectiveAreaSqFt || 0)).toFixed(2)} sq ft</span>
+                   </div>
+                 )}
+
+                 <div className="flex justify-between items-center mt-1 pt-1 border-t border-slate-100">
+                   <span className="text-slate-500 font-medium">
+                     {b.hasChildren ? 'Suggested Order (Total)' : 'Suggested Order'}
+                   </span>
+                   <span className="font-bold text-slate-800 font-mono">{c.ordStr}</span>
+                 </div>
                </div>
-               <div className="flex justify-between items-center">
-                 <span className="text-slate-500 font-medium">Area</span>
-                 <span className="font-bold text-slate-800">{((c.effectiveAreaSqFt || 0)).toFixed(2)} sq ft</span>
-               </div>
-               <div className="flex justify-between items-center mt-1">
-                 <span className="text-slate-500 font-medium">Suggested Order</span>
-                 <span className="font-bold text-slate-800">{c.ordStr}</span>
-               </div>
-             </div>
-          ))}
+             );
+          })}
           {totalsCards.length === 0 && (
             <div className="text-center text-slate-400 py-6 font-medium text-[11px]">
                No areas available.
@@ -512,6 +539,65 @@ export const QuantitiesPanel: React.FC<QuantitiesPanelProps> = ({
       ) : (
       <>
       <div className="relative mt-2">
+        {/* Surface Area Breakdown for Parent + Children */}
+        {activeGroupBreakdown && activeGroupBreakdown.hasChildren && (
+          <div className="mb-4 bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2.5">
+            <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">
+                  Surface Area Breakdown
+                </span>
+                <span className="text-[9px] bg-indigo-100 text-indigo-700 font-bold px-1.5 py-0.5 rounded font-mono">
+                  Parent + {activeGroupBreakdown.items.length - 1} Linked {activeGroupBreakdown.items.length - 1 === 1 ? 'Child' : 'Children'}
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-400 font-mono">
+                Shared Material
+              </span>
+            </div>
+
+            <div className="divide-y divide-slate-200/70 text-xs">
+              {activeGroupBreakdown.items.map((item) => (
+                <div key={item.id} className="py-1.5 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {item.isParent ? (
+                      <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded shrink-0 font-mono">
+                        Parent
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-indigo-600 pl-2 shrink-0">
+                        ↳
+                      </span>
+                    )}
+                    <span className={`truncate ${item.isParent ? 'font-bold text-slate-900' : 'font-medium text-slate-600'}`}>
+                      {item.name}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2.5 shrink-0 font-mono text-[11px]">
+                    <span className="font-bold text-slate-800">
+                      {item.netAreaSqFt.toFixed(2)} sq ft
+                    </span>
+                    <span className="text-slate-400 text-[10px] w-9 text-right">
+                      {item.percentage.toFixed(0)}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-2 border-t border-slate-200 space-y-1 text-xs font-mono">
+              <div className="flex justify-between items-center text-slate-600">
+                <span className="font-semibold">Combined Net Surface Area</span>
+                <span className="font-bold text-slate-800">{activeGroupBreakdown.totalNetSqFt.toFixed(2)} sq ft</span>
+              </div>
+              <div className="flex justify-between items-center bg-indigo-50/70 px-2 py-1 rounded text-indigo-900">
+                <span className="font-bold">Total with +{overage}% Waste</span>
+                <span className="font-black text-indigo-700">{activeGroupBreakdown.totalWithWasteSqFt.toFixed(2)} sq ft</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-x-3 text-xs mb-4">
           {/* Column 1: Labels (Crisp and Unblurred) */}
           <div className="space-y-3.5 text-left">
@@ -543,14 +629,18 @@ export const QuantitiesPanel: React.FC<QuantitiesPanelProps> = ({
             ) : (
               <div className="h-6 flex items-center pt-2 border-t border-slate-100">
                 <span className="font-bold text-slate-700">
-                  {isMosaic ? 'Total Raw Sheets Equivalent' : 'Total Raw Tiles'}
+                  {isMosaic ? 'Total Raw Sheets' : 'Total Raw Tiles'}
                 </span>
               </div>
             )}
 
             {isMosaic && activeStats && (
               <div className="h-6 flex items-center pt-1 text-[11px] font-mono text-indigo-700 font-semibold">
-                <span>Sheet Size ({activeStats.sW}" × {activeStats.sH}")</span>
+                <span>
+                  {activeStats.sheetInputMode === 'sqft'
+                    ? `Sheet Coverage (${activeStats.sheetSqFt.toFixed(3)} sq ft)`
+                    : `Sheet Size (${activeStats.sW}" × ${activeStats.sH}")`}
+                </span>
               </div>
             )}
 
@@ -585,7 +675,7 @@ export const QuantitiesPanel: React.FC<QuantitiesPanelProps> = ({
               </>
             ) : (
               <div className="h-6 flex items-center justify-end pt-2 border-t border-slate-100">
-                <span className="font-bold text-slate-900">{(activeReport.fullTilesCount || 0) + Math.ceil(reuseCuts ? (activeReport.fractionalCutCount || 0) : (activeReport.strictCutCount || activeReport.cutTilesCount || 0))}</span>
+                <span className="font-bold text-slate-900">{activeStats ? activeStats.totalRawCount : ((activeReport.fullTilesCount || 0) + Math.ceil(reuseCuts ? (activeReport.fractionalCutCount || 0) : (activeReport.strictCutCount || activeReport.cutTilesCount || 0)))}</span>
               </div>
             )}
 
@@ -597,7 +687,7 @@ export const QuantitiesPanel: React.FC<QuantitiesPanelProps> = ({
 
             <div className="flex flex-col items-end justify-center pt-2 border-t border-slate-100 bg-indigo-50/40 p-2 rounded-lg px-2 mt-2">
               <span className="font-bold text-xl text-indigo-700">
-                {((currentEffectiveAreaSqFt) * overageMultiplier).toFixed(2)} <span className="text-[12px] font-semibold">sq ft</span>
+                {(activeStats ? activeStats.recommendedSqFt : (currentEffectiveAreaSqFt * overageMultiplier)).toFixed(2)} <span className="text-[12px] font-semibold">sq ft</span>
               </span>
               <span className="text-[11px] font-medium text-slate-400 mt-0.5">
                 {recommendedQty} {qtyUnit}
@@ -650,7 +740,7 @@ export const QuantitiesPanel: React.FC<QuantitiesPanelProps> = ({
       </div>
 
             {/* Tile Count Method Toggle */}
-      {activeTab !== 'totals' && (
+      {activeTab !== 'totals' && !isMosaic && (
          <div className="mt-5 mb-1 px-1">
             <label className="flex items-center justify-between cursor-pointer">
               <span className="text-[11px] font-bold text-slate-700 tracking-wide font-mono">
@@ -735,43 +825,141 @@ export const QuantitiesPanel: React.FC<QuantitiesPanelProps> = ({
         </div>
 
         {/* Form Inputs */}
-        <div className="grid grid-cols-2 gap-3">
-          {settings.purchaseType === 'carton' ? (
-            <>
-              <div className="space-y-1">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">
-                  Sq Ft Per Carton
-                </label>
+        {settings.purchaseType === 'carton' ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">
+                Sq Ft Per Carton
+              </label>
+              <input
+                type="number"
+                min="0.1"
+                step="any"
+                value={settings.sqFtPerCarton || ''}
+                onChange={(e) => updatePurchasingSetting(activeTab, { sqFtPerCarton: e.target.value === '' ? '' : Math.max(0.1, parseFloat(e.target.value) || 0) })}
+                className="w-full bg-slate-50 text-slate-800 text-xs border border-slate-250 rounded-lg px-2.5 py-2 outline-none focus:border-indigo-500 focus:bg-white transition font-medium"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">
+                Price Per Sq Ft
+              </label>
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono font-bold">$</span>
                 <input
                   type="number"
-                  min="0.1"
+                  min="0"
                   step="any"
-                  value={settings.sqFtPerCarton || ''}
-                  onChange={(e) => updatePurchasingSetting(activeTab, { sqFtPerCarton: e.target.value === '' ? '' : Math.max(0.1, parseFloat(e.target.value) || 0) })}
-                  className="w-full bg-slate-50 text-slate-800 text-xs border border-slate-250 rounded-lg px-2.5 py-2 outline-none focus:border-indigo-500 focus:bg-white transition font-medium"
+                  value={settings.pricePerSqFt || ''}
+                  onChange={(e) => updatePurchasingSetting(activeTab, { pricePerSqFt: Math.max(0, parseFloat(e.target.value) || 0) })}
+                  className="w-full bg-slate-50 text-slate-800 text-xs border border-slate-250 rounded-lg pl-6 pr-2.5 py-2 outline-none focus:border-indigo-500 focus:bg-white transition font-mono font-medium"
                 />
               </div>
-              <div className="space-y-1">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">
-                  Price Per Sq Ft
+            </div>
+          </div>
+        ) : settings.purchaseType === 'sheet' ? (
+          <div className="p-3 bg-indigo-50/40 border border-indigo-150 rounded-xl space-y-3">
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider font-mono">
+                  Sheet Sizing & Coverage
                 </label>
-                <div className="relative">
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono font-bold">$</span>
+                <span className="text-[10px] font-mono text-indigo-700 font-bold bg-white px-2 py-0.5 rounded border border-indigo-100 shadow-2xs">
+                  {activeStats?.sheetSqFt ? `${activeStats.sheetSqFt.toFixed(3)} sq ft / sheet` : ''}
+                </span>
+              </div>
+              
+              {/* Toggle between Dimensions vs Direct Sq Ft */}
+              <div className="grid grid-cols-2 gap-1.5 p-1 bg-white border border-indigo-200/70 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => updatePurchasingSetting(activeTab, { sheetInputMode: 'dimensions' })}
+                  className={`py-1.5 text-center text-[10.5px] font-bold rounded-md transition-all cursor-pointer ${
+                    (settings.sheetInputMode || 'dimensions') === 'dimensions'
+                      ? 'bg-indigo-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-800'
+                  }`}
+                >
+                  Dimensions (W × H)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updatePurchasingSetting(activeTab, { sheetInputMode: 'sqft' })}
+                  className={`py-1.5 text-center text-[10.5px] font-bold rounded-md transition-all cursor-pointer ${
+                    settings.sheetInputMode === 'sqft'
+                      ? 'bg-indigo-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-800'
+                  }`}
+                >
+                  Direct Sq Ft / Sheet
+                </button>
+              </div>
+            </div>
+
+            {(settings.sheetInputMode || 'dimensions') === 'dimensions' ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-[9.5px] font-bold text-slate-500 uppercase tracking-wider font-mono">
+                    Sheet Width ({unit})
+                  </label>
                   <input
                     type="number"
-                    min="0"
-                    step="any"
-                    value={settings.pricePerSqFt || ''}
-                    onChange={(e) => updatePurchasingSetting(activeTab, { pricePerSqFt: Math.max(0, parseFloat(e.target.value) || 0) })}
-                    className="w-full bg-slate-50 text-slate-800 text-xs border border-slate-250 rounded-lg pl-6 pr-2.5 py-2 outline-none focus:border-indigo-500 focus:bg-white transition font-mono font-medium"
+                    min="1"
+                    max="100"
+                    step="0.1"
+                    value={settings.sheetWidth !== undefined && settings.sheetWidth !== '' ? settings.sheetWidth : (activeStats?.sW || 12)}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? '' : Math.max(0.1, parseFloat(e.target.value) || 0);
+                      updatePurchasingSetting(activeTab, { sheetWidth: val });
+                    }}
+                    className="w-full bg-white text-slate-800 text-xs border border-indigo-200/70 rounded-lg px-2.5 py-2 outline-none focus:border-indigo-500 transition font-mono font-medium"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[9.5px] font-bold text-slate-500 uppercase tracking-wider font-mono">
+                    Sheet Height ({unit})
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    step="0.1"
+                    value={settings.sheetHeight !== undefined && settings.sheetHeight !== '' ? settings.sheetHeight : (activeStats?.sH || 12)}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? '' : Math.max(0.1, parseFloat(e.target.value) || 0);
+                      updatePurchasingSetting(activeTab, { sheetHeight: val });
+                    }}
+                    className="w-full bg-white text-slate-800 text-xs border border-indigo-200/70 rounded-lg px-2.5 py-2 outline-none focus:border-indigo-500 transition font-mono font-medium"
                   />
                 </div>
               </div>
-            </>
-          ) : (
-            <div className="col-span-2 space-y-1">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">
-                {settings.purchaseType === 'piece' ? 'Price Per Piece' : 'Price Per Sheet'}
+            ) : (
+              <div className="space-y-1">
+                <label className="block text-[9.5px] font-bold text-slate-500 uppercase tracking-wider font-mono">
+                  Coverage per Sheet (Sq Ft)
+                </label>
+                <input
+                  type="number"
+                  min="0.01"
+                  max="100"
+                  step="0.001"
+                  placeholder="e.g. 0.95"
+                  value={settings.sqFtPerSheet !== undefined && settings.sqFtPerSheet !== '' ? settings.sqFtPerSheet : (activeStats?.sheetSqFt?.toFixed(3) || '1.000')}
+                  onChange={(e) => {
+                    const val = e.target.value === '' ? '' : Math.max(0.01, parseFloat(e.target.value) || 0);
+                    updatePurchasingSetting(activeTab, { sqFtPerSheet: val });
+                  }}
+                  className="w-full bg-white text-slate-800 text-xs border border-indigo-200/70 rounded-lg px-2.5 py-2 outline-none focus:border-indigo-500 transition font-mono font-medium"
+                />
+                <p className="text-[10px] text-slate-500 leading-tight pt-0.5">
+                  Enter nominal sq ft if product is non-rectangular, interlocking, or specialty mosaic.
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-1 pt-1.5 border-t border-indigo-100">
+              <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider font-mono">
+                Price Per Sheet
               </label>
               <div className="relative">
                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono font-bold">$</span>
@@ -781,12 +969,29 @@ export const QuantitiesPanel: React.FC<QuantitiesPanelProps> = ({
                   step="any"
                   value={settings.pricePerSheet || ''}
                   onChange={(e) => updatePurchasingSetting(activeTab, { pricePerSheet: Math.max(0, parseFloat(e.target.value) || 0) })}
-                  className="w-full bg-slate-50 text-slate-800 text-xs border border-slate-250 rounded-lg pl-6 pr-2.5 py-2 outline-none focus:border-indigo-500 focus:bg-white transition font-mono font-medium"
+                  className="w-full bg-white text-slate-800 text-xs border border-indigo-200/70 rounded-lg pl-6 pr-2.5 py-2 outline-none focus:border-indigo-500 transition font-mono font-medium"
                 />
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="col-span-2 space-y-1">
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">
+              Price Per Piece
+            </label>
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono font-bold">$</span>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={settings.pricePerSheet || ''}
+                onChange={(e) => updatePurchasingSetting(activeTab, { pricePerSheet: Math.max(0, parseFloat(e.target.value) || 0) })}
+                className="w-full bg-slate-50 text-slate-800 text-xs border border-slate-250 rounded-lg pl-6 pr-2.5 py-2 outline-none focus:border-indigo-500 focus:bg-white transition font-mono font-medium"
+              />
+            </div>
+          </div>
+        )}
 
         {/* Real-time Ordering & Cost Calculations */}
         <div className={`mt-3 p-3 bg-indigo-50/40 border border-indigo-100/50 rounded-xl space-y-1.5 text-xs transition-all duration-300 ${!user ? 'blur-md select-none pointer-events-none opacity-40' : ''}`}>
@@ -833,7 +1038,16 @@ export const QuantitiesPanel: React.FC<QuantitiesPanelProps> = ({
           ) : (
             <>
               <div className="flex justify-between items-center">
-                <span className="font-semibold text-slate-500 font-mono text-[11px] uppercase tracking-wider">Suggested Order</span>
+                <div>
+                  <span className="font-semibold text-slate-500 font-mono text-[11px] uppercase tracking-wider block">
+                    Suggested Order
+                  </span>
+                  {activeGroupBreakdown && activeGroupBreakdown.hasChildren && (
+                    <span className="text-[10px] text-indigo-600 font-medium block">
+                      Calculated on combined total ({activeGroupBreakdown.totalWithWasteSqFt.toFixed(2)} sq ft)
+                    </span>
+                  )}
+                </div>
                 <span className="font-mono font-black text-slate-800 text-sm">
                   {activeStats?.ordStr || `${recommendedQty} ${qtyUnit}`}
                 </span>

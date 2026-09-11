@@ -13,10 +13,6 @@ export const AccentFurnitureSubPanel: React.FC<AccentFurnitureSubPanelProps> = (
   unit,
   resolvedType,
 }) => {
-  if (resolvedType === 'cutout') {
-    return null;
-  }
-
   let currentDepth = activeSa.depth;
 
   if (currentDepth === undefined) {
@@ -47,8 +43,8 @@ export const AccentFurnitureSubPanel: React.FC<AccentFurnitureSubPanelProps> = (
         </div>
       )}
 
-      {/* 3. Inner Sill / Frame Controls (Niche recessed only) */}
-      {resolvedType === 'niche' && (
+      {/* 3. Inner Sill / Frame Controls (Niche recessed and Cutout openings) */}
+      {(resolvedType === 'niche' || resolvedType === 'cutout') && (
         <div className="p-3 bg-amber-100/25 border border-amber-200/50 rounded-lg space-y-3">
           <label className="flex items-center gap-2 font-bold text-xs text-amber-955 cursor-pointer select-none">
             <input
@@ -60,7 +56,7 @@ export const AccentFurnitureSubPanel: React.FC<AccentFurnitureSubPanelProps> = (
                   hasSill: checked,
                   ...(checked ? {
                     sillDepth: activeSa.sillDepth ?? 4,
-                    sillTileName: activeSa.sillTileName ?? 'Bullnose Sill Tile',
+                    sillTileName: activeSa.sillTileName ?? (resolvedType === 'cutout' ? 'Cutout Sill / Frame' : 'Bullnose Sill Tile'),
                     sillTileShape: activeSa.sillTileShape ?? 'Rectangle',
                     sillTileWidth: activeSa.sillTileWidth ?? (unit === 'in' ? 2 : 5),
                     sillTileHeight: activeSa.sillTileHeight ?? (unit === 'in' ? 6 : 15),
@@ -202,28 +198,30 @@ export const AccentFurnitureSubPanel: React.FC<AccentFurnitureSubPanelProps> = (
         </div>
       )}
 
-      {/* 4. Organic Edges Toggle (Flat, Shelf, Niche, Bench only) */}
-      <div className="pt-3 border-t border-amber-100/50 space-y-2">
-        <label className="flex items-start gap-2 cursor-pointer group">
-          <div className="relative flex items-center pt-0.5">
-            <input
-              type="checkbox"
-              checked={activeSa.organicEdges || false}
-              onChange={(e) => updateActiveSubArea({ organicEdges: e.target.checked })}
-              className="peer sr-only"
-            />
-            <div className="w-8 h-4.5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-amber-600"></div>
-          </div>
-          <div>
-            <span className="font-bold text-xs text-slate-800 group-hover:text-slate-900 transition-colors select-none block leading-tight">
-              Organic Edges
-            </span>
-            <span className="text-[10px] text-slate-500 font-medium block leading-snug mt-0.5">
-              Render full tiles inside the bounds instead of clipping
-            </span>
-          </div>
-        </label>
-      </div>
+      {/* 4. Organic Edges Toggle (Flat, Shelf, Niche only - not cutout) */}
+      {resolvedType !== 'cutout' && (
+        <div className="pt-3 border-t border-amber-100/50 space-y-2">
+          <label className="flex items-start gap-2 cursor-pointer group">
+            <div className="relative flex items-center pt-0.5">
+              <input
+                type="checkbox"
+                checked={activeSa.organicEdges || false}
+                onChange={(e) => updateActiveSubArea({ organicEdges: e.target.checked })}
+                className="peer sr-only"
+              />
+              <div className="w-8 h-4.5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-amber-600"></div>
+            </div>
+            <div>
+              <span className="font-bold text-xs text-slate-800 group-hover:text-slate-900 transition-colors select-none block leading-tight">
+                Organic Edges
+              </span>
+              <span className="text-[10px] text-slate-500 font-medium block leading-snug mt-0.5">
+                Render full tiles inside the bounds instead of clipping
+              </span>
+            </div>
+          </label>
+        </div>
+      )}
     </div>
   );
 };

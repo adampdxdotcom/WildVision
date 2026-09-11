@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { SubArea, MeasurementUnit, WallExtension, TileFinish, TileShape, RectanglePattern, ColorPattern, ColorVariation } from '../../types';
-import { Lock, Unlock, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { Lock, Unlock, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Grid, Paintbrush } from 'lucide-react';
 import { BorderConfigPanel } from './BorderConfigPanel';
 import { AccentFurnitureSubPanel } from './AccentPanels/AccentFurnitureSubPanel';
 import { SurfaceSelector } from './SurfaceSelector';
@@ -31,9 +31,17 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
   const rawType = (activeSa.accentType as string) || (activeSa.isCutout ? 'cutout' : (activeSa.hasSill ? 'niche' : 'flat'));
   const resolvedType = (rawType === 'bench' ? 'shelf' : rawType) as 'flat' | 'niche' | 'shelf' | 'cutout' | 'slab';
 
+  const rawCutoutColor = activeSa.tileColors && activeSa.tileColors[0]
+    ? (typeof activeSa.tileColors[0] === 'string' ? activeSa.tileColors[0] : (activeSa.tileColors[0] as any).hex)
+    : (activeSa.tileColor || null);
+  const activeCutoutColorHex = rawCutoutColor || '#f8fafc';
+
   const [fineTuneIncrement, setFineTuneIncrement] = useState<number>(0.125);
   const setIsCanvasDirty = useAppStore(state => state.setIsCanvasDirty);
   const subAreas = useAppStore(state => state.subAreas);
+  const mainTileName = useAppStore(state => state.tileName);
+  const mainOffsetX = useAppStore(state => state.offsetX) ?? 0;
+  const mainOffsetY = useAppStore(state => state.offsetY) ?? 0;
   const tileColorOverrides = useAppStore(state => state.tileColorOverrides) || {};
   const activeBrushColorIndex = useAppStore(state => state.activeBrushColorIndex) ?? 1;
   const setTileColorOverride = useAppStore(state => state.setTileColorOverride);
@@ -141,6 +149,25 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
     setIsCanvasDirty(true);
   };
 
+  const isUsingMainWallTile = activeSa.linkedMaterialId === 'main';
+  const isLinkedToOtherProfile = !!activeSa.linkedMaterialId && !isUsingMainWallTile;
+
+  const targetMainOffsetX = Number((mainOffsetX - (activeSa.x || 0)).toFixed(4));
+  const targetMainOffsetY = Number((mainOffsetY - (activeSa.y || 0)).toFixed(4));
+
+  const isAlignedWithMain =
+    Math.abs((activeSa.offsetX || 0) - targetMainOffsetX) < 0.005 &&
+    Math.abs((activeSa.offsetY || 0) - targetMainOffsetY) < 0.005;
+
+  const handleAlignToMainWall = (e: React.MouseEvent) => {
+    e.preventDefault();
+    updateActiveSubArea({
+      offsetX: targetMainOffsetX,
+      offsetY: targetMainOffsetY,
+    });
+    setIsCanvasDirty(true);
+  };
+
   const savedProfiles = subAreas.filter(
     sa => sa.isMaterialParent && sa.id !== activeSa.id
   );
@@ -203,10 +230,10 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
         />
       </div>
 
-      {/* Accent Tile Name */}
-      {!integrationData?.variant_id && (
+      {/* Accent Tile Name / Profile */}
+      {!integrationData?.variant_id && resolvedType !== 'cutout' && (
         <div className="space-y-2">
-          {(savedProfiles.length > 0 || !!activeSa.linkedMaterialId) && (
+          {!isUsingMainWallTile && (savedProfiles.length > 0 || isLinkedToOtherProfile) && (
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455 mb-1">
                 Apply Saved Tile Profile
@@ -230,7 +257,7 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
             </div>
           )}
 
-          {!activeSa.linkedMaterialId && (
+          {!isLinkedToOtherProfile && (
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455 mb-1">
                 Accent Tile Name / Label
@@ -238,153 +265,109 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
               <input
                 type="text"
                 placeholder="e.g. Glass Teal Mosaic, Charcoal Hex"
-                value={activeSa.tileName || ''}
+                disabled={isUsingMainWallTile}
+                value={isUsingMainWallTile ? (mainTileName || 'Main Wall Tile') : (activeSa.tileName || '')}
                 onChange={(e) => updateActiveSubArea({ tileName: e.target.value })}
-                className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-semibold text-slate-800 focus:ring-1 focus:ring-amber-500 focus:outline-hidden"
+                className={`w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-semibold text-slate-800 focus:ring-1 focus:ring-amber-500 focus:outline-hidden ${
+                  isUsingMainWallTile ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : ''
+                }`}
               />
 
-              <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer select-none mt-2">
-                <input
-                  type="checkbox"
-                  disabled={!!integrationData?.variant_id}
-                  checked={!!activeSa.isMaterialParent}
-                  onChange={(e) => updateActiveSubArea({ isMaterialParent: e.target.checked })}
-                  className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 h-4 w-4 accent-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-                <span>Save as Reusable Tile Profile</span>
-              </label>
+              <div className="flex items-center gap-4 flex-wrap mt-2">
+                <label
+                  className={`flex items-center gap-2 text-xs font-semibold select-none ${
+                    isUsingMainWallTile
+                      ? 'text-slate-400 opacity-50 cursor-not-allowed'
+                      : 'text-slate-700 cursor-pointer'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    disabled={!!integrationData?.variant_id || isUsingMainWallTile}
+                    checked={!isUsingMainWallTile && !!activeSa.isMaterialParent}
+                    onChange={(e) => updateActiveSubArea({ isMaterialParent: e.target.checked })}
+                    className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 h-4 w-4 accent-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <span>Save as Reusable Tile Profile</span>
+                </label>
+
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    disabled={!!integrationData?.variant_id}
+                    checked={isUsingMainWallTile}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        updateActiveSubArea({
+                          linkedMaterialId: 'main',
+                          isMaterialParent: false,
+                        });
+                      } else {
+                        updateActiveSubArea({
+                          linkedMaterialId: undefined,
+                        });
+                      }
+                    }}
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 accent-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <span>Use Main Wall Tile</span>
+                </label>
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Pricing Mode & Mounted on Mesh Controls */}
-      <div className="pt-3 border-t border-slate-100 space-y-3 animate-fade-in">
-        <div>
-          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-            Pricing Mode
-          </label>
-          <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-50 border border-slate-155 rounded">
-            <button
-              type="button"
-              onClick={() => updatePurchasingSetting(activeSa.id, { purchaseType: 'carton' })}
-              className={`py-1 text-center text-[10px] font-bold rounded transition-all cursor-pointer ${
-                (purchasingSettings[activeSa.id]?.purchaseType || 'carton') === 'carton'
-                  ? 'bg-white text-indigo-750 shadow-xs border border-indigo-100'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              Carton
-            </button>
-            <button
-              type="button"
-              onClick={() => updatePurchasingSetting(activeSa.id, { purchaseType: 'sheet' })}
-              className={`py-1 text-center text-[10px] font-bold rounded transition-all cursor-pointer ${
-                (purchasingSettings[activeSa.id]?.purchaseType || 'carton') === 'sheet'
-                  ? 'bg-white text-indigo-750 shadow-xs border border-indigo-100'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              Sheet
-            </button>
-            <button
-              type="button"
-              onClick={() => updatePurchasingSetting(activeSa.id, { purchaseType: 'piece' })}
-              className={`py-1 text-center text-[10px] font-bold rounded transition-all cursor-pointer ${
-                (purchasingSettings[activeSa.id]?.purchaseType || 'carton') === 'piece'
-                  ? 'bg-white text-indigo-750 shadow-xs border border-indigo-100'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              Piece
-            </button>
+      {/* Pricing Mode Controls */}
+      {resolvedType !== 'cutout' && (
+        <div className="pt-3 border-t border-slate-100 space-y-3 animate-fade-in">
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+              Pricing Mode
+            </label>
+            <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-50 border border-slate-155 rounded">
+              <button
+                type="button"
+                onClick={() => updatePurchasingSetting(activeSa.id, { purchaseType: 'carton' })}
+                className={`py-1 text-center text-[10px] font-bold rounded transition-all cursor-pointer ${
+                  (purchasingSettings[activeSa.id]?.purchaseType || 'carton') === 'carton'
+                    ? 'bg-white text-indigo-750 shadow-xs border border-indigo-100'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Carton
+              </button>
+              <button
+                type="button"
+                onClick={() => updatePurchasingSetting(activeSa.id, { purchaseType: 'sheet' })}
+                className={`py-1 text-center text-[10px] font-bold rounded transition-all cursor-pointer ${
+                  (purchasingSettings[activeSa.id]?.purchaseType || 'carton') === 'sheet'
+                    ? 'bg-white text-indigo-750 shadow-xs border border-indigo-100'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Sheet
+              </button>
+              <button
+                type="button"
+                onClick={() => updatePurchasingSetting(activeSa.id, { purchaseType: 'piece' })}
+                className={`py-1 text-center text-[10px] font-bold rounded transition-all cursor-pointer ${
+                  (purchasingSettings[activeSa.id]?.purchaseType || 'carton') === 'piece'
+                    ? 'bg-white text-indigo-750 shadow-xs border border-indigo-100'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Piece
+              </button>
+            </div>
+            {(purchasingSettings[activeSa.id]?.purchaseType || 'carton') === 'sheet' && (
+              <p className="text-[10px] text-slate-500 bg-slate-50 border border-slate-200 rounded p-2 mt-1.5">
+                Sheet sizing, coverage, and pricing are configured on the <span className="font-semibold text-indigo-600">Quantities</span> tab.
+              </p>
+            )}
           </div>
         </div>
-
-        <div className="flex items-center gap-2 pt-1">
-          <input
-            type="checkbox"
-            id={`sold-as-mosaic-${activeSa.id}`}
-            checked={!!activeSa.soldAsMosaic}
-            onChange={(e) => updateActiveSubArea({ soldAsMosaic: e.target.checked })}
-            className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
-          />
-          <label htmlFor={`sold-as-mosaic-${activeSa.id}`} className="text-xs font-bold text-slate-700 select-none cursor-pointer">
-            Mounted on Mesh Sheets (Mosaic)
-          </label>
-        </div>
-
-        {activeSa.soldAsMosaic && (
-          <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded space-y-3 animate-fade-in">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[9px] font-bold uppercase tracking-wider text-indigo-800/80 mb-1">
-                  Sheet Width ({unit})
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  step="0.1"
-                  disabled={hasPaintOverrides}
-                  value={activeSa.mosaicWidth === 0 ? '' : (activeSa.mosaicWidth ?? 12)}
-                  onChange={(e) => {
-                    const valStr = e.target.value;
-                    if (valStr === '') {
-                      updateActiveSubArea({ mosaicWidth: 0 });
-                    } else {
-                      const val = parseFloat(valStr);
-                      if (!isNaN(val)) {
-                        updateActiveSubArea({ mosaicWidth: val });
-                      }
-                    }
-                  }}
-                  onBlur={() => {
-                    const clamped = Math.max(1, Math.min(100, activeSa.mosaicWidth || 12));
-                    updateActiveSubArea({ mosaicWidth: clamped });
-                  }}
-                  className="w-full px-2.5 py-1.5 bg-white border border-indigo-200/50 rounded text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                />
-              </div>
-              <div>
-                <label className="block text-[9px] font-bold uppercase tracking-wider text-indigo-800/80 mb-1">
-                  Sheet Height ({unit})
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  step="0.1"
-                  disabled={hasPaintOverrides}
-                  value={activeSa.mosaicHeight === 0 ? '' : (activeSa.mosaicHeight ?? 12)}
-                  onChange={(e) => {
-                    const valStr = e.target.value;
-                    if (valStr === '') {
-                      updateActiveSubArea({ mosaicHeight: 0 });
-                    } else {
-                      const val = parseFloat(valStr);
-                      if (!isNaN(val)) {
-                        updateActiveSubArea({ mosaicHeight: val });
-                      }
-                    }
-                  }}
-                  onBlur={() => {
-                    const clamped = Math.max(1, Math.min(100, activeSa.mosaicHeight || 12));
-                    updateActiveSubArea({ mosaicHeight: clamped });
-                  }}
-                  className="w-full px-2.5 py-1.5 bg-white border border-indigo-200/50 rounded text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed font-mono"
-                />
-              </div>
-            </div>
-            <div className="text-[10px] font-mono text-indigo-700 font-semibold flex justify-between items-center pt-1.5 border-t border-indigo-100/60">
-              <span>Sheet Sq Footage:</span>
-              <span>
-                {(((activeSa.mosaicWidth || 12) * (activeSa.mosaicHeight || 12)) / (unit === 'in' ? 144 : 929.0304)).toFixed(3)} sq ft / sheet
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Primary Feature Type Selector */}
       <div>
@@ -427,7 +410,174 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
         </div>
       )}
 
-      {/* 1. Tile Specifications Sub Panel (Universal) */}
+      {/* 0.5. Cutout Solid Fill Color Panel */}
+      {resolvedType === 'cutout' && (
+        <div className="bg-white rounded border border-slate-200 p-3.5 shadow-xs space-y-3 animate-fade-in">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            <div className="space-y-0.5">
+              <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-700">
+                <Paintbrush className="w-3.5 h-3.5 text-slate-500" />
+                Cutout Solid Color
+              </label>
+              <p className="text-[10px] text-slate-500 font-medium">
+                Apply a solid paint or opening background color.
+              </p>
+            </div>
+            {rawCutoutColor && (
+              <button
+                type="button"
+                onClick={() => {
+                  updateActiveSubArea({ tileColors: undefined, tileColor: undefined });
+                  setIsCanvasDirty(true);
+                }}
+                className="text-[10px] font-semibold text-rose-600 hover:text-rose-700 underline cursor-pointer"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {/* Color picker and hex input */}
+          <div className="flex items-center gap-3">
+            <div className="relative shrink-0">
+              <input
+                type="color"
+                value={activeCutoutColorHex}
+                onChange={(e) => {
+                  const newHex = e.target.value;
+                  updateActiveSubArea({ tileColors: [newHex], tileColor: newHex });
+                  setIsCanvasDirty(true);
+                }}
+                className="w-9 h-9 rounded border border-slate-300 p-0.5 cursor-pointer bg-white shadow-xs"
+                title="Choose cutout color"
+              />
+            </div>
+            <div className="flex-1 space-y-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-slate-600">Hex:</span>
+                <input
+                  type="text"
+                  value={activeCutoutColorHex}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val.startsWith('#') && (val.length === 4 || val.length === 7)) {
+                      updateActiveSubArea({ tileColors: [val], tileColor: val });
+                      setIsCanvasDirty(true);
+                    }
+                  }}
+                  className="w-24 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-mono font-semibold text-slate-800"
+                  placeholder="#f8fafc"
+                />
+              </div>
+              <span className="text-[9.5px] text-slate-400 block">
+                {rawCutoutColor ? 'Solid fill applied' : 'Default empty opening'}
+              </span>
+            </div>
+          </div>
+
+          {/* Preset Swatches */}
+          <div className="pt-2 border-t border-slate-100">
+            <label className="block text-[9.5px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+              Popular Opening & Drywall Tones
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { name: 'Pure White', hex: '#ffffff' },
+                { name: 'Drywall Off-White', hex: '#f8fafc' },
+                { name: 'Soft Gray', hex: '#e2e8f0' },
+                { name: 'Slate Gray', hex: '#94a3b8' },
+                { name: 'Dark Slate', hex: '#475569' },
+                { name: 'Charcoal', hex: '#1e293b' },
+                { name: 'Deep Black', hex: '#0f172a' },
+                { name: 'Warm Cream', hex: '#fef3c7' },
+                { name: 'Warm Taupe', hex: '#d6d3d1' },
+                { name: 'Navy', hex: '#1e3a8a' },
+                { name: 'Forest', hex: '#14532d' },
+              ].map((swatch) => {
+                const isSelected = activeCutoutColorHex.toLowerCase() === swatch.hex.toLowerCase() && !!rawCutoutColor;
+                return (
+                  <button
+                    key={swatch.hex}
+                    type="button"
+                    onClick={() => {
+                      updateActiveSubArea({ tileColors: [swatch.hex], tileColor: swatch.hex });
+                      setIsCanvasDirty(true);
+                    }}
+                    className={`w-5.5 h-5.5 rounded border transition-all cursor-pointer ${
+                      isSelected
+                        ? 'ring-2 ring-indigo-500 ring-offset-1 border-slate-500 scale-110'
+                        : 'border-slate-300 hover:scale-105'
+                    }`}
+                    style={{ backgroundColor: swatch.hex }}
+                    title={`${swatch.name} (${swatch.hex})`}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Linked Material Banner (shown when linked to Main Wall or Profile) */}
+      {!!activeSa.linkedMaterialId && (() => {
+        const isMain = activeSa.linkedMaterialId === 'main';
+        const parent = isMain ? null : subAreas.find((s) => s.id === activeSa.linkedMaterialId);
+        const parentName = isMain
+          ? (mainTileName || 'Main Wall Tile')
+          : (parent ? (parent.tileName || parent.name || 'Master Profile') : 'Master Profile');
+        return (
+          <div className={`p-3 rounded text-xs space-y-1.5 shadow-xs border ${
+            isMain
+              ? 'bg-indigo-50/80 border-indigo-200 text-indigo-900'
+              : 'bg-amber-50 border-amber-200 text-amber-900'
+          }`}>
+            <div className="flex items-center justify-between">
+              <span className="font-bold flex items-center gap-1.5">
+                <span className={`inline-block w-2 h-2 rounded-full animate-pulse ${
+                  isMain ? 'bg-indigo-500' : 'bg-amber-500'
+                }`} />
+                {isMain ? 'Linked to Main Wall Tile' : 'Linked to Reusable Tile Profile'}
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold truncate max-w-[150px] ${
+                  isMain ? 'bg-indigo-200/70 text-indigo-950' : 'bg-amber-200/70 text-amber-950'
+                }`}
+                title={parentName}
+              >
+                {parentName}
+              </span>
+            </div>
+            <p className={`text-[11px] leading-relaxed ${isMain ? 'text-indigo-850' : 'text-amber-800'}`}>
+              {isMain ? (
+                <>
+                  Tile shape, dimensions, colors, pattern, finish, and grout are actively synced with the{' '}
+                  <span className="font-semibold text-indigo-950">Main Wall</span>. Any changes made to the
+                  Main Wall will automatically update this accent area.
+                </>
+              ) : (
+                <>
+                  Tile shape, dimensions, colors, pattern, finish, and grout are actively synced with{' '}
+                  <span className="font-semibold text-amber-950">{parentName}</span>. Any changes made to the
+                  master profile automatically update this accent area.
+                </>
+              )}
+            </p>
+            <div className="pt-0.5">
+              <button
+                type="button"
+                onClick={() => updateActiveSubArea({ linkedMaterialId: undefined })}
+                className={`text-[11px] font-semibold underline cursor-pointer ${
+                  isMain ? 'text-indigo-900 hover:text-indigo-950' : 'text-amber-900 hover:text-amber-950'
+                }`}
+              >
+                Detach & edit independently
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 1. Tile Specifications Sub Panel (Universal) - for unlinked tiled features */}
       {resolvedType !== 'slab' && resolvedType !== 'cutout' && !activeSa.linkedMaterialId && (
         <div className="bg-white rounded border border-slate-200 p-4 shadow-xs space-y-4">
           <UniversalTileSpecs
@@ -474,77 +624,112 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
             activeCustomPattern={activeSa.customPatternPayload || null}
             onChangeActiveCustomPattern={(pattern) => updateActiveSubArea({ customPatternPayload: pattern })}
           />
-          {/* Layout Nudge Tool */}
-          <div className="pt-3 border-t border-slate-100 space-y-3">
+        </div>
+      )}
+
+      {/* Layout Nudge Tool - Available for all tiled features (unlinked and children) */}
+      {resolvedType !== 'slab' && resolvedType !== 'cutout' && (
+        <div className="bg-white rounded border border-slate-200 p-4 shadow-xs space-y-3">
+          <div className="flex items-center justify-between pb-1 border-b border-slate-100">
             <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
               Nudge Layout
             </label>
-            
-            <div className="flex flex-col items-center gap-3 bg-slate-50 border border-slate-200 rounded p-4">
-              <div className="grid grid-cols-3 grid-rows-3 gap-1">
-                <div />
-                <button
-                  type="button"
-                  onClick={(e) => handleNudgeClick('up', e)}
-                  className="p-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform cursor-pointer"
-                  title="Nudge Up (Hold Shift for Fine Tune)"
-                >
-                  <ChevronUp size={16} />
-                </button>
-                <div />
-                <button
-                  type="button"
-                  onClick={(e) => handleNudgeClick('left', e)}
-                  className="p-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform cursor-pointer"
-                  title="Nudge Left (Hold Shift for Fine Tune)"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleResetNudge}
-                  className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform cursor-pointer"
-                  title="Reset Alignment"
-                >
-                  <RefreshCw size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => handleNudgeClick('right', e)}
-                  className="p-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform cursor-pointer"
-                  title="Nudge Right (Hold Shift for Fine Tune)"
-                >
-                  <ChevronRight size={16} />
-                </button>
-                <div />
-                <button
-                  type="button"
-                  onClick={(e) => handleNudgeClick('down', e)}
-                  className="p-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform cursor-pointer"
-                  title="Nudge Down (Hold Shift for Fine Tune)"
-                >
-                  <ChevronDown size={16} />
-                </button>
-                <div />
-              </div>
-              <div className="flex items-center gap-2 w-full mt-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 whitespace-nowrap">
-                  Fine-Tune Step
-                </span>
-                <input
-                  type="number"
-                  min="0.001"
-                  step="0.001"
-                  value={fineTuneIncrement}
-                  onChange={(e) => setFineTuneIncrement(Math.max(0.001, parseFloat(e.target.value) || 0.125))}
-                  className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:outline-none focus:border-indigo-500 flex-1"
-                />
-              </div>
-              <p className="text-[9px] text-slate-400 text-center w-full mt-[-4px]">
-                Hold <b>SHIFT</b> while clicking to use fine-tune step.
+            {(Boolean(activeSa.offsetX) || Boolean(activeSa.offsetY)) && (
+              <span className="text-[10px] font-mono text-slate-500 font-medium">
+                X: {activeSa.offsetX ? (activeSa.offsetX > 0 ? `+${activeSa.offsetX}` : activeSa.offsetX) : 0}{unit}{' '}
+                Y: {activeSa.offsetY ? (activeSa.offsetY > 0 ? `+${activeSa.offsetY}` : activeSa.offsetY) : 0}{unit}
+              </span>
+            )}
+          </div>
+          
+          <div className="flex flex-col items-center gap-3 bg-slate-50 border border-slate-200 rounded p-4">
+            <div className="grid grid-cols-3 grid-rows-3 gap-1">
+              <div />
+              <button
+                type="button"
+                onClick={(e) => handleNudgeClick('up', e)}
+                className="p-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform cursor-pointer"
+                title="Nudge Up (Hold Shift for Fine Tune)"
+              >
+                <ChevronUp size={16} />
+              </button>
+              <div />
+              <button
+                type="button"
+                onClick={(e) => handleNudgeClick('left', e)}
+                className="p-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform cursor-pointer"
+                title="Nudge Left (Hold Shift for Fine Tune)"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={handleResetNudge}
+                className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform cursor-pointer"
+                title="Reset Alignment (0,0)"
+              >
+                <RefreshCw size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => handleNudgeClick('right', e)}
+                className="p-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform cursor-pointer"
+                title="Nudge Right (Hold Shift for Fine Tune)"
+              >
+                <ChevronRight size={16} />
+              </button>
+              <div />
+              <button
+                type="button"
+                onClick={(e) => handleNudgeClick('down', e)}
+                className="p-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform cursor-pointer"
+                title="Nudge Down (Hold Shift for Fine Tune)"
+              >
+                <ChevronDown size={16} />
+              </button>
+              <div />
+            </div>
+            <div className="flex items-center gap-2 w-full mt-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 whitespace-nowrap">
+                Fine-Tune Step
+              </span>
+              <input
+                type="number"
+                min="0.001"
+                step="0.001"
+                value={fineTuneIncrement}
+                onChange={(e) => setFineTuneIncrement(Math.max(0.001, parseFloat(e.target.value) || 0.125))}
+                className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:outline-none focus:border-indigo-500 flex-1"
+              />
+            </div>
+            <p className="text-[9px] text-slate-400 text-center w-full mt-[-4px]">
+              Hold <b>SHIFT</b> while clicking to use fine-tune step.
+            </p>
+          </div>
+
+          {/* Align to Main Wall Option - Below nudge layout info, ONLY present if "main wall tile" is selected */}
+          {isUsingMainWallTile && (
+            <div className="pt-2.5 border-t border-slate-100 space-y-2">
+              <button
+                type="button"
+                onClick={handleAlignToMainWall}
+                className={`w-full flex items-center justify-center gap-2 py-2 px-3 rounded text-xs font-semibold shadow-xs transition-all cursor-pointer border ${
+                  isAlignedWithMain
+                    ? 'bg-emerald-50/90 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
+                    : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
+                }`}
+                title="Align this accent area's grout joints with the main wall pattern"
+              >
+                <Grid size={14} className={isAlignedWithMain ? 'text-emerald-600' : 'text-indigo-600'} />
+                <span>{isAlignedWithMain ? '✓ Aligned with Main Wall Grout' : 'Align Grout with Main Wall'}</span>
+              </button>
+              <p className="text-[10px] text-slate-500 text-center leading-tight">
+                {isAlignedWithMain
+                  ? 'Grout lines currently match and flow continuously from the main wall.'
+                  : 'Snap tile grout lines to run continuously with the surrounding wall pattern.'}
               </p>
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -615,37 +800,6 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
           </div>
         </div>
       )}
-
-      {/* Linked Material Banner */}
-      {!!activeSa.linkedMaterialId && (() => {
-        const parent = subAreas.find((s) => s.id === activeSa.linkedMaterialId);
-        const parentName = parent ? (parent.tileName || parent.name || 'Master Profile') : 'Master Profile';
-        return (
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-900 space-y-1.5 shadow-xs">
-            <div className="flex items-center justify-between">
-              <span className="font-bold flex items-center gap-1.5">
-                <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                Linked to Reusable Tile Profile
-              </span>
-              <span className="px-2 py-0.5 bg-amber-200/70 text-amber-950 rounded text-[11px] font-semibold truncate max-w-[150px]" title={parentName}>
-                {parentName}
-              </span>
-            </div>
-            <p className="text-[11px] text-amber-800 leading-relaxed">
-              Tile shape, dimensions, colors, pattern, finish, and grout are actively synced with <span className="font-semibold text-amber-950">{parentName}</span>. Any changes made to the master profile automatically update this accent area.
-            </p>
-            <div className="pt-0.5">
-              <button
-                type="button"
-                onClick={() => updateActiveSubArea({ linkedMaterialId: undefined })}
-                className="text-[11px] font-semibold text-amber-900 underline hover:text-amber-950 cursor-pointer"
-              >
-                Detach & edit independently
-              </button>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* 3. Options & Add-ons Sub Panel */}
       {(resolvedType !== 'slab' || true) && (

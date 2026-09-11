@@ -182,24 +182,42 @@ export const FeaturesPanel: React.FC<FeaturesPanelProps> = ({
         }
       }
 
-      // 2. If user selected or switched a Reusable Tile Profile
+      // 2. If user selected or switched a Reusable Tile Profile or Main Wall Tile
       if (fields.linkedMaterialId !== undefined) {
         if (fields.linkedMaterialId) {
-          const profileMaster = prev.find((s) => s.id === fields.linkedMaterialId);
-          if (profileMaster) {
-            const profileProps: any = {};
+          if (fields.linkedMaterialId === 'main') {
+            const store = useAppStore.getState();
+            const mainProps: any = {};
             AESTHETIC_KEYS.forEach((key) => {
-              if ((profileMaster as any)[key] !== undefined) {
-                profileProps[key] = JSON.parse(JSON.stringify((profileMaster as any)[key]));
+              if ((store as any)[key] !== undefined) {
+                mainProps[key] = JSON.parse(JSON.stringify((store as any)[key]));
               }
             });
+            mainProps.tileName = store.tileName || 'Main Wall Tile';
             // Children inherit aesthetic profile and should not be their own parent
-            finalFields = { ...profileProps, ...finalFields, isMaterialParent: false };
+            finalFields = { ...mainProps, ...finalFields, isMaterialParent: false };
 
-            // Synchronize purchasing settings if master has them
-            const store = useAppStore.getState();
-            if (store.purchasingSettings && store.purchasingSettings[profileMaster.id]) {
-              store.updatePurchasingSetting?.(activeSubAreaId, store.purchasingSettings[profileMaster.id]);
+            // Synchronize purchasing settings if main has them
+            if (store.purchasingSettings && store.purchasingSettings['main']) {
+              store.updatePurchasingSetting?.(activeSubAreaId, store.purchasingSettings['main']);
+            }
+          } else {
+            const profileMaster = prev.find((s) => s.id === fields.linkedMaterialId);
+            if (profileMaster) {
+              const profileProps: any = {};
+              AESTHETIC_KEYS.forEach((key) => {
+                if ((profileMaster as any)[key] !== undefined) {
+                  profileProps[key] = JSON.parse(JSON.stringify((profileMaster as any)[key]));
+                }
+              });
+              // Children inherit aesthetic profile and should not be their own parent
+              finalFields = { ...profileProps, ...finalFields, isMaterialParent: false };
+
+              // Synchronize purchasing settings if master has them
+              const store = useAppStore.getState();
+              if (store.purchasingSettings && store.purchasingSettings[profileMaster.id]) {
+                store.updatePurchasingSetting?.(activeSubAreaId, store.purchasingSettings[profileMaster.id]);
+              }
             }
           }
         }

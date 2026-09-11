@@ -7,6 +7,7 @@ import { Panel3D } from './types';
 import { NicheFeature } from './features/NicheFeature';
 import { ShelfFeature } from './features/ShelfFeature';
 import { SlabFeature } from './features/SlabFeature';
+import { CutoutFeature } from './features/CutoutFeature';
 import { isSubAreaInBenchMode } from '../TileCanvas/painters';
 import { useLayoutConfig } from './LayoutConfigContext';
 
@@ -461,7 +462,7 @@ export const WallPanel: React.FC<WallPanelProps> = ({
       {/* Active volumetric features */}
       {intersectingSubAreas.map(({ sa, resolvedType, isOwner }, idx) => {
         if (!isOwner) return null;
-        if (resolvedType === 'cutout' || resolvedType === 'flat') return null;
+        if (resolvedType === 'flat') return null;
 
         // Calculate size and coordinates
         const saD3Width = (sa.width / panel.width) * panel.d3Width;
@@ -524,6 +525,25 @@ export const WallPanel: React.FC<WallPanelProps> = ({
                 globalBumpTexture={globalBumpTexture}
               />
             );
+          }
+
+          if (resolvedType === 'cutout') {
+            const rawCutoutColor = sa.tileColors && sa.tileColors[0]
+              ? (typeof sa.tileColors[0] === 'string' ? sa.tileColors[0] : (sa.tileColors[0] as any).hex)
+              : ((sa as any).tileColor || null);
+            if (sa.hasSill || rawCutoutColor) {
+              return (
+                <CutoutFeature
+                  sa={sa}
+                  localX={saLocalX}
+                  localY={saLocalY}
+                  d3Width={saD3Width}
+                  d3Height={saD3Height}
+                  to3D={to3D}
+                  cutoutColor={rawCutoutColor}
+                />
+              );
+            }
           }
 
           return null;

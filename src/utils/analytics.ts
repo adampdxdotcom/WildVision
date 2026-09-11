@@ -578,16 +578,18 @@ export function computeComprehensiveStatistics(params: ComputeStatsParams): Comp
     }
   }
 
-  // Individual Sub-Area reports
-  const subAreaReports = combinedSubAreas.map((sa, i) => {
-    // 1. Calculate visible area by subtracting intersecting areas of subAreas drawn on top (j > i)
+  // Individual Sub-Area reports (excluding cutouts without sills)
+  const nonCutoutSubAreas = combinedSubAreas.filter(sa => (!sa.isCutout && sa.accentType !== 'cutout') || sa.hasSill);
+  const subAreaReports = nonCutoutSubAreas.map((sa) => {
+    const originalIndex = combinedSubAreas.indexOf(sa);
+    // 1. Calculate visible area by subtracting intersecting areas of subAreas drawn on top (j > originalIndex)
     const originalArea = getTrueArea(sa as any);
     let visibleArea = originalArea;
 
     if (sa.visible === false) {
       visibleArea = 0;
     } else {
-      for (let j = i + 1; j < combinedSubAreas.length; j++) {
+      for (let j = originalIndex + 1; j < combinedSubAreas.length; j++) {
         const other = combinedSubAreas[j];
         if (other.visible === false) continue;
         
@@ -612,7 +614,7 @@ export function computeComprehensiveStatistics(params: ComputeStatsParams): Comp
 
     let report: AreaReport;
     
-    if ((sa as any).accentType === 'slab') {
+    if ((sa as any).accentType === 'slab' || (sa as any).accentType === 'cutout' || sa.isCutout) {
       report = {
         totalTilesUsed: 0,
         fullTilesCount: 0,

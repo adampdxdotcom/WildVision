@@ -225,7 +225,12 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                 id={`tab-selector-${tab.id}`}
                 key={tab.id}
                 type="button"
-                onClick={() => setActiveTab2(tab.id)}
+                onClick={() => {
+                  if (tab.id === 7 && useAppStore.getState().viewMode !== '2d') {
+                    useAppStore.getState().setViewMode('2d');
+                  }
+                  setActiveTab2(tab.id);
+                }}
                 className={`flex flex-col items-center justify-center py-2 px-1 rounded-md text-center transition-all cursor-pointer ${
                   isActive
                     ? 'bg-white text-indigo-600 shadow-xs border border-slate-200/60 font-black'

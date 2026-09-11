@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useAppStore } from '../../store/useAppStore';
+import { getSnapshot } from '../../store/slices/projectSlice';
 import { X, Save, Cloud, FileDown, Check, RefreshCw, AlertCircle, Copy } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { logger } from '../../utils/logger';
@@ -37,72 +38,26 @@ export const SaveModal: React.FC<SaveModalProps> = ({
   // Helper to construct exact project snapshot
   const getStoreSnapshot = () => {
     const s = useAppStore.getState();
+    const baseSnapshot = getSnapshot(s);
     return {
       version: '1.0',
+      ...baseSnapshot,
       projectName: s.projectName || 'Untitled',
-      wallWidth: s.wallWidth,
-      wallHeight: s.wallHeight,
-      wallVertices: s.wallVertices,
-      unit: s.unit,
-      shape: s.shape,
-      tileWidth: s.tileWidth,
-      tileHeight: s.tileHeight,
-      pattern: s.pattern,
-      groutWidth: s.groutWidth,
-      angle: s.angle,
-      tileName: s.tileName,
-      tileColors: s.tileColors,
-      colorPattern: s.colorPattern,
-      tilesPerStripe: s.tilesPerStripe,
-      tileDotColor: s.compositeColors.secondary || '#334155',
-      colorVariation: s.colorVariation,
-      groutColor: s.groutColor,
-      viewSettings: s.viewSettings,
-      offsetX: s.offsetX,
-      offsetY: s.offsetY,
-      subAreas: s.subAreas,
       activeSubAreaId: s.activeSubAreaId,
-      wallExtensions: s.wallExtensions,
       activeWallExtensionId: s.activeWallExtensionId,
-      isPainted: s.isPainted,
       isBlankCanvasMode: s.isBlankCanvasMode,
       activePresetId: s.activePresetId,
-      soldAsMosaic: s.soldAsMosaic,
-      mosaicWidth: s.mosaicWidth,
-      mosaicHeight: s.mosaicHeight,
-      overage: s.overage,
-      hasNotes: s.hasNotes,
-      notes: s.notes,
       angleDisplayMode: s.angleDisplayMode,
-      backgroundImage: s.backgroundImage,
       isBgUnlocked: s.isBgUnlocked,
-      bgScale: s.bgScale,
-      bgOffsetX: s.bgOffsetX,
-      bgOffsetY: s.bgOffsetY,
-      tileOpacity: s.tileOpacity,
-      bgOpacity: s.bgOpacity,
       exportPhotoBg: s.exportPhotoBg,
       showAccentDistances: s.showAccentDistances,
-      wallBoundaryShape: s.wallBoundaryShape,
-      wallArchHeight: s.wallArchHeight,
-      wallActiveArches: s.wallActiveArches,
-      wallArchDepth: s.wallArchDepth,
-      wallAngle: s.wallAngle,
-      wallBorder: s.wallBorder,
-      mainShapeSettings: s.mainShapeSettings,
-      foldLines: s.foldLines,
-      roomDimensions: s.roomDimensions,
-      roomColors: s.roomColors,
       layoutTransform: s.layoutTransform,
-      sceneObjects: s.sceneObjects,
       activeObjectId: s.activeObjectId,
       floorY: s.floorY,
       backWallZ: s.backWallZ,
       leftWallX: s.leftWallX,
       rightWallX: s.rightWallX,
       ceilingY: s.ceilingY,
-      linkedSubfloorProjectId: s.linkedSubfloorProjectId,
-      integrationData: s.integrationData,
     };
   };
 

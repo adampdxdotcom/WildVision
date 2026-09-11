@@ -16,6 +16,20 @@ import { isSubAreaInBenchMode, definePolygonVerticesPath } from './geometryHelpe
 import { drawBorder } from './borderPainter';
 import { getVariedColor } from '../../../utils/geometry';
 
+function isDarkColor(hex: string): boolean {
+  try {
+    const c = hex.replace('#', '');
+    if (c.length < 6) return false;
+    const r = parseInt(c.substring(0, 2), 16);
+    const g = parseInt(c.substring(2, 4), 16);
+    const b = parseInt(c.substring(4, 6), 16);
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    return brightness < 140;
+  } catch (e) {
+    return false;
+  }
+}
+
 /**
  * Renders individual custom Accent SubAreas onto the active canvas
  */
@@ -196,14 +210,63 @@ export function drawSubAreas(
     ctx.globalAlpha = tileOpacity;
 
     if (resolvedType === 'cutout') {
-      // Draw background fill representing empty/cutout space (faint gray)
+      // Draw background fill representing empty/cutout space or solid color
       ctx.save();
       ctx.globalAlpha = 1.0;
       defineBoundaryPath();
       ctx.clip();
 
-      ctx.fillStyle = '#f8fafc'; // faint slate gray
+      const rawCutoutColor = sa.tileColors && sa.tileColors[0]
+        ? (typeof sa.tileColors[0] === 'string' ? sa.tileColors[0] : (sa.tileColors[0] as any).hex)
+        : ((sa as any).tileColor || null);
+      const cutoutFillColor = rawCutoutColor || '#f8fafc';
+
+      ctx.fillStyle = cutoutFillColor;
       ctx.fill();
+
+      // If cutout has sill frame, render the inner sill frame
+      let innerXLeft = xLeft;
+      let innerXRight = xRight;
+      let innerYTop = yTop;
+      let innerYBottom = yBottom;
+
+      if (sa.hasSill) {
+        const sillDepthVal = sa.sillDepth ?? 4;
+        const sillThicknessPx = Math.min(
+          Math.min((xRight - xLeft) / 4, (yBottom - yTop) / 4),
+          viewport.scale * (unit === 'in' ? sillDepthVal : sillDepthVal / 2.54)
+        );
+
+        if (sillThicknessPx > 1) {
+          const sillColor = sa.sillTileColor || '#475569';
+          ctx.save();
+          ctx.fillStyle = sillColor;
+          ctx.strokeStyle = '#334155';
+          ctx.lineWidth = 1;
+
+          // Draw perimeter sill frame
+          ctx.beginPath();
+          defineBoundaryPath();
+          ctx.rect(
+            xLeft + sillThicknessPx,
+            yTop + sillThicknessPx,
+            Math.max(0, xRight - xLeft - 2 * sillThicknessPx),
+            Math.max(0, yBottom - yTop - 2 * sillThicknessPx)
+          );
+          ctx.fill('evenodd');
+          ctx.stroke();
+
+          // Refill inner opening with cutout fill color
+          innerXLeft = xLeft + sillThicknessPx;
+          innerXRight = xRight - sillThicknessPx;
+          innerYTop = yTop + sillThicknessPx;
+          innerYBottom = yBottom - sillThicknessPx;
+
+          ctx.fillStyle = cutoutFillColor;
+          ctx.fillRect(innerXLeft, innerYTop, Math.max(0, innerXRight - innerXLeft), Math.max(0, innerYBottom - innerYTop));
+          ctx.restore();
+        }
+      }
 
       // Distinct bounding stroke: solid slate border
       ctx.strokeStyle = '#475569';
@@ -213,13 +276,16 @@ export function drawSubAreas(
       ctx.stroke();
 
       // Draw two intersecting diagonal lines
-      ctx.strokeStyle = '#94a3b8'; // clear slate gray
+      const isDark = isDarkColor(cutoutFillColor);
+      ctx.strokeStyle = rawCutoutColor
+        ? (isDark ? 'rgba(255, 255, 255, 0.35)' : 'rgba(0, 0, 0, 0.22)')
+        : '#94a3b8';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(xLeft, yTop);
-      ctx.lineTo(xRight, yBottom);
-      ctx.moveTo(xRight, yTop);
-      ctx.lineTo(xLeft, yBottom);
+      ctx.moveTo(innerXLeft, innerYTop);
+      ctx.lineTo(innerXRight, innerYBottom);
+      ctx.moveTo(innerXRight, innerYTop);
+      ctx.lineTo(innerXLeft, innerYBottom);
       ctx.stroke();
       ctx.restore();
     } else {

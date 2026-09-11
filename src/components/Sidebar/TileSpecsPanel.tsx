@@ -187,90 +187,12 @@ export const TileSpecsPanel: React.FC<TileSpecsPanelProps> = ({ onNudge, onReset
               Piece
             </button>
           </div>
+          {(purchasingSettings.main?.purchaseType || 'carton') === 'sheet' && (
+            <p className="text-[10px] text-slate-500 bg-slate-50 border border-slate-200 rounded p-2 mt-1.5">
+              Sheet sizing, coverage, and pricing are configured on the <span className="font-semibold text-indigo-600">Quantities</span> tab.
+            </p>
+          )}
         </div>
-
-        <div className="flex items-center gap-2 pt-1">
-          <input
-            type="checkbox"
-            id="sold-as-mosaic"
-            checked={soldAsMosaic}
-            onChange={(e) => setSoldAsMosaic(e.target.checked)}
-            className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
-          />
-          <label htmlFor="sold-as-mosaic" className="text-xs font-bold text-slate-700 select-none">
-            Mounted on Mesh Sheets (Mosaic)
-          </label>
-        </div>
-        {soldAsMosaic && (
-          <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded space-y-3 animate-fade-in">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[9px] font-bold uppercase tracking-wider text-indigo-800/80 mb-1">
-                  Sheet Width ({unit})
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  step="0.1"
-                  disabled={isLockedForPainting}
-                  value={mosaicWidth === 0 ? '' : mosaicWidth}
-                  onChange={(e) => {
-                    const valStr = e.target.value;
-                    if (valStr === '') {
-                      setMosaicWidth(0);
-                    } else {
-                      const val = parseFloat(valStr);
-                      if (!isNaN(val)) {
-                        setMosaicWidth(val);
-                      }
-                    }
-                  }}
-                  onBlur={() => {
-                    const clamped = Math.max(1, Math.min(100, mosaicWidth || 12));
-                    setMosaicWidth(clamped);
-                  }}
-                  className="w-full px-2.5 py-1.5 bg-white border border-indigo-200/50 rounded text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                />
-              </div>
-              <div>
-                <label className="block text-[9px] font-bold uppercase tracking-wider text-indigo-800/80 mb-1">
-                  Sheet Height ({unit})
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  step="0.1"
-                  disabled={isLockedForPainting}
-                  value={mosaicHeight === 0 ? '' : mosaicHeight}
-                  onChange={(e) => {
-                    const valStr = e.target.value;
-                    if (valStr === '') {
-                      setMosaicHeight(0);
-                    } else {
-                      const val = parseFloat(valStr);
-                      if (!isNaN(val)) {
-                        setMosaicHeight(val);
-                      }
-                    }
-                  }}
-                  onBlur={() => {
-                    const clamped = Math.max(1, Math.min(100, mosaicHeight || 12));
-                    setMosaicHeight(clamped);
-                  }}
-                  className="w-full px-2.5 py-1.5 bg-white border border-indigo-200/50 rounded text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 font-mono"
-                />
-              </div>
-            </div>
-            <div className="text-[10px] font-mono text-indigo-700 font-semibold flex justify-between items-center pt-1.5 border-t border-indigo-100/60">
-              <span>Sheet Sq Footage:</span>
-              <span>
-                {(((mosaicWidth || 12) * (mosaicHeight || 12)) / (unit === 'in' ? 144 : 929.0304)).toFixed(3)} sq ft / sheet
-              </span>
-            </div>
-          </div>
-        )}
       </div>
 
       {shape !== 'round' && (
