@@ -1,6 +1,6 @@
 import React from 'react';
 import { SubArea, MeasurementUnit, WallExtension, TileFinish, TileShape, RectanglePattern, ColorPattern, ColorVariation } from '../../types';
-import { Lock, Unlock, Grid, Paintbrush } from 'lucide-react';
+import { Lock, Unlock, Grid, Paintbrush, Layers } from 'lucide-react';
 import { BorderConfigPanel } from './BorderConfigPanel';
 import { AccentFurnitureSubPanel } from './AccentPanels/AccentFurnitureSubPanel';
 import { SurfaceSelector } from './SurfaceSelector';
@@ -9,6 +9,7 @@ import { UniversalColorPalette } from './Universal/UniversalColorPalette';
 import { UniversalGroutControls } from './Universal/UniversalGroutControls';
 import { NudgeControls } from './NudgeControls';
 import { useAppStore } from '../../store/useAppStore';
+import { detectBenchWallConnections } from '../../utils/benchGeometry';
 
 interface ActiveAccentEditorProps {
   activeSa: SubArea;
@@ -52,6 +53,20 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
   const purchasingSettings = useAppStore(state => state.purchasingSettings);
   const updatePurchasingSetting = useAppStore(state => state.updatePurchasingSetting);
   const integrationData = useAppStore(state => state.integrationData);
+  const foldLines = useAppStore(state => state.foldLines);
+  const wallVertices = useAppStore(state => state.wallVertices);
+
+  const benchConnections = React.useMemo(() => {
+    if (resolvedType !== 'shelf' && rawType !== 'bench') return null;
+    return detectBenchWallConnections({
+      subArea: activeSa,
+      wallWidth,
+      wallHeight,
+      wallExtensions,
+      foldLines,
+      wallVertices,
+    });
+  }, [activeSa, wallWidth, wallHeight, wallExtensions, foldLines, wallVertices, resolvedType, rawType]);
 
   const handleProductSync = (metadata: { name: string; pricingMode: 'carton' | 'sheet' | 'piece'; price: number; cartonSize: number | null }) => {
     updateActiveSubArea({ tileName: metadata.name });
@@ -390,32 +405,92 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
         </select>
       </div>
 
-      {/* Bench / Shelf Depth Setting */}
+      {/* Bench / Shelf Depth Setting & Wall Connection Analysis */}
       {resolvedType === 'shelf' && (
-        <div className="space-y-1 animate-fade-in">
-          <label htmlFor="bench-shelf-depth-input" className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">
-            Bench / Shelf Depth ({unit === 'cm' ? 'cm' : 'inches'})
-          </label>
-          <div className="relative flex items-center">
-            <input
-              type="number"
-              id="bench-shelf-depth-input"
-              step="0.001"
-              min="0.001"
-              max={unit === 'cm' ? 500 : 200}
-              value={depthInput}
-              placeholder={unit === 'cm' ? '15.000' : '6.000'}
-              onChange={handleDepthChange}
-              onBlur={handleDepthBlur}
-              className="w-full px-2.5 py-1.5 pr-14 bg-white border border-slate-200 rounded text-xs font-semibold text-slate-800 focus:ring-1 focus:ring-amber-500 focus:outline-hidden"
-            />
-            <span className="absolute right-2.5 text-xs font-semibold text-slate-400 pointer-events-none">
-              {unit === 'cm' ? 'cm' : 'in'}
-            </span>
+        <div className="space-y-3 animate-fade-in">
+          <div className="space-y-1">
+            <label htmlFor="bench-shelf-depth-input" className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Bench / Shelf Depth ({unit === 'cm' ? 'cm' : 'inches'})
+            </label>
+            <div className="relative flex items-center">
+              <input
+                type="number"
+                id="bench-shelf-depth-input"
+                step="0.001"
+                min="0.001"
+                max={unit === 'cm' ? 500 : 200}
+                value={depthInput}
+                placeholder={unit === 'cm' ? '15.000' : '6.000'}
+                onChange={handleDepthChange}
+                onBlur={handleDepthBlur}
+                className="w-full px-2.5 py-1.5 pr-14 bg-white border border-slate-200 rounded text-xs font-semibold text-slate-800 focus:ring-1 focus:ring-amber-500 focus:outline-hidden"
+              />
+              <span className="absolute right-2.5 text-xs font-semibold text-slate-400 pointer-events-none">
+                {unit === 'cm' ? 'cm' : 'in'}
+              </span>
+            </div>
+            <p className="text-[9.5px] text-slate-400 leading-tight">
+              Sets the floor footprint and 3D extrusion depth (up to 3 decimal places).
+            </p>
           </div>
-          <p className="text-[9.5px] text-slate-400 leading-tight">
-            Sets the floor footprint and 3D extrusion depth (up to 3 decimal places).
-          </p>
+
+          {/* Live Bench Wall Connections Analysis Card */}
+          {benchConnections && (
+            <div className="p-3 bg-indigo-50/60 border border-indigo-100 rounded-lg space-y-2.5 text-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                  <span className="text-[10.5px] font-bold text-indigo-900 uppercase tracking-wider font-mono">
+                    Wall Connections
+                  </span>
+                </div>
+                <span className="text-[9.5px] font-bold px-2 py-0.5 bg-indigo-100/90 text-indigo-800 rounded-full font-mono">
+                  {benchConnections.connectedWallCount === 3
+                    ? '3 Walls'
+                    : benchConnections.connectedWallCount === 2
+                    ? '2 Walls'
+                    : '1 Wall'}
+                </span>
+              </div>
+
+              <div className="text-[11px] font-medium text-slate-700 bg-white/80 px-2.5 py-1.5 rounded border border-indigo-100/70">
+                <span className="text-slate-500 text-[10px] block uppercase font-bold tracking-tight">Configuration</span>
+                <span className="font-bold text-slate-800">
+                  {benchConnections.configuration === 'alcove'
+                    ? 'Alcove (Enclosed Left & Right)'
+                    : benchConnections.configuration === 'corner_left'
+                    ? 'Left Corner Bench'
+                    : benchConnections.configuration === 'corner_right'
+                    ? 'Right Corner Bench'
+                    : 'Freestanding / Floating Bench'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono">
+                <div className="flex items-center justify-between bg-white px-2 py-1 rounded border border-slate-200">
+                  <span className="text-slate-500">Left Return:</span>
+                  <span className={benchConnections.exposedSides.left ? 'font-bold text-amber-700' : 'font-bold text-emerald-700'}>
+                    {benchConnections.exposedSides.left ? 'Exposed' : 'Wall Flush'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between bg-white px-2 py-1 rounded border border-slate-200">
+                  <span className="text-slate-500">Right Return:</span>
+                  <span className={benchConnections.exposedSides.right ? 'font-bold text-amber-700' : 'font-bold text-emerald-700'}>
+                    {benchConnections.exposedSides.right ? 'Exposed' : 'Wall Flush'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-indigo-100 flex items-center justify-between text-[10.5px] text-slate-600 font-mono">
+                <span>Total 3D Area:</span>
+                <span className="font-bold text-indigo-900">
+                  {unit === 'cm'
+                    ? `${(benchConnections.dimensions.totalSurfaceArea / 10000).toFixed(2)} m²`
+                    : `${(benchConnections.dimensions.totalSurfaceArea / 144).toFixed(2)} sq ft`}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

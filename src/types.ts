@@ -143,6 +143,45 @@ export interface AreaReport {
   borderArea?: number;
   borderTilesNeeded?: number;
   borderTileName?: string;
+  // Bench / 3D Return stats
+  isBench?: boolean;
+  benchConnections?: BenchWallConnections;
+  benchTopArea?: number;
+  benchFrontArea?: number;
+  benchExposedEndArea?: number;
+  benchTotal3DArea?: number;
+  benchExposedLinearEdgeFeet?: number;
+}
+
+export interface BenchExposedSides {
+  left: boolean;
+  right: boolean;
+  front: boolean;
+  top: boolean;
+  bottom: boolean;
+}
+
+export interface BenchAreaDimensions {
+  topArea: number;
+  frontArea: number;
+  leftEndArea: number;
+  rightEndArea: number;
+  bottomArea: number;
+  totalSurfaceArea: number;
+  exposedLinearEdgeFeet: number;
+}
+
+export interface BenchWallConnections {
+  touchesBackWall: boolean;
+  touchesLeftWall: boolean;
+  touchesRightWall: boolean;
+  touchesFloor: boolean;
+  connectedWallCount: 1 | 2 | 3;
+  configuration: 'alcove' | 'corner_left' | 'corner_right' | 'freestanding';
+  configurationLabel: string;
+  exposedSides: BenchExposedSides;
+  exposedEndCount: number;
+  dimensions: BenchAreaDimensions;
 }
 
 export interface SubArea {

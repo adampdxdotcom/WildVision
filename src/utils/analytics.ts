@@ -1,7 +1,9 @@
-import { TileShape, RectanglePattern, AreaReport, SubArea, ComprehensiveReport, WallExtension, BorderConfig } from '../types';
+import { TileShape, RectanglePattern, AreaReport, SubArea, ComprehensiveReport, WallExtension, BorderConfig, FoldLine } from '../types';
 import { generateTiles } from './generator';
 import { getTrueArea, getPolygonArea, getTessellatedPath, isPointInPolygon, clipPolygon } from './geometry';
 import { useAppStore } from '../store/useAppStore';
+import { detectBenchWallConnections } from './benchGeometry';
+import { isSubAreaInBenchMode } from '../components/TileCanvas/painters/geometryHelpers';
 
 
 interface ComputeStatsParams {
@@ -31,6 +33,7 @@ interface ComputeStatsParams {
   isPicket?: boolean;
   picketLength?: number;
   wallVertices?: {x: number, y: number}[];
+  foldLines?: FoldLine[];
   reuseCuts?: boolean;
 }
 
@@ -684,6 +687,37 @@ export function computeComprehensiveStatistics(params: ComputeStatsParams): Comp
       report.sillTileWidth = sW;
       report.sillTileHeight = sH;
       report.sillTileColor = sa.sillTileColor || '#475569';
+    }
+
+    // 3D Bench & Exposed Sides Analysis
+    const rawType = (sa as any).accentType;
+    const isBench = rawType === 'bench' || rawType === 'shelf' || isSubAreaInBenchMode(sa);
+    if (isBench) {
+      try {
+        const storeState = useAppStore.getState();
+        const foldLines = params.foldLines || storeState.foldLines || [];
+        const wallVertices = params.wallVertices || storeState.wallVertices || [];
+        const wallExtensions = params.extensions || storeState.wallExtensions || [];
+
+        const benchConnections = detectBenchWallConnections({
+          subArea: sa,
+          wallWidth: params.wallWidth,
+          wallHeight: params.wallHeight,
+          wallExtensions,
+          foldLines,
+          wallVertices,
+        });
+
+        report.isBench = true;
+        report.benchConnections = benchConnections;
+        report.benchTopArea = benchConnections.dimensions.topArea;
+        report.benchFrontArea = benchConnections.dimensions.frontArea;
+        report.benchExposedEndArea = benchConnections.dimensions.leftEndArea + benchConnections.dimensions.rightEndArea;
+        report.benchTotal3DArea = benchConnections.dimensions.totalSurfaceArea;
+        report.benchExposedLinearEdgeFeet = benchConnections.dimensions.exposedLinearEdgeFeet;
+      } catch (err) {
+        // Fallback gracefully if state context is unavailable
+      }
     }
 
     return {

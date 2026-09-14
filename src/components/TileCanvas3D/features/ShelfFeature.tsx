@@ -4,6 +4,7 @@ import { FeatureProps } from '../types';
 import { useAppStore } from '../../../store/useAppStore';
 import { getMaterialFinishProps } from '../materialUtils';
 import { useLayoutConfig } from '../LayoutConfigContext';
+import { detectBenchWallConnections } from '../../../utils/benchGeometry';
 
 export interface ShelfFeatureProps extends FeatureProps {
   isFloorMounted?: boolean;
@@ -27,6 +28,22 @@ export const ShelfFeature: React.FC<ShelfFeatureProps> = ({
   const globalFinish = context ? context.tileFinish : globalFinishStore;
   const resolvedFinish = sa.tileFinish || globalFinish;
   const finishProps = React.useMemo(() => getMaterialFinishProps(resolvedFinish), [resolvedFinish]);
+
+  const foldLines = useAppStore(state => state.foldLines) || [];
+  const wallVertices = useAppStore(state => state.wallVertices) || [];
+  const wallExtensionsStore = useAppStore(state => state.wallExtensions) || [];
+  const wallExtensions = context ? context.wallExtensions : wallExtensionsStore;
+
+  const benchConnections = React.useMemo(() => {
+    return detectBenchWallConnections({
+      subArea: sa,
+      wallWidth: bounds.width,
+      wallHeight: bounds.height,
+      wallExtensions,
+      foldLines,
+      wallVertices,
+    });
+  }, [sa, bounds.width, bounds.height, wallExtensions, foldLines, wallVertices]);
 
   const depthD3 = to3D(sa.depth ?? 6.0);
 
@@ -229,17 +246,25 @@ export const ShelfFeature: React.FC<ShelfFeatureProps> = ({
     <mesh position={[localX, localY, localZ]} key={isolatedBumpTex ? 'shelf_wall_bump' : 'shelf_wall_flat'} castShadow receiveShadow>
       <boxGeometry args={[d3Width, d3Height, depthD3]} />
       {/* 0: Right (+X) */}
-      {sideTexture ? (
-        <meshStandardMaterial attach="material-0" map={sideTexture} bumpMap={sideBumpTexture || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
+      {benchConnections.exposedSides.right ? (
+        sideTexture ? (
+          <meshStandardMaterial attach="material-0" map={sideTexture} bumpMap={sideBumpTexture || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
+        ) : (
+          <meshStandardMaterial attach="material-0" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
+        )
       ) : (
-        <meshStandardMaterial attach="material-0" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
+        <meshStandardMaterial attach="material-0" color="#334155" roughness={0.4} metalness={0.1} side={THREE.DoubleSide} polygonOffset={true} polygonOffsetFactor={1} polygonOffsetUnits={1} />
       )}
 
       {/* 1: Left (-X) */}
-      {sideTexture ? (
-        <meshStandardMaterial attach="material-1" map={sideTexture} bumpMap={sideBumpTexture || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
+      {benchConnections.exposedSides.left ? (
+        sideTexture ? (
+          <meshStandardMaterial attach="material-1" map={sideTexture} bumpMap={sideBumpTexture || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
+        ) : (
+          <meshStandardMaterial attach="material-1" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
+        )
       ) : (
-        <meshStandardMaterial attach="material-1" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
+        <meshStandardMaterial attach="material-1" color="#334155" roughness={0.4} metalness={0.1} side={THREE.DoubleSide} polygonOffset={true} polygonOffsetFactor={1} polygonOffsetUnits={1} />
       )}
 
       {/* 2: Top (+Y) */}
@@ -250,7 +275,15 @@ export const ShelfFeature: React.FC<ShelfFeatureProps> = ({
       )}
 
       {/* 3: Bottom (-Y) */}
-      <meshStandardMaterial attach="material-3" color="#334155" roughness={0.4} metalness={0.1} side={THREE.DoubleSide} polygonOffset={true} polygonOffsetFactor={1} polygonOffsetUnits={1} />
+      {benchConnections.exposedSides.bottom ? (
+        topTexture ? (
+          <meshStandardMaterial attach="material-3" map={topTexture} bumpMap={topBumpTexture || undefined} bumpScale={0.8} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
+        ) : (
+          <meshStandardMaterial attach="material-3" color={fallbackColor} roughness={finishProps.roughness} metalness={finishProps.metalness} polygonOffset={true} polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
+        )
+      ) : (
+        <meshStandardMaterial attach="material-3" color="#334155" roughness={0.4} metalness={0.1} side={THREE.DoubleSide} polygonOffset={true} polygonOffsetFactor={1} polygonOffsetUnits={1} />
+      )}
 
       {/* 4: Front (+Z) */}
       {isolatedTex ? (

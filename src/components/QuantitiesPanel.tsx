@@ -717,6 +717,70 @@ export const QuantitiesPanel: React.FC<QuantitiesPanelProps> = ({
           </div>
         )}
 
+        {/* 3D Bench & Exposed Sides Analysis */}
+        {activeReport.isBench && activeReport.benchConnections && (
+          <div className="mt-4 pt-3 border-t border-slate-100 space-y-2.5 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-widest block font-mono">
+                3D Bench Wall Connections
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded font-mono">
+                {activeReport.benchConnections.connectedWallCount === 3
+                  ? '3 Walls Connected'
+                  : activeReport.benchConnections.connectedWallCount === 2
+                  ? '2 Walls Connected'
+                  : '1 Wall Connected'}
+              </span>
+            </div>
+
+            <div className="p-2.5 bg-indigo-50/50 border border-indigo-100 rounded-lg space-y-2 text-slate-700">
+              <div className="flex justify-between items-center text-[11px]">
+                <span className="font-semibold text-slate-600">Layout Style</span>
+                <span className="font-bold text-slate-800 capitalize font-mono">
+                  {activeReport.benchConnections.configuration === 'alcove'
+                    ? 'Alcove (Enclosed)'
+                    : activeReport.benchConnections.configuration === 'corner_left'
+                    ? 'Left Corner Bench'
+                    : activeReport.benchConnections.configuration === 'corner_right'
+                    ? 'Right Corner Bench'
+                    : 'Freestanding / Floating'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5 pt-1 text-[10px] font-mono">
+                <div className="flex items-center justify-between bg-white px-2 py-1 rounded border border-slate-100">
+                  <span className="text-slate-500">Left Return:</span>
+                  <span className={activeReport.benchConnections.exposedSides.left ? 'font-bold text-amber-700' : 'font-bold text-emerald-700'}>
+                    {activeReport.benchConnections.exposedSides.left ? 'Exposed' : 'Wall Flush'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between bg-white px-2 py-1 rounded border border-slate-100">
+                  <span className="text-slate-500">Right Return:</span>
+                  <span className={activeReport.benchConnections.exposedSides.right ? 'font-bold text-amber-700' : 'font-bold text-emerald-700'}>
+                    {activeReport.benchConnections.exposedSides.right ? 'Exposed' : 'Wall Flush'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-indigo-100/80 flex justify-between items-center text-[11px] font-mono">
+                <span className="font-semibold text-slate-600">Total 3D Tiled Area:</span>
+                <span className="font-bold text-indigo-900">
+                  {((activeReport.benchTotal3DArea || 0) / 144).toFixed(2)} sq ft
+                </span>
+              </div>
+
+              {activeReport.benchExposedLinearEdgeFeet !== undefined && (
+                <div className="flex justify-between items-center text-[11px] font-mono">
+                  <span className="font-semibold text-slate-600">Exposed Edge Trim:</span>
+                  <span className="font-bold text-indigo-900">
+                    {activeReport.benchExposedLinearEdgeFeet.toFixed(2)} lin ft
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Lock Overlay (only if guest) */}
         {!user && (
           <div className="absolute inset-0 bg-white/20 backdrop-blur-[1px] rounded-lg flex flex-col items-center justify-center p-3 text-center z-10">
