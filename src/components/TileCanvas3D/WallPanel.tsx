@@ -68,7 +68,18 @@ export const WallPanel: React.FC<WallPanelProps> = ({
 
   const maxBound = Math.max(bounds.width, bounds.height || 1);
   const scaleFactor = 5;
-  const to3D = React.useCallback((val: number) => (val / maxBound) * scaleFactor, [maxBound]);
+  const to3D = React.useCallback(
+    (val: number) => {
+      if (panel.width > 0 && panel.d3Width > 0) {
+        return (val / panel.width) * panel.d3Width;
+      }
+      if (panel.height > 0 && panel.d3Height > 0) {
+        return (val / panel.height) * panel.d3Height;
+      }
+      return (val / maxBound) * scaleFactor;
+    },
+    [panel.width, panel.d3Width, panel.height, panel.d3Height, maxBound]
+  );
 
   const width = margin ? Math.max(0.001, panel.d3Width - margin) : panel.d3Width;
   const height = margin ? Math.max(0.001, panel.d3Height - margin) : panel.d3Height;
