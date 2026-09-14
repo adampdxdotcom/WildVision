@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { SubArea, MeasurementUnit, WallExtension, TileFinish, TileShape, RectanglePattern, ColorPattern, ColorVariation } from '../../types';
-import { Lock, Unlock, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Grid, Paintbrush } from 'lucide-react';
+import { Lock, Unlock, Grid, Paintbrush } from 'lucide-react';
 import { BorderConfigPanel } from './BorderConfigPanel';
 import { AccentFurnitureSubPanel } from './AccentPanels/AccentFurnitureSubPanel';
 import { SurfaceSelector } from './SurfaceSelector';
 import { UniversalTileSpecs } from './Universal/UniversalTileSpecs';
 import { UniversalColorPalette } from './Universal/UniversalColorPalette';
 import { UniversalGroutControls } from './Universal/UniversalGroutControls';
+import { NudgeControls } from './NudgeControls';
 import { useAppStore } from '../../store/useAppStore';
 
 interface ActiveAccentEditorProps {
@@ -36,7 +37,6 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
     : (activeSa.tileColor || null);
   const activeCutoutColorHex = rawCutoutColor || '#f8fafc';
 
-  const [fineTuneIncrement, setFineTuneIncrement] = useState<number>(0.125);
   const setIsCanvasDirty = useAppStore(state => state.setIsCanvasDirty);
   const subAreas = useAppStore(state => state.subAreas);
   const mainTileName = useAppStore(state => state.tileName);
@@ -67,84 +67,28 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
     }));
   };
   
-  const calculateNudgeAmount = (dir: 'up' | 'down' | 'left' | 'right', isShiftKey: boolean): number => {
-    if (isShiftKey) {
-      return fineTuneIncrement;
-    }
-    const tileWidth = activeSa.tileWidth || 6;
-    const tileHeight = activeSa.tileHeight || 3;
-    const shape = activeSa.shape || 'rectangle';
-    const groutWidth = activeSa.groutWidth ?? (unit === 'cm' ? 0.3 : 0.125);
-
-    const wUnit = tileWidth + (unit === 'in' ? groutWidth : groutWidth / 10);
-    const hUnit = tileHeight + (unit === 'in' ? groutWidth : groutWidth / 10);
-
-    if (shape === 'hexagon') {
-      if (dir === 'up' || dir === 'down') {
-        const sEff = wUnit / Math.sqrt(3);
-        return 1.5 * sEff;
-      }
-      return wUnit;
-    }
-    if ((shape as string) === 'penny') {
-      if (dir === 'up' || dir === 'down') {
-        return wUnit * (Math.sqrt(3) / 2);
-      }
-      return wUnit;
-    }
-    if (shape === 'diamond') {
-      if (dir === 'up' || dir === 'down') {
-        return 0.5 * tileHeight + (unit === 'in' ? groutWidth : groutWidth / 10);
-      }
-      return wUnit;
-    }
-    if (shape === 'scallop') {
-      if (dir === 'up' || dir === 'down') {
-        return tileWidth / 2 + (unit === 'in' ? groutWidth : groutWidth / 10);
-      }
-      return wUnit;
-    }
-    if (shape === 'triangle') {
-      if (dir === 'left' || dir === 'right') {
-        return wUnit / 2;
-      }
-      const actualTileH = tileWidth * (Math.sqrt(3) / 2);
-      return actualTileH + (unit === 'in' ? groutWidth : groutWidth / 10);
-    }
-    if ((shape as string) === 'versailles') {
-      return unit === 'in' ? 16 : 40.64;
-    }
-    if (dir === 'left' || dir === 'right') {
-      return wUnit;
-    }
-    return hUnit;
-  };
-
-  const handleNudgeClick = (dir: 'up' | 'down' | 'left' | 'right', e: React.MouseEvent) => {
-    e.preventDefault();
-    const amountInUnits = calculateNudgeAmount(dir, e.shiftKey);
+  const handleNudge = (dir: 'up' | 'down' | 'left' | 'right', amount: number) => {
     const currentX = activeSa.offsetX || 0;
     const currentY = activeSa.offsetY || 0;
     
     switch (dir) {
       case 'left':
-        updateActiveSubArea({ offsetX: Number((currentX - amountInUnits).toFixed(4)) });
+        updateActiveSubArea({ offsetX: Number((currentX - amount).toFixed(4)) });
         break;
       case 'right':
-        updateActiveSubArea({ offsetX: Number((currentX + amountInUnits).toFixed(4)) });
+        updateActiveSubArea({ offsetX: Number((currentX + amount).toFixed(4)) });
         break;
       case 'down':
-        updateActiveSubArea({ offsetY: Number((currentY - amountInUnits).toFixed(4)) });
+        updateActiveSubArea({ offsetY: Number((currentY - amount).toFixed(4)) });
         break;
       case 'up':
-        updateActiveSubArea({ offsetY: Number((currentY + amountInUnits).toFixed(4)) });
+        updateActiveSubArea({ offsetY: Number((currentY + amount).toFixed(4)) });
         break;
     }
     setIsCanvasDirty(true);
   };
 
-  const handleResetNudge = (e: React.MouseEvent) => {
-    e.preventDefault();
+  const handleResetNudge = () => {
     updateActiveSubArea({ offsetX: 0, offsetY: 0 });
     setIsCanvasDirty(true);
   };
@@ -171,6 +115,53 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
   const savedProfiles = subAreas.filter(
     sa => sa.isMaterialParent && sa.id !== activeSa.id
   );
+
+  const fallbackDepth = unit === 'cm' ? 15.0 : 6.0;
+  const [depthInput, setDepthInput] = React.useState<string>(() => {
+    return activeSa.depth !== undefined && activeSa.depth !== null
+      ? String(activeSa.depth)
+      : String(fallbackDepth);
+  });
+
+  React.useEffect(() => {
+    if (activeSa.depth !== undefined && activeSa.depth !== null) {
+      if (parseFloat(depthInput) !== activeSa.depth) {
+        setDepthInput(String(activeSa.depth));
+      }
+    } else {
+      setDepthInput(String(fallbackDepth));
+    }
+  }, [activeSa.id, activeSa.depth, unit, fallbackDepth]);
+
+  const handleDepthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawVal = e.target.value;
+    setDepthInput(rawVal);
+    if (rawVal === '') {
+      return;
+    }
+    const parsed = parseFloat(rawVal);
+    if (!isNaN(parsed)) {
+      const rounded = Math.round(parsed * 1000) / 1000;
+      updateActiveSubArea({ depth: rounded });
+      setIsCanvasDirty(true);
+    }
+  };
+
+  const handleDepthBlur = () => {
+    const parsed = parseFloat(depthInput);
+    if (isNaN(parsed) || parsed <= 0) {
+      setDepthInput(String(fallbackDepth));
+      updateActiveSubArea({ depth: fallbackDepth });
+      setIsCanvasDirty(true);
+    } else {
+      const maxLimit = unit === 'cm' ? 500 : 200;
+      const clamped = Math.max(0.001, Math.min(maxLimit, parsed));
+      const rounded = Math.round(clamped * 1000) / 1000;
+      setDepthInput(String(rounded));
+      updateActiveSubArea({ depth: rounded });
+      setIsCanvasDirty(true);
+    }
+  };
 
   return (
     <div className="space-y-4 animate-slide-up">
@@ -383,9 +374,9 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
               isCutout: type === 'cutout',
             };
             if (type === 'shelf') {
-              updates.depth = activeSa.depth ?? 6.0;
+              updates.depth = activeSa.depth ?? (unit === 'cm' ? 15.0 : 6.0);
             } else if (type === 'niche') {
-              updates.depth = activeSa.depth ?? 3.5;
+              updates.depth = activeSa.depth ?? (unit === 'cm' ? 9.0 : 3.5);
             }
             updateActiveSubArea(updates);
           }}
@@ -398,6 +389,35 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
           <option value="slab">Solid Surface (Slab)</option>
         </select>
       </div>
+
+      {/* Bench / Shelf Depth Setting */}
+      {resolvedType === 'shelf' && (
+        <div className="space-y-1 animate-fade-in">
+          <label htmlFor="bench-shelf-depth-input" className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">
+            Bench / Shelf Depth ({unit === 'cm' ? 'cm' : 'inches'})
+          </label>
+          <div className="relative flex items-center">
+            <input
+              type="number"
+              id="bench-shelf-depth-input"
+              step="0.001"
+              min="0.001"
+              max={unit === 'cm' ? 500 : 200}
+              value={depthInput}
+              placeholder={unit === 'cm' ? '15.000' : '6.000'}
+              onChange={handleDepthChange}
+              onBlur={handleDepthBlur}
+              className="w-full px-2.5 py-1.5 pr-14 bg-white border border-slate-200 rounded text-xs font-semibold text-slate-800 focus:ring-1 focus:ring-amber-500 focus:outline-hidden"
+            />
+            <span className="absolute right-2.5 text-xs font-semibold text-slate-400 pointer-events-none">
+              {unit === 'cm' ? 'cm' : 'in'}
+            </span>
+          </div>
+          <p className="text-[9.5px] text-slate-400 leading-tight">
+            Sets the floor footprint and 3D extrusion depth (up to 3 decimal places).
+          </p>
+        </div>
+      )}
 
       {/* 0. Slab / Solid Surface Panel */}
       {resolvedType === 'slab' && !activeSa.linkedMaterialId && (
@@ -630,82 +650,14 @@ export const ActiveAccentEditor: React.FC<ActiveAccentEditorProps> = ({
       {/* Layout Nudge Tool - Available for all tiled features (unlinked and children) */}
       {resolvedType !== 'slab' && resolvedType !== 'cutout' && (
         <div className="bg-white rounded border border-slate-200 p-4 shadow-xs space-y-3">
-          <div className="flex items-center justify-between pb-1 border-b border-slate-100">
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Nudge Layout
-            </label>
-            {(Boolean(activeSa.offsetX) || Boolean(activeSa.offsetY)) && (
-              <span className="text-[10px] font-mono text-slate-500 font-medium">
-                X: {activeSa.offsetX ? (activeSa.offsetX > 0 ? `+${activeSa.offsetX}` : activeSa.offsetX) : 0}{unit}{' '}
-                Y: {activeSa.offsetY ? (activeSa.offsetY > 0 ? `+${activeSa.offsetY}` : activeSa.offsetY) : 0}{unit}
-              </span>
-            )}
-          </div>
-          
-          <div className="flex flex-col items-center gap-3 bg-slate-50 border border-slate-200 rounded p-4">
-            <div className="grid grid-cols-3 grid-rows-3 gap-1">
-              <div />
-              <button
-                type="button"
-                onClick={(e) => handleNudgeClick('up', e)}
-                className="p-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform cursor-pointer"
-                title="Nudge Up (Hold Shift for Fine Tune)"
-              >
-                <ChevronUp size={16} />
-              </button>
-              <div />
-              <button
-                type="button"
-                onClick={(e) => handleNudgeClick('left', e)}
-                className="p-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform cursor-pointer"
-                title="Nudge Left (Hold Shift for Fine Tune)"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                type="button"
-                onClick={handleResetNudge}
-                className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform cursor-pointer"
-                title="Reset Alignment (0,0)"
-              >
-                <RefreshCw size={16} />
-              </button>
-              <button
-                type="button"
-                onClick={(e) => handleNudgeClick('right', e)}
-                className="p-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform cursor-pointer"
-                title="Nudge Right (Hold Shift for Fine Tune)"
-              >
-                <ChevronRight size={16} />
-              </button>
-              <div />
-              <button
-                type="button"
-                onClick={(e) => handleNudgeClick('down', e)}
-                className="p-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform cursor-pointer"
-                title="Nudge Down (Hold Shift for Fine Tune)"
-              >
-                <ChevronDown size={16} />
-              </button>
-              <div />
-            </div>
-            <div className="flex items-center gap-2 w-full mt-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 whitespace-nowrap">
-                Fine-Tune Step
-              </span>
-              <input
-                type="number"
-                min="0.001"
-                step="0.001"
-                value={fineTuneIncrement}
-                onChange={(e) => setFineTuneIncrement(Math.max(0.001, parseFloat(e.target.value) || 0.125))}
-                className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:outline-none focus:border-indigo-500 flex-1"
-              />
-            </div>
-            <p className="text-[9px] text-slate-400 text-center w-full mt-[-4px]">
-              Hold <b>SHIFT</b> while clicking to use fine-tune step.
-            </p>
-          </div>
+          <NudgeControls
+            unit={unit}
+            offsetX={activeSa.offsetX || 0}
+            offsetY={activeSa.offsetY || 0}
+            onNudge={handleNudge}
+            onReset={handleResetNudge}
+            resetTitle="Reset Alignment (0,0)"
+          />
 
           {/* Align to Main Wall Option - Below nudge layout info, ONLY present if "main wall tile" is selected */}
           {isUsingMainWallTile && (

@@ -429,20 +429,18 @@ export default function App() {
 
   // 4. Manual fine-tune nudging adjustments
   const handleNudge = (dir: 'up' | 'down' | 'left' | 'right', amount: number) => {
-    const actualAmt = unit === 'cm' ? amount * 2.54 : amount;
-    
     switch (dir) {
       case 'left':
-        setOffsetX((prev) => Number((prev - actualAmt).toFixed(4)));
+        setOffsetX((prev) => Number((prev - amount).toFixed(4)));
         break;
       case 'right':
-        setOffsetX((prev) => Number((prev + actualAmt).toFixed(4)));
+        setOffsetX((prev) => Number((prev + amount).toFixed(4)));
         break;
       case 'down':
-        setOffsetY((prev) => Number((prev - actualAmt).toFixed(4)));
+        setOffsetY((prev) => Number((prev - amount).toFixed(4)));
         break;
       case 'up':
-        setOffsetY((prev) => Number((prev + actualAmt).toFixed(4)));
+        setOffsetY((prev) => Number((prev + amount).toFixed(4)));
         break;
     }
   };

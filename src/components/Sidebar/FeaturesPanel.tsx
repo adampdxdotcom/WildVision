@@ -7,6 +7,7 @@ import { useAppStore } from '../../store/useAppStore';
 
 const AESTHETIC_KEYS: (keyof SubArea | string)[] = [
   'shape',
+  'depth',
   'tileWidth',
   'tileHeight',
   'pattern',

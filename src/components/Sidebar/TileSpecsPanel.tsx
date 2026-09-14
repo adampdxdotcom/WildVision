@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useAppStore } from '../../store/useAppStore';
-import { Settings, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { BorderConfigPanel } from './BorderConfigPanel';
 import { UniversalTileSpecs } from './Universal/UniversalTileSpecs';
+import { NudgeControls } from './NudgeControls';
 
 export interface TileSpecsPanelProps {
   onNudge: (dir: 'up' | 'down' | 'left' | 'right', amount: number) => void;
@@ -10,8 +11,6 @@ export interface TileSpecsPanelProps {
 }
 
 export const TileSpecsPanel: React.FC<TileSpecsPanelProps> = ({ onNudge, onResetAlignment }) => {
-  const [fineTuneIncrement, setFineTuneIncrement] = useState<number>(0.125);
-  
   // Fetch everything from Zustand
   const shape = useAppStore(state => state.shape);
   const setShape = useAppStore(state => state.setShape);
@@ -42,6 +41,8 @@ export const TileSpecsPanel: React.FC<TileSpecsPanelProps> = ({ onNudge, onReset
   const setNotes = useAppStore(state => state.setNotes);
   const border = useAppStore(state => state.wallBorder);
   const setBorder = useAppStore(state => state.setWallBorder);
+  const offsetX = useAppStore(state => state.offsetX);
+  const offsetY = useAppStore(state => state.offsetY);
   
   const isPicket = useAppStore(state => state.isPicket);
   const setIsPicket = useAppStore(state => state.setIsPicket);
@@ -77,27 +78,6 @@ export const TileSpecsPanel: React.FC<TileSpecsPanelProps> = ({ onNudge, onReset
 
   const tileColorOverrides = useAppStore(state => state.tileColorOverrides) || {};
   const isLockedForPainting = Object.keys(tileColorOverrides).length > 0;
-
-  const calculateNudgeAmount = (dir: 'up' | 'down' | 'left' | 'right', isShiftKey: boolean): number => {
-    if (isShiftKey) {
-      return fineTuneIncrement;
-    }
-    const wUnit = tileWidth + (unit === 'in' ? groutWidth : groutWidth / 10);
-    const hUnit = tileHeight + (unit === 'in' ? groutWidth : groutWidth / 10);
-    if (shape === 'hexagon') {
-      if (dir === 'up' || dir === 'down') {
-        const sEff = wUnit / Math.sqrt(3);
-        return 1.5 * sEff;
-      }
-      return wUnit;
-    }
-    return (dir === 'up' || dir === 'down') ? hUnit : wUnit;
-  };
-
-  const handleNudgeClick = (dir: 'up' | 'down' | 'left' | 'right', e: React.MouseEvent) => {
-    const amount = calculateNudgeAmount(dir, e.shiftKey);
-    onNudge(dir, amount);
-  };
 
   return (
     <div className="bg-white rounded border border-slate-200 p-5 shadow-xs space-y-5">
@@ -239,71 +219,16 @@ export const TileSpecsPanel: React.FC<TileSpecsPanelProps> = ({ onNudge, onReset
           </div>
         </div>
       )}
-          {/* Layout Nudge Tool */}
-      <div className="pt-3 border-t border-slate-100 space-y-3">
-        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-          Nudge Layout
-        </label>
-        
-        <div className="flex flex-col items-center gap-3 bg-slate-50 border border-slate-200 rounded p-4">
-          <div className="grid grid-cols-3 grid-rows-3 gap-1">
-            <div />
-            <button
-              onClick={(e) => handleNudgeClick('up', e)}
-              className="p-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform"
-              title="Nudge Up (Hold Shift for Fine Tune)"
-            >
-              <ChevronUp size={16} />
-            </button>
-            <div />
-            <button
-              onClick={(e) => handleNudgeClick('left', e)}
-              className="p-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform"
-              title="Nudge Left (Hold Shift for Fine Tune)"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <button
-              onClick={onResetAlignment}
-              className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform"
-              title="Reset Alignment"
-            >
-              <RefreshCw size={16} />
-            </button>
-            <button
-              onClick={(e) => handleNudgeClick('right', e)}
-              className="p-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform"
-              title="Nudge Right (Hold Shift for Fine Tune)"
-            >
-              <ChevronRight size={16} />
-            </button>
-            <div />
-            <button
-              onClick={(e) => handleNudgeClick('down', e)}
-              className="p-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:scale-95 transition-transform"
-              title="Nudge Down (Hold Shift for Fine Tune)"
-            >
-              <ChevronDown size={16} />
-            </button>
-            <div />
-          </div>
-          <div className="flex items-center gap-2 w-full mt-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Fine-Tune Step
-            </span>
-            <input
-              type="number"
-              min="0.001"
-              step="0.001"
-              value={fineTuneIncrement}
-              onChange={(e) => setFineTuneIncrement(Math.max(0.001, parseFloat(e.target.value) || 0.125))}
-              className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:outline-hidden focus:border-indigo-500 flex-1"
-            />
-          </div>
-          <p className="text-[9px] text-slate-400 text-center w-full mt-[-4px]">
-            Hold <b>SHIFT</b> while clicking to use fine-tune step.
-          </p>
-        </div>
+      {/* Layout Nudge Tool */}
+      <div className="pt-3 border-t border-slate-100">
+        <NudgeControls
+          unit={unit}
+          offsetX={offsetX}
+          offsetY={offsetY}
+          onNudge={onNudge}
+          onReset={onResetAlignment}
+          resetTitle="Reset Alignment"
+        />
       </div>
 
       <BorderConfigPanel border={border} onChange={setBorder} shape={shape} />

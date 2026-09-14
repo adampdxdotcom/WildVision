@@ -43,7 +43,7 @@ export const useSubAreaDrag = ({
       if (!sa || !activeSubAreaId) return;
 
       const unit = useAppStore.getState().unit || 'in';
-      const increment = unit === 'cm' ? 5 : 6;
+      const increment = unit === 'cm' ? 1 : 1;
       const minSize = increment;
 
       // Target position of the dragged corner/handle in wall space
@@ -93,7 +93,7 @@ export const useSubAreaDrag = ({
       let newY = subAreaStartPos.y + deltaY;
 
       const unit = useAppStore.getState().unit || 'in';
-      const increment = unit === 'cm' ? 5 : 6;
+      const increment = unit === 'cm' ? 1 : 1;
       const shapeWidth = sa.width;
       const shapeHeight = sa.height;
       const bounds = getCombinedWallBounds(wallWidth, wallHeight, wallExtensions, wallVertices);
@@ -135,8 +135,9 @@ export const useSubAreaDrag = ({
         });
 
         const guides: { axis: 'x' | 'y'; value: number }[] = [];
+        const guideSnapThreshold = unit === 'cm' ? 2 : 1.5;
         
-        let minDiffX = increment;
+        let minDiffX = guideSnapThreshold;
         let offsetX = 0;
         let snappedTargetX: number | null = null;
         const myPointsX = [newX, newX + shapeWidth / 2, newX + shapeWidth];
@@ -156,7 +157,7 @@ export const useSubAreaDrag = ({
           guides.push({ axis: 'x', value: snappedTargetX });
         }
 
-        let minDiffY = increment;
+        let minDiffY = guideSnapThreshold;
         let offsetY = 0;
         let snappedTargetY: number | null = null;
         const myPointsY = [newY, newY + shapeHeight / 2, newY + shapeHeight];

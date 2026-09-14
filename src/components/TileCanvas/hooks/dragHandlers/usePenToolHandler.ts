@@ -71,7 +71,8 @@ export const usePenToolHandler = ({
           t = Math.max(0, Math.min(1, t));
           const rawScalarDistance = t * totalLength;
 
-          const increment = unit === 'cm' ? 5 : 6;
+          const isSubArea = hoverMatch && hoverMatch.id !== 'main';
+          const increment = isSubArea ? (unit === 'cm' ? 1 : 1) : (unit === 'cm' ? 5 : 6);
 
           let snappedDistance = Math.round(rawScalarDistance / increment) * increment;
           snappedDistance = Math.max(0, Math.min(totalLength, snappedDistance));

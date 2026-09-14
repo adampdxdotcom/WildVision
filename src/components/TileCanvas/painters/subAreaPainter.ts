@@ -334,51 +334,50 @@ export function drawSubAreas(
         ctx.clip();
       }
 
-    if (!isDraftMode) {
-      if ((sa as any).accentType === 'slab') {
-        let patternFilled = false;
-        if (sa.surfaceUrl) {
-          const img = getLoadedSurfaceImage(sa.surfaceUrl);
-          if (img) {
-            const pattern = ctx.createPattern(img, 'no-repeat');
-            if (pattern) {
-              const imageAspect = img.naturalWidth / img.naturalHeight;
-              const saAspect = sa.width / sa.height;
-              
-              const matrix = new DOMMatrix();
-              matrix.translateSelf(saCanvasMin.x, saCanvasMin.y);
-              
-              let scaleX = 1, scaleY = 1;
-              if (imageAspect > saAspect) {
-                // Image is wider than the area. Fit height, crop width.
-                scaleY = saH / img.naturalHeight;
-                scaleX = scaleY;
-                const scaledWidth = img.naturalWidth * scaleX;
-                matrix.translateSelf(-((scaledWidth - saW) / 2), 0);
-              } else {
-                // Image is taller than the area. Fit width, crop height.
-                scaleX = saW / img.naturalWidth;
-                scaleY = scaleX;
-                const scaledHeight = img.naturalHeight * scaleY;
-                matrix.translateSelf(0, -((scaledHeight - saH) / 2));
-              }
-              matrix.scaleSelf(scaleX, scaleY);
-              pattern.setTransform(matrix);
-              
-              ctx.fillStyle = pattern;
-              defineBoundaryPath();
-              ctx.fill();
-              patternFilled = true;
+    // 3. Generate internal accent band tiles beautifully
+    if ((sa as any).accentType === 'slab') {
+      let patternFilled = false;
+      if (sa.surfaceUrl) {
+        const img = getLoadedSurfaceImage(sa.surfaceUrl);
+        if (img) {
+          const pattern = ctx.createPattern(img, 'no-repeat');
+          if (pattern) {
+            const imageAspect = img.naturalWidth / img.naturalHeight;
+            const saAspect = sa.width / sa.height;
+            
+            const matrix = new DOMMatrix();
+            matrix.translateSelf(saCanvasMin.x, saCanvasMin.y);
+            
+            let scaleX = 1, scaleY = 1;
+            if (imageAspect > saAspect) {
+              // Image is wider than the area. Fit height, crop width.
+              scaleY = saH / img.naturalHeight;
+              scaleX = scaleY;
+              const scaledWidth = img.naturalWidth * scaleX;
+              matrix.translateSelf(-((scaledWidth - saW) / 2), 0);
+            } else {
+              // Image is taller than the area. Fit width, crop height.
+              scaleX = saW / img.naturalWidth;
+              scaleY = scaleX;
+              const scaledHeight = img.naturalHeight * scaleY;
+              matrix.translateSelf(0, -((scaledHeight - saH) / 2));
             }
+            matrix.scaleSelf(scaleX, scaleY);
+            pattern.setTransform(matrix);
+            
+            ctx.fillStyle = pattern;
+            defineBoundaryPath();
+            ctx.fill();
+            patternFilled = true;
           }
         }
-        if (!patternFilled) {
-          ctx.fillStyle = sa.tileColor || '#94a3b8'; // fallback solid color
-          defineBoundaryPath();
-          ctx.fill();
-        }
-      } else {
-      // 3. Generate internal accent band tiles beautifully
+      }
+      if (!patternFilled) {
+        ctx.fillStyle = sa.tileColor || '#94a3b8'; // fallback solid color
+        defineBoundaryPath();
+        ctx.fill();
+      }
+    } else {
       const saAngleRad = ((sa.angle || 0) * Math.PI) / 180;
     const saActualTileW = sa.shape === 'hexagon' ? sa.tileWidth : sa.tileWidth;
     let saActualTileH = sa.shape === 'hexagon'
@@ -631,7 +630,6 @@ export function drawSubAreas(
       ctx.restore();
     } // closes tile loop
     } // closes slab else block
-    } // closes !isDraftMode check
   } // closes else block
 
     ctx.restore(); // restores sub-area clip

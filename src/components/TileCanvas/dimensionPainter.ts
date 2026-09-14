@@ -692,7 +692,8 @@ export function drawSubAreaDimensions(
           if (resolvedType === 'shelf') dVal = 6.0;
           else if (resolvedType === 'niche') dVal = 3.5;
         }
-        const dFormatted = Number(dVal).toFixed(1) + unitSymbol;
+        const dNum = Number(dVal);
+        const dFormatted = (dNum % 1 === 0 ? dNum.toFixed(1) : parseFloat(dNum.toFixed(3)).toString()) + unitSymbol;
         dimensionStr += ` × ${dFormatted} D`;
       }
 

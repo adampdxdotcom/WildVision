@@ -377,7 +377,7 @@ export function useCanvasRenderer({
       defineCombinedWallPath(ctx, viewport, wallWidth, wallHeight, wallExtensions, wallBoundaryShape, wallArchHeight, wallActiveArches, wallArchDepth, borderThickness, wallVertices);
       ctx.clip();
 
-      if (!isBlankCanvasMode && !isDrafting) {
+      if (!isBlankCanvasMode) {
         const mainTiles = subAreaTileMap ? subAreaTileMap['main'] || [] : [];
 
         ctx.save();
@@ -407,7 +407,7 @@ export function useCanvasRenderer({
           dimensions
         );
         ctx.restore();
-      } else if (!isDrafting) {
+      } else {
         ctx.save();
         ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
         ctx.font = 'bold 15px "Space Grotesk", "Inter", system-ui, sans-serif';

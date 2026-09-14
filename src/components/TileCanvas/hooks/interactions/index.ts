@@ -638,9 +638,6 @@ const clickedSceneObject = Object.values(sceneObjects).find(obj => {
       handleExtensionDrag(dragMachine.draggingExtensionId, deltaX, deltaY, dragMachine.extStartPos, isFreeform);
     } else if (dragMachine.draggingSubAreaCorner || dragMachine.draggingSubAreaId) {
       handleSubAreaDrag(dragMachine.draggingSubAreaId, dragMachine.draggingSubAreaCorner, activeSubAreaId, deltaX, deltaY, dragMachine.subAreaStartPos, isFreeform);
-    } else if (dragMachine.isDragging) {
-      setOffsetX(offsetStart.x + deltaX);
-      setOffsetY(offsetStart.y + deltaY);
     }
   };
 
@@ -700,12 +697,6 @@ const clickedSceneObject = Object.values(sceneObjects).find(obj => {
     }
 
     if (e.button === 0) {
-      const activeSa = activeSubAreaId ? subAreas.find(s => s.id === activeSubAreaId) : null;
-      const isPaintingNow = ((activeSa && activeSa.colorPattern === 'paint') || (!activeSa && colorPattern === 'paint')) && activeTool === 'paint';
-      if (!isPaintingNow) {
-        setIsDrafting(true);
-        dragMachine.setIsDragging(true);
-      }
       const hitProp = handleDragStart(e.clientX, e.clientY, e.shiftKey);
       if (hitProp) {
         e.stopPropagation();

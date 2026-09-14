@@ -45,7 +45,8 @@ export const useWallNodeDrag = ({
     isOrtho: boolean = false
   ): boolean => {
     const unit = useAppStore.getState().unit || 'in';
-    const increment = unit === 'cm' ? 5 : 6;
+    const wallIncrement = unit === 'cm' ? 5 : 6;
+    const subAreaIncrement = unit === 'cm' ? 1 : 1;
 
     if (draggingSubAreaVertexIndex !== null) {
       return handleSubAreaNodeDrag({
@@ -58,7 +59,7 @@ export const useWallNodeDrag = ({
         activeSubAreaId,
         archDragBehavior,
         screenToWall,
-        increment,
+        increment: subAreaIncrement,
         isFreeform,
         isOrtho,
         dragStartVertexPos
@@ -77,7 +78,7 @@ export const useWallNodeDrag = ({
         archDragBehavior,
         screenToWall,
         dragStartVertices: overrideDragStartVertices !== undefined ? overrideDragStartVertices : dragStartVertices,
-        increment,
+        increment: wallIncrement,
         isFreeform,
         isOrtho,
         dragStartVertexPos
