@@ -62,9 +62,11 @@ export function drawSubAreas(
 ) {
   subAreas.forEach((sa) => {
     if (sa.visible === false) return;
-    const resolvedSaMaterialImage = (showTextures && sa.materialTexture && sa.materialTexture !== 'none')
+    const isLinkedToMain = sa.linkedMaterialId === 'main';
+    const hasExplicitTexture = showTextures && sa.materialTexture && sa.materialTexture !== 'none';
+    const resolvedSaMaterialImage = hasExplicitTexture
       ? getLoadedTextureImage(sa.materialTexture)
-      : (sa.materialTexture === 'none' ? null : materialImage);
+      : (isLinkedToMain && showTextures ? (materialImage ?? null) : null);
 
     const saCanvasMin = mapToCanvas(sa.x, sa.y + sa.height, viewport);
     const saCanvasMax = mapToCanvas(sa.x + sa.width, sa.y, viewport);
@@ -510,13 +512,15 @@ export function drawSubAreas(
     const tileColorOverrides = state.tileColorOverrides || {};
     const uploadedSvgText = state.uploadedSvgText;
     const patternAccentColor = state.patternAccentColor || '#000000';
-    const disableColorWithTexture = sa.disableColorWithTexture !== undefined ? sa.disableColorWithTexture : (state.disableColorWithTexture ?? false);
+    const disableColorWithTexture = sa.disableColorWithTexture !== undefined
+      ? sa.disableColorWithTexture
+      : (isLinkedToMain ? (state.disableColorWithTexture ?? false) : false);
     const textureConfig: MaterialTextureConfig = {
-      opacity: disableColorWithTexture ? 1.0 : (sa.textureOpacity !== undefined ? sa.textureOpacity : (state.textureOpacity ?? 0.8)),
-      scale: sa.textureScale !== undefined ? sa.textureScale : (state.textureScale ?? 1.0),
-      scaleRandom: sa.textureScaleRandom !== undefined ? sa.textureScaleRandom : (state.textureScaleRandom ?? false),
-      rotationMode: sa.textureRotationMode !== undefined ? sa.textureRotationMode : (state.textureRotationMode ?? 'random'),
-      rotationAngle: sa.textureRotationAngle !== undefined ? sa.textureRotationAngle : (state.textureRotationAngle ?? 0),
+      opacity: disableColorWithTexture ? 1.0 : (sa.textureOpacity !== undefined ? sa.textureOpacity : (isLinkedToMain ? (state.textureOpacity ?? 0.8) : 0.8)),
+      scale: sa.textureScale !== undefined ? sa.textureScale : (isLinkedToMain ? (state.textureScale ?? 1.0) : 1.0),
+      scaleRandom: sa.textureScaleRandom !== undefined ? sa.textureScaleRandom : (isLinkedToMain ? (state.textureScaleRandom ?? false) : false),
+      rotationMode: sa.textureRotationMode !== undefined ? sa.textureRotationMode : (isLinkedToMain ? (state.textureRotationMode ?? 'random') : 'random'),
+      rotationAngle: sa.textureRotationAngle !== undefined ? sa.textureRotationAngle : (isLinkedToMain ? (state.textureRotationAngle ?? 0) : 0),
     };
     const onImageLoaded = () => {
       useAppStore.getState().setIsCanvasDirty(true);

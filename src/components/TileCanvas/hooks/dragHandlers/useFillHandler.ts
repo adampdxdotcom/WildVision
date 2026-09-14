@@ -62,6 +62,7 @@ export const useFillHandler = ({
         useLabelColor: true,
         labelColor: '#ffffff',
         customPatternPayload: null,
+        materialTexture: 'none',
         vertices: clickedRegion.map(v => ({ x: v.x, y: v.y, isCurveNode: v.isCurveNode })),
       };
 

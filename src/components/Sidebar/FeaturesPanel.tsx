@@ -115,6 +115,7 @@ export const FeaturesPanel: React.FC<FeaturesPanelProps> = ({
       useLabelColor: true,
       labelColor: '#ffffff',
       customPatternPayload: null,
+      materialTexture: 'none',
     };
 
     setSubAreas((prev) => [...prev, newSa]);
